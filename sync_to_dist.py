@@ -1,0 +1,49 @@
+"""
+快速同步源碼到 dist_embed（不重新下載 Python）
+用法: python sync_to_dist.py
+"""
+import os
+import shutil
+
+SRC  = os.path.dirname(os.path.abspath(__file__))
+DIST = os.path.join(SRC, 'dist_embed', '製令查詢')
+APP  = os.path.join(DIST, '_app')
+
+def sync():
+    print('同步源碼到 dist_embed ...')
+
+    # 1. 複製 Python 檔案
+    for f in ['app.py', 'main.py', 'config.py']:
+        src = os.path.join(SRC, f)
+        dst = os.path.join(APP, f)
+        if os.path.exists(src):
+            shutil.copy2(src, dst)
+            print(f'  [OK] {f}')
+
+    # 2. 複製 config.py 到根目錄（使用者可編輯）
+    shutil.copy2(os.path.join(SRC, 'config.py'), DIST)
+    print(f'  [OK] config.py → 根目錄')
+
+    # 3. 同步 templates
+    tpl_src = os.path.join(SRC, 'templates')
+    tpl_dst = os.path.join(APP, 'templates')
+    if os.path.exists(tpl_dst):
+        shutil.rmtree(tpl_dst)
+    shutil.copytree(tpl_src, tpl_dst)
+    n = len(os.listdir(tpl_dst))
+    print(f'  [OK] templates/ ({n} 個檔案)')
+
+    # 4. 清除快取
+    for cache_dir in [
+        os.path.join(APP, '__pycache__'),
+        os.path.join(DIST, '__pycache__'),
+        os.path.join(DIST, '_edge_data'),
+    ]:
+        if os.path.exists(cache_dir):
+            shutil.rmtree(cache_dir)
+            print(f'  [DEL] 清除 {os.path.basename(cache_dir)}/')
+
+    print('\n同步完成！')
+
+if __name__ == '__main__':
+    sync()

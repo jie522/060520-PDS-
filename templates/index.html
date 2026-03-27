@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>製令查詢 {{ app_version }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* ══════════════════════════════════════════
+           ERP Classic Blue — Design System
+        ══════════════════════════════════════════ */
+        :root {
+            --erp-blue:        #1565C0;
+            --erp-blue-dark:   #0D47A1;
+            --erp-blue-mid:    #1976D2;
+            --erp-blue-light:  #E3F2FD;
+            --erp-blue-pale:   #F0F7FF;
+            --erp-bg:          #ECF0F5;
+            --erp-surface:     #FFFFFF;
+            --erp-border:      #BDC3C7;
+            --erp-border-dark: #95A5A6;
+            --erp-text:        #212121;
+            --erp-text-muted:  #546E7A;
+            --erp-header-bg:   #1565C0;
+            --erp-row-even:    #F5F9FF;
+            --erp-row-hover:   #DDEEFF;
+            --machine-bg:      #FFF9C4;
+            --machine-text:    #7B5800;
+            --success:         #2E7D32;
+            --warning:         #E65100;
+            --danger:          #C62828;
+        }
+
+        /* ── Base ── */
+        * { box-sizing: border-box; }
+        body {
+            background: var(--erp-bg);
+            font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif;
+            color: var(--erp-text);
+            font-size: 0.85rem;
+            margin: 0;
+        }
+
+        /* ── Top title bar (ERP 視窗標題列風格) ── */
+        .header {
+            background: linear-gradient(180deg, #4A90D9 0%, #1565C0 40%, #0D47A1 100%);
+            color: white;
+            padding: 0;
+            margin-bottom: 0;
+            border-bottom: 2px solid #0A2E6E;
+        }
+        .header-inner {
+            display: flex;
+            align-items: stretch;
+            padding: 0;
+        }
+        .header-title {
+            padding: 0.45rem 1.2rem;
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        /* Tab strip */
+        .header-tabs {
+            display: flex;
+            align-items: flex-end;
+            padding-left: 0.5rem;
+            gap: 2px;
+        }
+        .header-tab {
+            background: rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.8);
+            border: 1px solid rgba(255,255,255,0.25);
+            border-bottom: none;
+            padding: 0.3rem 1.1rem;
+            font-size: 0.82rem;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+            text-decoration: none;
+            transition: background .15s;
+        }
+        .header-tab.active, .header-tab:hover {
+            background: var(--erp-surface);
+            color: var(--erp-blue);
+            font-weight: 600;
+        }
+        .header-tab.active { color: var(--erp-blue-dark); }
+
+        /* ── Page body wrapper ── */
+        .page-body { padding: 0.75rem 1rem; max-width: 1600px; margin: 0 auto; }
+
+        /* ── Panel / Card ── */
+        .erp-panel {
+            background: var(--erp-surface);
+            border: 1px solid var(--erp-border);
+            margin-bottom: 0.6rem;
+        }
+        .erp-panel-toolbar {
+            background: #F0F4F8;
+            border-bottom: 1px solid var(--erp-border);
+            padding: 0.4rem 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        /* ── Search row ── */
+        .search-row {
+            padding: 0.5rem 0.75rem;
+            background: var(--erp-surface);
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .search-label { font-size: 0.82rem; font-weight: 600; color: var(--erp-text-muted); white-space: nowrap; }
+        .form-control, .form-select {
+            border: 1px solid var(--erp-border-dark);
+            border-radius: 3px;
+            font-size: 0.83rem;
+            color: var(--erp-text);
+            background: white;
+            padding: 0.28rem 0.55rem;
+            height: auto;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--erp-blue-mid);
+            box-shadow: 0 0 0 2px rgba(21,101,192,.18);
+            outline: none;
+        }
+        .form-control::placeholder { color: #BDBDBD; }
+        .form-label { font-size: 0.8rem; font-weight: 600; color: var(--erp-text-muted); margin-bottom: 0.2rem; }
+
+        /* ── ERP Buttons ── */
+        .btn-erp {
+            background: linear-gradient(180deg, #FAFAFA 0%, #E8E8E8 100%);
+            border: 1px solid #9E9E9E;
+            color: #212121;
+            font-size: 0.81rem;
+            padding: 0.28rem 0.75rem;
+            border-radius: 3px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background .1s;
+        }
+        .btn-erp:hover { background: linear-gradient(180deg, #E8F4FF 0%, #C5DCF5 100%); border-color: var(--erp-blue-mid); color: var(--erp-blue-dark); }
+        .btn-erp:active { background: linear-gradient(180deg, #C5DCF5 0%, #A8CCF0 100%); }
+
+        .btn-erp-primary {
+            background: linear-gradient(180deg, #2196F3 0%, #1565C0 100%);
+            border: 1px solid #0D47A1;
+            color: white;
+            font-weight: 600;
+        }
+        .btn-erp-primary:hover { background: linear-gradient(180deg, #42A5F5 0%, #1976D2 100%); color: white; }
+
+        .btn-erp-amber {
+            background: linear-gradient(180deg, #FFD54F 0%, #F9A825 100%);
+            border: 1px solid #E65100;
+            color: #4E2600;
+            font-weight: 600;
+        }
+        .btn-erp-amber:hover { background: linear-gradient(180deg, #FFE082 0%, #FFB300 100%); color: #3E1A00; }
+
+        .btn-erp-green {
+            background: linear-gradient(180deg, #A5D6A7 0%, #388E3C 100%);
+            border: 1px solid #1B5E20;
+            color: white;
+            font-weight: 600;
+        }
+        .btn-erp-green:hover { background: linear-gradient(180deg, #C8E6C9 0%, #43A047 100%); }
+
+        .btn-erp-cyan {
+            background: linear-gradient(180deg, #80DEEA 0%, #00838F 100%);
+            border: 1px solid #006064;
+            color: white;
+            font-weight: 600;
+        }
+        .btn-erp-cyan:hover { background: linear-gradient(180deg, #B2EBF2 0%, #00ACC1 100%); }
+
+        /* backward compat aliases */
+        .btn-search { }
+        .btn-refresh { }
+        .btn-toolbar-check { }
+        .btn-toolbar-inspect { }
+        .btn-toolbar-drawing { }
+        .btn-toolbar-print { }
+
+        /* ── Table ── */
+        .table-container { max-height: 65vh; overflow: auto; }
+        .table { margin-bottom: 0; font-size: 0.82rem; border-collapse: collapse; width: 100%; }
+        .table thead th {
+            position: sticky;
+            top: 0;
+            background: var(--erp-header-bg);
+            color: white;
+            z-index: 2;
+            white-space: nowrap;
+            font-weight: 600;
+            font-size: 0.78rem;
+            padding: 0.42rem 0.6rem;
+            border: 1px solid #0D47A1;
+            letter-spacing: 0.02em;
+        }
+        .table td {
+            vertical-align: middle;
+            white-space: nowrap;
+            padding: 0.32rem 0.6rem;
+            border: 1px solid #D6E4F0;
+        }
+        .table td.wrap-cell { white-space: normal; max-width: 260px; word-break: break-word; }
+        .table tbody tr:hover td { background: var(--erp-row-hover) !important; }
+        .table tbody tr:nth-child(even) td { background: var(--erp-row-even); }
+
+        /* ── Data cells ── */
+        .order-id { font-family: Consolas, 'Courier New', monospace; font-size: 0.78rem; color: var(--erp-blue-dark); }
+        .proc-code { font-family: Consolas, monospace; font-size: 0.8rem; background: #E3F2FD; color: var(--erp-blue-dark); padding: 0px 5px; border: 1px solid #90CAF9; border-radius: 2px; }
+        .std-time  { font-family: Consolas, monospace; font-size: 0.8rem; color: #37474F; }
+        .qty-val   { font-family: Consolas, monospace; font-weight: 600; color: #1A237E; }
+        .date-val       { font-family: Consolas, monospace; font-size: 0.78rem; color: #37474F; }
+        /* 估算完工日（無SFT資料，以開工日代替）— 斜體灰色加虛線底線 */
+        .date-est       { font-family: Consolas, monospace; font-size: 0.78rem; color: #90A4AE; font-style: italic; border-bottom: 1px dashed #90A4AE; cursor: help; }
+        .realtime-active { color: #1B5E20; font-weight: 700; font-family: Consolas, monospace; }
+        /* 即時生產量有數字 → 整列底色 */
+        .realtime-row td                   { background: #A5D6A7 !important; }
+        .realtime-row:hover td             { background: #81C784 !important; }
+        .machine-row td.machine-cell       { background: #FFD600 !important; font-weight: 700; color: #4E2600; font-family: Consolas, monospace; font-size: 0.8rem; border-left: 2px solid #F9A825; }
+        /* 無機台的機台格（空白格不染色） */
+        .table td.machine-cell             { font-weight: 700; color: var(--machine-text); font-family: Consolas, monospace; font-size: 0.8rem; }
+
+        /* ── Clickable ── */
+        .clickable { color: var(--erp-blue); cursor: pointer; text-decoration: underline; font-weight: 600; }
+        .clickable:hover { color: var(--erp-blue-dark); }
+
+        /* ── Toolbar row inside results ── */
+        .toolbar-label { font-weight: 700; color: var(--erp-text); font-size: 0.83rem; }
+        .result-badge {
+            background: var(--erp-blue);
+            color: white;
+            font-family: Consolas, monospace;
+            font-size: 0.76rem;
+            padding: 1px 7px;
+            border-radius: 2px;
+            border: 1px solid var(--erp-blue-dark);
+        }
+
+        /* ── Loading / Error ── */
+        #loading { display: none; }
+        #error-msg { display: none; }
+
+        /* ── Modals ── */
+        .modal-dialog { max-width: 92vw; }
+        .modal-content { border-radius: 4px; border: 2px solid var(--erp-blue-dark); }
+        .modal-header {
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid var(--erp-border);
+        }
+        .modal-header-teal  { background: linear-gradient(180deg, #42A5F5, #1565C0); color: white; }
+        .modal-header-amber { background: linear-gradient(180deg, #FFD54F, #E65100); color: white; }
+        .modal-header-blue  { background: linear-gradient(180deg, #64B5F6, #0D47A1); color: white; }
+        .modal-title { font-size: 0.92rem; font-weight: 700; }
+        .modal-body { padding: 0.75rem 1rem; }
+        .modal-footer { padding: 0.4rem 1rem; border-top: 1px solid var(--erp-border); background: #F5F5F5; }
+        #detail-loading { display: none; }
+
+        /* ── Detail sections ── */
+        .detail-section { margin-bottom: 1.2rem; border: 1px solid var(--erp-border); overflow: hidden; }
+        .detail-section h6 {
+            padding: 0.38rem 0.8rem;
+            margin-bottom: 0;
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        /* 用料資訊 — 綠色 */
+        .detail-section-material h6 { background: #1B5E20; color: white; }
+        .detail-section-material .table thead th { background: #388E3C; color: white; border-color: #2E7D32; }
+        .detail-section-material .table td { border-color: #C8E6C9; }
+        .detail-section-material .table tbody tr:nth-child(even) td { background: #F1F8F1; }
+        .detail-section-material .table tbody tr:hover td { background: #C8E6C9 !important; }
+        /* 製程資訊 — 橘棕色 */
+        .detail-section-process h6 { background: #BF360C; color: white; }
+        .detail-section-process .table thead th { background: #E64A19; color: white; border-color: #BF360C; }
+        .detail-section-process .table td { border-color: #FFCCBC; }
+        .detail-section-process .table tbody tr:nth-child(even) td { background: #FBE9E7; }
+        .detail-section-process .table tbody tr:hover td { background: #FFCCBC !important; }
+        /* 移轉單資訊 — 深藍紫 */
+        .detail-section-transfer h6 { background: #311B92; color: white; }
+        .detail-section-transfer .table thead th { background: #512DA8; color: white; border-color: #311B92; }
+        .detail-section-transfer .table td { border-color: #D1C4E9; }
+        .detail-section-transfer .table tbody tr:nth-child(even) td { background: #F3EEF9; }
+        .detail-section-transfer .table tbody tr:hover td { background: #D1C4E9 !important; }
+
+        /* ── Status badges ── */
+        .badge-done   { background:#2E7D32; color:white; padding:0px 6px; border-radius:2px; font-size:0.72rem; font-weight:700; border:1px solid #1B5E20; }
+        .badge-undone { background:#C62828; color:white; padding:0px 6px; border-radius:2px; font-size:0.72rem; font-weight:700; border:1px solid #B71C1C; }
+        .badge-exempt { background:#546E7A; color:white; padding:0px 6px; border-radius:2px; font-size:0.72rem; border:1px solid #37474F; }
+        .badge-wait   { background:#E65100; color:white; padding:0px 6px; border-radius:2px; font-size:0.72rem; font-weight:700; border:1px solid #BF360C; }
+        .badge-pass   { background:#1565C0; color:white; padding:0px 6px; border-radius:2px; font-size:0.72rem; border:1px solid #0D47A1; }
+
+        /* ── Spinner ── */
+        .spinner-border { color: var(--erp-blue) !important; }
+    </style>
+</head>
+<body>
+    <!-- ── ERP 標題列 ── -->
+    <div class="header">
+        <div class="header-inner">
+            <div class="header-title">📋 製令查詢 <span id="app-ver" style="font-size:0.75rem; color:rgba(255,255,255,0.7); font-weight:normal; margin-left:12px;"></span></div>
+            <div class="header-tabs">
+                <span class="header-tab active">資料瀏覽</span>
+                <a href="/drawing" class="header-tab">圖面查詢</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="page-body">
+        <!-- 搜尋列 -->
+        <div class="erp-panel">
+            <div class="search-row">
+                <span class="search-label">條件：</span>
+                <input type="text" id="orderInput" class="form-control" style="width:200px;"
+                       placeholder="製令號碼" autofocus>
+                <input type="text" id="nameInput" class="form-control" style="width:220px;"
+                       placeholder="品名（空格=AND，-前綴=排除）">
+                <select id="unitSelect" class="form-select" style="width:160px;">
+                    <option value="000-1" selected>000-1 加工課</option>
+                    <option value="000-3">000-3 製三課</option>
+                    <option value="000-2">000-2 成品部</option>
+                    <option value="other">其它</option>
+                    <option value="*">全部</option>
+                </select>
+                <button id="searchBtn" class="btn-erp btn-erp-primary">🔍 查詢</button>
+                <button class="btn-erp" onclick="refreshCache()" title="清除快取，重新抓取最新資料">↻ 重新整理</button>
+            </div>
+
+            <!-- 工具列 -->
+            <div class="erp-panel-toolbar" id="result-toolbar" style="display:none;">
+                <span class="toolbar-label">製令資料</span>
+                <span class="result-badge" id="resultCount">0</span>
+                <span style="color:#78909C;font-size:0.8rem;">筆</span>
+                <div style="width:1px;height:20px;background:#BDC3C7;margin:0 4px;"></div>
+                <button class="btn-erp" onclick="selectAll()">全選</button>
+                <button class="btn-erp" onclick="deselectAll()">取消</button>
+                <div style="width:1px;height:20px;background:#BDC3C7;margin:0 4px;"></div>
+                <button class="btn-erp btn-erp-amber" onclick="openInspection()">📋 自主檢查表</button>
+                <button class="btn-erp btn-erp-cyan" onclick="openDrawing()">📐 讀取圖面</button>
+                <button class="btn-erp btn-erp-green" onclick="printSelected()">🖨️ 列印日報表</button>
+            </div>
+
+            <!-- 狀態列 / 錯誤 / 資料表 -->
+            <div id="loading" class="text-center py-4">
+                <div class="spinner-border" role="status" style="width:1.8rem;height:1.8rem;"></div>
+                <div class="mt-2" style="color:#1565C0;font-size:0.85rem;">查詢中，請稍候...</div>
+            </div>
+            <div id="error-msg" style="margin:0.6rem;padding:0.5rem 0.8rem;border-left:4px solid #E65100;background:#FFF3E0;color:#BF360C;font-size:0.83rem;"></div>
+            <div id="result-area" style="display:none;">
+                <div class="table-container">
+                    <table class="table table-bordered table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:32px;"><input type="checkbox" id="checkAll" onchange="toggleAll(this)"></th>
+                                <th>製令</th>
+                                <th>品號</th>
+                                <th>品名</th>
+                                <th>加工順序</th>
+                                <th>製程代號</th>
+                                <th>製程名稱</th>
+                                <th>標工</th>
+                                <th>預計生產量</th>
+                                <th>預計開工日</th>
+                                <th>預計完工日</th>
+                                <th>即時生產量</th>
+                                <th>機台</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自主巡檢表 Modal -->
+    <div class="modal fade" id="inspectionModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header modal-header-amber">
+                    <h5 class="modal-title">📋 自主巡檢表查詢</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="inspectionResults">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-warning"></div>
+                        <p class="mt-2">搜尋中...</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <small class="text-muted me-auto" style="font-size:0.75rem;">\\192.168.1.99\共用區\品保加工共用平台\加工課自主巡檢表(空白)</small>
+                    <button type="button" class="btn-erp" data-bs-dismiss="modal">關閉</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 圖面 Modal -->
+    <div class="modal fade" id="drawingModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header modal-header-blue">
+                    <h5 class="modal-title">📐 PDM 圖面查詢</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="drawingResults">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary"></div>
+                        <p class="mt-2">搜尋中...</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <small class="text-muted me-auto" style="font-size:0.75rem;">圖面路徑：C:\MAXCLAW\00-研發部\01-正式圖面\01-產品圖</small>
+                    <button type="button" class="btn-erp" data-bs-dismiss="modal">關閉</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 詳細資訊 Modal -->
+    <div class="modal fade" id="detailModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable" style="max-width:88vw;">
+            <div class="modal-content">
+                <div class="modal-header modal-header-teal">
+                    <h5 class="modal-title" id="detailTitle">製令詳細資訊</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="detail-loading" class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <div class="mt-2 text-muted" style="font-size:0.83rem;">載入中...</div>
+                    </div>
+                    <div id="detail-content"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-erp" data-bs-dismiss="modal">關閉</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const orderInput = document.getElementById('orderInput');
+        const nameInput = document.getElementById('nameInput');
+        const unitSelect = document.getElementById('unitSelect');
+        const searchBtn = document.getElementById('searchBtn');
+        const loading = document.getElementById('loading');
+        const errorMsg = document.getElementById('error-msg');
+        const resultArea = document.getElementById('result-area');
+        const resultBody = document.getElementById('resultBody');
+        const resultCount = document.getElementById('resultCount');
+
+        // 儲存查詢結果
+        window._searchResults = [];
+        window._inspectionData = {};
+
+        const resultToolbar = document.getElementById('result-toolbar');
+
+        function hideAll() {
+            loading.style.display = 'none';
+            errorMsg.style.display = 'none';
+            resultArea.style.display = 'none';
+            resultToolbar.style.display = 'none';
+        }
+
+        // ========== 重新整理快取 ==========
+        async function refreshCache() {
+            try {
+                await fetch('/api/cache/refresh', { method: 'POST' });
+                alert('快取已清除，下次查詢將重新抓取最新資料');
+            } catch (e) {
+                alert('清除快取失敗: ' + e.message);
+            }
+        }
+
+        // ========== 查詢 ==========
+        async function doSearch() {
+            const orderId = orderInput.value.trim();
+            const productName = nameInput.value.trim();
+            if (!orderId && !productName) {
+                hideAll();
+                errorMsg.textContent = '請輸入製令號碼或品名';
+                errorMsg.style.display = 'block';
+                return;
+            }
+
+            hideAll();
+            loading.style.display = 'block';
+            searchBtn.disabled = true;
+
+            try {
+                const unit = unitSelect.value;
+                let url = '/api/query?unit=' + encodeURIComponent(unit);
+                if (orderId) url += '&order_id=' + encodeURIComponent(orderId);
+                if (productName) url += '&product_name=' + encodeURIComponent(productName);
+                const resp = await fetch(url);
+                const json = await resp.json();
+                hideAll();
+
+                if (json.success && json.data && json.data.length > 0) {
+                    window._searchResults = json.data;
+                    resultBody.innerHTML = '';
+                    resultCount.textContent = json.data.length;
+                    resultToolbar.style.display = 'flex';
+                    json.data.forEach((row, idx) => {
+                        const tr = document.createElement('tr');
+                        const oid = row['製令'] || '';
+                        const rt = row['即時生產量'] || '';
+                        const machine = row['生產機台'] || '';
+                        const hasMachine = machine.trim() !== '';
+                        const hasRt = rt && parseInt(rt.replace(/,/g,'')) > 0;
+                        const rtCls = hasRt ? ' realtime-active' : ' qty-val';
+                        const finishDate = row['預計完工日'] || '';
+                        const hasSft = row['has_sft_finish'];
+                        // 完工日：SFT確認值用正常樣式，估算值（以開工日代替）用斜體灰色+tooltip
+                        const finishCell = finishDate
+                            ? (hasSft
+                                ? '<span class="date-val">' + esc(finishDate) + '</span>'
+                                : '<span class="date-est" title="SFT尚未排程，以預計開工日估算">' + esc(finishDate) + '</span>')
+                            : '';
+                        // 整列底色：即時生產量有數字時整行綠底
+                        if (hasRt) tr.classList.add('realtime-row');
+                        tr.innerHTML =
+                            '<td class="text-center"><input type="checkbox" class="row-check" data-index="' + idx + '"></td>' +
+                            '<td><span class="order-id">' + esc(oid) + '</span></td>' +
+                            '<td><span class="clickable" onclick="showDetail(\'' + escAttr(oid) + '\')">' + esc(row['品號']) + '</span></td>' +
+                            '<td class="wrap-cell">' + esc(row['品名']) + '</td>' +
+                            '<td class="text-center std-time">' + esc(row['加工順序']) + '</td>' +
+                            '<td class="text-center"><span class="proc-code">' + esc(row['製程代號']) + '</span></td>' +
+                            '<td>' + esc(row['製程名稱']) + '</td>' +
+                            '<td class="std-time">' + esc(row['標工']) + '</td>' +
+                            '<td class="text-end qty-val">' + esc(row['預計生產量']) + '</td>' +
+                            '<td class="date-val">' + esc(row['預計開工日']) + '</td>' +
+                            '<td>' + finishCell + '</td>' +
+                            '<td class="text-end' + rtCls + '">' + esc(rt) + '</td>' +
+                            '<td class="text-center machine-cell">' + esc(machine) + '</td>';
+                        resultBody.appendChild(tr);
+                    });
+                    resultArea.style.display = 'block';
+                } else {
+                    errorMsg.textContent = json.error || '查無資料';
+                    errorMsg.style.display = 'block';
+                }
+            } catch (e) {
+                hideAll();
+                errorMsg.textContent = '查詢失敗: ' + e.message;
+                errorMsg.style.display = 'block';
+            } finally {
+                searchBtn.disabled = false;
+            }
+        }
+
+        // ========== 勾選功能 ==========
+        function selectAll() { document.querySelectorAll('.row-check').forEach(cb => cb.checked = true); document.getElementById('checkAll').checked = true; }
+        function deselectAll() { document.querySelectorAll('.row-check').forEach(cb => cb.checked = false); document.getElementById('checkAll').checked = false; }
+        function toggleAll(master) { document.querySelectorAll('.row-check').forEach(cb => cb.checked = master.checked); }
+
+        // ========== 列印日報表 ==========
+        function printSelected() {
+            const checks = document.querySelectorAll('.row-check:checked');
+            if (checks.length === 0) { alert('請先勾選要列印的製令'); return; }
+
+            const records = window._searchResults;
+            const printData = [];
+            checks.forEach(cb => {
+                const idx = parseInt(cb.dataset.index);
+                const r = records[idx];
+                if (r) {
+                    printData.push({
+                        order_id: r['製令'] || '',
+                        process_seq: r['加工順序'] || '',
+                        process_code: r['製程代號'] || '',
+                        process_name: r['製程名稱'] || '',
+                        unit: '000-1',
+                        product_name: r['品名'] || '',
+                        qty: r['預計生產量'] || '',
+                        machine: r['生產機台'] || '',
+                    });
+                }
+            });
+
+            fetch('/print', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(printData),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) { alert('列印失敗: ' + (data.error || '未知錯誤')); return; }
+                // 用完整 URL 開啟列印預覽視窗
+                var printUrl = window.location.origin + '/print/view/' + data.key;
+                window.open(printUrl, '_blank');
+            })
+            .catch(err => alert('列印失敗: ' + err.message));
+        }
+
+        // ========== 自主檢查表 ==========
+        function openInspection() {
+            const checks = document.querySelectorAll('.row-check:checked');
+            if (checks.length === 0) { alert('請先勾選要查詢檢查表的製令'); return; }
+
+            const records = window._searchResults;
+            const productNos = new Set();
+            // 收集所有勾選的製令號碼（全域，不分品號）
+            window._allCheckedOrderIds = [];
+            window._allCheckedQty = '';
+            window._inspectionData = {};
+
+            checks.forEach(cb => {
+                const idx = parseInt(cb.dataset.index);
+                const r = records[idx];
+                if (r && r['品號']) {
+                    const pno = r['品號'];
+                    productNos.add(pno);
+                    const oid = r['製令'] || '';
+                    const qty = r['預計生產量'] || '';
+                    // 全域收集所有製令
+                    if (oid && !window._allCheckedOrderIds.includes(oid)) {
+                        window._allCheckedOrderIds.push(oid);
+                    }
+                    if (!window._allCheckedQty && qty) {
+                        window._allCheckedQty = qty;
+                    }
+                }
+            });
+            if (productNos.size === 0) { alert('找不到品號資訊'); return; }
+
+            const modal = new bootstrap.Modal(document.getElementById('inspectionModal'));
+            document.getElementById('inspectionResults').innerHTML =
+                '<div class="text-center py-4"><div class="spinner-border text-warning"></div><p class="mt-2">搜尋自主巡檢表中...</p></div>';
+            modal.show();
+
+            const queries = [...productNos].map(pno =>
+                fetch('/api/inspection?product_no=' + encodeURIComponent(pno))
+                    .then(r => r.json())
+                    .then(data => ({ product_no: pno, ...data }))
+                    .catch(() => ({ product_no: pno, success: false, error: '查詢失敗' }))
+            );
+
+            // 儲存巡檢表檔案列表（避免 inline onclick 中文路徑跳脫問題）
+            window._inspectionFiles = [];
+            Promise.all(queries).then(results => {
+                let html = '';
+                results.forEach(res => {
+                    if (res.success && res.files && res.files.length > 0) {
+                        const allOids = window._allCheckedOrderIds || [];
+                        html += '<div class="mb-3 border rounded p-2">';
+                        html += '<div class="fw-bold text-success mb-2">品號：' + esc(res.product_no) +
+                            ' <span class="badge bg-success ms-1">' + res.files.length + ' 份</span>' +
+                            ' <span class="badge bg-info ms-1">製令：' + allOids.join(', ') + '</span></div>';
+                        res.files.forEach(f => {
+                            const iidx = window._inspectionFiles.length;
+                            window._inspectionFiles.push(f);
+                            const inspectBadge = f.need_inspect ? '<span class="badge bg-danger me-1">需送檢</span>' : '';
+                            html += '<div class="d-flex align-items-center mb-2 ms-2 p-2 bg-light rounded">' +
+                                '<div class="flex-grow-1"><div class="fw-bold">' + esc(f.file_name) + '</div>' +
+                                '<div class="text-muted" style="font-size:0.72rem">' + esc(f.dir) + '</div>' +
+                                '<div>' + inspectBadge + '</div></div>' +
+                                '<button class="btn-erp btn-erp-amber ms-2 text-nowrap inspect-open-btn" data-iidx="' + iidx + '" style="font-size:0.78rem;padding:3px 10px;">📂 開啟 Excel</button></div>';
+                        });
+                        html += '</div>';
+                    } else {
+                        html += '<div class="alert alert-warning py-2 mb-2">品號 ' + esc(res.product_no) + '：<strong>無對應自主檢查表</strong></div>';
+                    }
+                });
+                document.getElementById('inspectionResults').innerHTML = html || '<p class="text-muted">無結果</p>';
+            });
+        }
+
+        // 事件委派：inspectionModal 內的開啟按鈕
+        document.getElementById('inspectionResults').addEventListener('click', function(e) {
+            const btn = e.target.closest('.inspect-open-btn');
+            if (!btn) return;
+            const iidx = parseInt(btn.dataset.iidx);
+            const f = window._inspectionFiles[iidx];
+            if (!f) { alert('找不到檔案資訊'); return; }
+
+            const origHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>開啟中...';
+
+            const orderIds = window._allCheckedOrderIds || [];
+            const qty = window._allCheckedQty || '';
+            fetch('/api/inspection/open', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    file_path: f.file_path,
+                    order_ids: orderIds,
+                    qty: orderIds.length === 1 ? qty : ''
+                }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    btn.innerHTML = '✔ 已開啟';
+                    btn.classList.replace('btn-erp-amber', 'btn-erp-green');
+                    setTimeout(() => { btn.innerHTML = origHTML; btn.classList.replace('btn-erp-green', 'btn-erp-amber'); btn.disabled = false; }, 3000);
+                } else { alert('開啟失敗: ' + data.error); btn.innerHTML = origHTML; btn.disabled = false; }
+            })
+            .catch(err => { alert('開啟失敗: ' + err.message); btn.innerHTML = origHTML; btn.disabled = false; });
+        });
+
+        // ========== 詳細資訊 ==========
+        async function showDetail(orderId) {
+            const modal = new bootstrap.Modal(document.getElementById('detailModal'));
+            const detailTitle = document.getElementById('detailTitle');
+            const detailLoading = document.getElementById('detail-loading');
+            const detailContent = document.getElementById('detail-content');
+
+            detailTitle.textContent = '製令詳細資訊 - ' + orderId;
+            detailContent.innerHTML = '';
+            detailLoading.style.display = 'block';
+            modal.show();
+
+            try {
+                const resp = await fetch('/api/detail?order_id=' + encodeURIComponent(orderId));
+                const json = await resp.json();
+                detailLoading.style.display = 'none';
+
+                if (!json.success) {
+                    detailContent.innerHTML = '<div class="alert alert-warning">' + esc(json.error) + '</div>';
+                    return;
+                }
+
+                const d = json.data;
+                let html = '';
+
+                if (d.materials && d.materials.length > 0) {
+                    html += '<div class="detail-section detail-section-material"><h6>🟢 用料資訊</h6>';
+                    html += '<table class="table table-bordered table-sm mb-0"><thead><tr>';
+                    html += '<th>材料品號</th><th>材料品名</th><th>現有庫存</th><th>需領用數量</th><th>已領用數量</th><th>預計領用日期</th>';
+                    html += '</tr></thead><tbody>';
+                    d.materials.forEach(m => {
+                        const stock = parseFloat((m['現有庫存']||'').replace(/,/g,''));
+                        const need  = parseFloat((m['需領用數量']||'').replace(/,/g,''));
+                        const stockStyle = (!isNaN(stock) && !isNaN(need) && stock < need)
+                            ? ' style="color:#DC2626;font-weight:700;"' : '';
+                        html += '<tr>' +
+                            '<td style="font-family:\'Fira Code\',monospace;font-size:0.78rem;">' + esc(m['材料品號']) + '</td>' +
+                            '<td>' + esc(m['材料品名']) + '</td>' +
+                            '<td class="text-end"' + stockStyle + '>' + esc(m['現有庫存']) + '</td>' +
+                            '<td class="text-end">' + esc(m['需領用數量']) + '</td>' +
+                            '<td class="text-end">' + esc(m['已領用數量']) + '</td>' +
+                            '<td style="font-family:\'Fira Code\',monospace;font-size:0.78rem;">' + esc(m['預計領用日期']) + '</td>' +
+                            '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+
+                if (d.processes && d.processes.length > 0) {
+                    html += '<div class="detail-section detail-section-process"><h6>🟠 製程資訊</h6>';
+                    html += '<table class="table table-bordered table-sm mb-0"><thead><tr>';
+                    html += '<th>完工否</th><th>製令</th><th>製程代號</th><th>製程名稱</th><th>製程敘述</th><th>加工廠商</th><th>投入數量</th><th>完成數量</th>';
+                    html += '</tr></thead><tbody>';
+                    d.processes.forEach(p => {
+                        const done = (p['完工否'] || '').trim();
+                        const doneBadge = done === '是'
+                            ? '<span class="badge-done">是</span>'
+                            : (done ? '<span class="badge-undone">' + esc(done) + '</span>' : '');
+                        html += '<tr>' +
+                            '<td class="text-center">' + doneBadge + '</td>' +
+                            '<td style="font-family:\'Fira Code\',monospace;font-size:0.76rem;">' + esc(p['Textbox14']) + '</td>' +
+                            '<td><span class="proc-code">' + esc(p['製程代號']) + '</span></td>' +
+                            '<td>' + esc(p['製程名稱']) + '</td>' +
+                            '<td class="wrap-cell" style="max-width:320px;">' + esc(p['製程敘述']) + '</td>' +
+                            '<td>' + esc(p['加工廠商']) + '</td>' +
+                            '<td class="text-end">' + esc(p['投入數量']) + '</td>' +
+                            '<td class="text-end">' + esc(p['完成及調撥數量']) + '</td>' +
+                            '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+
+                if (d.transfers && d.transfers.length > 0) {
+                    html += '<div class="detail-section detail-section-transfer"><h6>🟣 移轉單資訊</h6>';
+                    html += '<table class="table table-bordered table-sm mb-0"><thead><tr>';
+                    html += '<th>製令單</th><th>移轉單</th><th>移出日期</th><th>移轉數量</th><th>驗收數量</th><th>驗退數量</th><th>檢驗狀態</th>';
+                    html += '</tr></thead><tbody>';
+                    d.transfers.forEach(t => {
+                        const st = (t['檢驗狀態'] || '').trim();
+                        const stBadge = st === '免檢' ? '<span class="badge-exempt">免檢</span>'
+                            : st === '待檢' ? '<span class="badge-wait">待檢</span>'
+                            : st === '合格' || st === '通過' ? '<span class="badge-pass">' + esc(st) + '</span>'
+                            : esc(st);
+                        html += '<tr>' +
+                            '<td style="font-family:\'Fira Code\',monospace;font-size:0.76rem;">' + esc(t['製令單1']) + '</td>' +
+                            '<td style="font-family:\'Fira Code\',monospace;font-size:0.76rem;">' + esc(t['移轉單']) + '</td>' +
+                            '<td style="font-family:\'Fira Code\',monospace;font-size:0.76rem;">' + esc(t['移出日期']) + '</td>' +
+                            '<td class="text-end">' + esc(t['移轉數量']) + '</td>' +
+                            '<td class="text-end">' + esc(t['驗收數量']) + '</td>' +
+                            '<td class="text-end">' + esc(t['驗退數量']) + '</td>' +
+                            '<td class="text-center">' + stBadge + '</td>' +
+                            '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+
+                if (!html) html = '<div class="text-center text-muted py-3">無詳細資料</div>';
+                detailContent.innerHTML = html;
+            } catch (e) {
+                detailLoading.style.display = 'none';
+                detailContent.innerHTML = '<div class="alert alert-danger">載入失敗: ' + esc(e.message) + '</div>';
+            }
+        }
+
+        // ========== 讀取圖面 ==========
+        // 儲存圖面檔案列表（避免 inline onclick 的中文路徑跳脫問題）
+        window._drawingFiles = [];
+
+        function openDrawing() {
+            const checks = document.querySelectorAll('.row-check:checked');
+            if (checks.length === 0) { alert('請先勾選要讀取圖面的製令'); return; }
+
+            const records = window._searchResults;
+            const productNos = new Set();
+            checks.forEach(cb => {
+                const idx = parseInt(cb.dataset.index);
+                const r = records[idx];
+                if (r && r['品號']) productNos.add(r['品號']);
+            });
+            if (productNos.size === 0) { alert('找不到品號資訊'); return; }
+
+            const modal = new bootstrap.Modal(document.getElementById('drawingModal'));
+            document.getElementById('drawingResults').innerHTML =
+                '<div class="text-center py-4"><div class="spinner-border text-primary"></div><p class="mt-2">搜尋 PDM 圖面中...</p></div>';
+            modal.show();
+
+            const queries = [...productNos].map(pno =>
+                fetch('/api/drawing?product_no=' + encodeURIComponent(pno))
+                    .then(r => r.json())
+                    .then(data => ({ product_no: pno, ...data }))
+                    .catch(() => ({ product_no: pno, success: false, error: '查詢失敗' }))
+            );
+
+            window._drawingFiles = [];
+            Promise.all(queries).then(results => {
+                let html = '';
+                results.forEach(res => {
+                    if (res.success && res.files && res.files.length > 0) {
+                        html += '<div class="mb-3 border rounded p-2">';
+                        html += '<div class="fw-bold text-success mb-2">品號：' + esc(res.product_no) +
+                            (res.files[0].product_name ? ' <span class="text-secondary fw-normal ms-2">' + esc(res.files[0].product_name) + '</span>' : '') +
+                            ' <span class="badge bg-success ms-1">' + res.files.length + ' 份圖面</span></div>';
+                        res.files.forEach(f => {
+                            const didx = window._drawingFiles.length;
+                            window._drawingFiles.push(f);
+                            html += '<div class="d-flex align-items-center mb-2 ms-2 p-2 bg-light rounded">' +
+                                '<div class="flex-grow-1">' +
+                                '<div class="fw-bold">' + esc(f.file_name) + '</div>' +
+                                '<div class="text-muted mb-1" style="font-size:0.72rem">' + esc(f.dir) + '</div>' +
+                                '<div>' +
+                                (f.ji_xing ? '<span class="badge bg-info text-dark me-1">機型：' + esc(f.ji_xing) + '</span>' : '') +
+                                (f.xing_hao ? '<span class="badge bg-secondary me-1">型號：' + esc(f.xing_hao) + '</span>' : '') +
+                                (f.product_name ? '<span class="badge bg-warning text-dark me-1">品名：' + esc(f.product_name) + '</span>' : '') +
+                                (f.modified_at ? '<span class="badge bg-light text-dark border me-1">發圖：' + esc(f.modified_at) + '</span>' : '') +
+                                '</div></div>' +
+                                '<button class="btn-erp btn-erp-cyan ms-2 text-nowrap drawing-open-btn" data-didx="' + didx + '" style="font-size:0.78rem;padding:3px 10px;">📐 SW開啟</button>' +
+                                '</div>';
+                        });
+                        html += '</div>';
+                    } else {
+                        html += '<div class="alert alert-warning py-2 mb-2">品號 ' + esc(res.product_no) + '：' + esc(res.error || 'PDM 中找不到圖面') + '</div>';
+                    }
+                });
+                document.getElementById('drawingResults').innerHTML = html || '<p class="text-muted">無結果</p>';
+            });
+        }
+
+        // 事件委派：drawingModal 內的開啟按鈕
+        document.getElementById('drawingResults').addEventListener('click', function(e) {
+            const btn = e.target.closest('.drawing-open-btn');
+            if (!btn) return;
+            const didx = parseInt(btn.dataset.didx);
+            const f = window._drawingFiles[didx];
+            if (!f) { alert('找不到檔案資訊'); return; }
+
+            const origHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>開啟中...';
+            fetch('/api/drawing/open', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_path: f.file_path }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    btn.innerHTML = '✔ 已開啟';
+                    btn.classList.replace('btn-erp-cyan', 'btn-erp-green');
+                    setTimeout(() => { btn.innerHTML = origHTML; btn.classList.replace('btn-erp-green', 'btn-erp-cyan'); btn.disabled = false; }, 4000);
+                } else { alert('開啟失敗: ' + data.error); btn.innerHTML = origHTML; btn.disabled = false; }
+            })
+            .catch(err => { alert('開啟失敗: ' + err.message); btn.innerHTML = origHTML; btn.disabled = false; });
+        });
+
+        // ========== 工具函式 ==========
+        function esc(s) {
+            if (!s) return '';
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        function escAttr(s) {
+            return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+
+        searchBtn.addEventListener('click', doSearch);
+        orderInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+        nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+    </script>
+</body>
+</html>

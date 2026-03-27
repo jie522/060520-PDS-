@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>加工-生產日報表</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 10mm;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif;
+            font-size: 12pt;
+            color: #000;
+        }
+
+        .report-page {
+            width: 190mm;
+            min-height: 270mm;
+            margin: 0 auto;
+            padding: 5mm;
+            border: 2px solid #000;
+            position: relative;
+            page-break-after: always;
+        }
+        .report-page:last-child {
+            page-break-after: avoid;
+        }
+
+        /* 標題區 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .header-left {
+            font-size: 10pt;
+            color: #000;
+        }
+        .header-center {
+            text-align: center;
+            flex: 1;
+        }
+        .header-center h1 {
+            font-size: 22pt;
+            font-weight: bold;
+            display: inline;
+        }
+        .header-right {
+            text-align: right;
+            font-size: 13pt;
+            font-weight: bold;
+        }
+        .std-time {
+            color: #000;
+        }
+
+        /* 資訊區 */
+        .info-section {
+            margin-bottom: 6px;
+            font-size: 12pt;
+        }
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .info-table td {
+            padding: 1px 0;
+            vertical-align: top;
+        }
+        .info-table .col-left { width: 55%; }
+        .info-table .col-mid { width: 25%; }
+        .info-table .col-right { width: 20%; }
+        .info-label {
+            color: #000;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .info-value {
+            color: #000;
+            font-weight: bold;
+        }
+        .info-field-label {
+            color: #000;
+            font-size: 11pt;
+            font-weight: bold;
+        }
+
+        /* 條碼區 */
+        .barcode-section {
+            margin: 6px 0 10px 0;
+        }
+        .barcode-section svg {
+            max-width: 300px;
+            height: 40px;
+        }
+        .barcode-text {
+            font-size: 8pt;
+            color: #333;
+        }
+
+        /* 表格 */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 5px;
+        }
+        .data-table th, .data-table td {
+            border: 1px solid #000;
+            padding: 4px 8px;
+            text-align: center;
+        }
+        .data-table th {
+            background-color: #e8e8e8;
+            font-size: 13pt;
+            font-weight: bold;
+            height: 32px;
+        }
+        .data-table td {
+            height: 26px;
+            font-size: 11pt;
+        }
+        .data-table .col-date { width: 18%; }
+        .data-table .col-time { width: 32%; }
+        .data-table .col-worker { width: 22%; }
+        .data-table .col-qty { width: 18%; }
+
+        /* 列印控制 */
+        .no-print {
+            text-align: center;
+            padding: 15px;
+            background: #4a6fa5;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            align-items: center;
+        }
+        .no-print button {
+            padding: 8px 24px;
+            font-size: 14pt;
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            color: white;
+        }
+        .btn-print { background: #28a745; }
+        .btn-print:hover { background: #218838; }
+        .btn-back { background: #6c757d; }
+        .btn-back:hover { background: #5a6268; }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { margin: 0; }
+            .report-page {
+                border: 2px solid #000;
+                margin: 0;
+                padding: 5mm;
+            }
+        }
+        @page {
+            margin: 10mm;
+            /* 隱藏瀏覽器自動產生的頁首頁尾（URL、頁碼等） */
+            @top-left { content: none; }
+            @top-center { content: none; }
+            @top-right { content: none; }
+            @bottom-left { content: none; }
+            @bottom-center { content: none; }
+            @bottom-right { content: none; }
+        }
+
+        /* 螢幕預覽時的間距 */
+        @media screen {
+            body { background: #ddd; padding-top: 70px; }
+            .report-page {
+                background: white;
+                margin: 10px auto;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <button class="btn-print" onclick="window.print()">列印</button>
+        <button class="btn-back" onclick="window.close()">關閉</button>
+    </div>
+
+    {% for item in items %}
+    <div class="report-page">
+        <!-- 標題區 -->
+        <div class="header">
+            <div class="header-left">
+                <div>{{ item.qty }}</div>
+                <div>列印日期：</div>
+                <div>{{ today }}</div>
+            </div>
+            <div class="header-center">
+                <h1>加工-生產日報表</h1>
+            </div>
+            <div class="header-right">
+                <span class="std-time">標準工時：{{ item.std_time if item.std_time else '' }}</span>
+            </div>
+        </div>
+
+        <!-- 資訊區 -->
+        <div class="info-section">
+            <table class="info-table">
+                <tr>
+                    <td class="col-left"><span class="info-label">製令：</span><span class="info-value">{{ item.order_id }}</span></td>
+                    <td class="col-mid"><span class="info-field-label">製程代號：</span><span class="info-value">{{ item.process_code }}</span></td>
+                    <td class="col-right"><span class="info-field-label">機台代號：</span><span class="info-value">{{ item.machine }}</span></td>
+                </tr>
+                <tr>
+                    <td class="col-left"><span class="info-label">品名：</span><span class="info-value">{{ item.product_name }}</span></td>
+                    <td class="col-mid"><span class="info-field-label">製程名稱：</span><span class="info-value">{{ item.process_name }}</span></td>
+                    <td class="col-right"><span class="info-field-label">穴　數：</span></td>
+                </tr>
+                <tr>
+                    <td class="col-left"></td>
+                    <td class="col-mid"></td>
+                    <td class="col-right"><span class="info-field-label">報工設備：</span></td>
+                </tr>
+                <tr>
+                    <td class="col-left"></td>
+                    <td class="col-mid"></td>
+                    <td class="col-right"><span class="info-field-label">每桶數量：</span></td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- 條碼區 -->
+        <div class="barcode-section">
+            <svg class="barcode-{{ loop.index }}"></svg>
+        </div>
+
+        <!-- 表格 -->
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th class="col-date">日期</th>
+                    <th class="col-time">時間</th>
+                    <th class="col-worker">生產人員</th>
+                    <th class="col-qty">生產數量</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in range(26) %}
+                <tr>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+
+    <script>
+        // 為每個報表產生條碼
+        const items = {{ items_json | safe }};
+        items.forEach((item, index) => {
+            const barcodeValue = item.barcode;
+            try {
+                JsBarcode(`.barcode-${index + 1}`, barcodeValue, {
+                    format: "CODE128",
+                    width: 1.5,
+                    height: 40,
+                    displayValue: true,
+                    fontSize: 10,
+                    margin: 0,
+                    textMargin: 2
+                });
+            } catch(e) {
+                console.error('Barcode error:', e);
+            }
+        });
+    </script>
+</body>
+</html>

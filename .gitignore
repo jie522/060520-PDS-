@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.db
+.claude/
+
+# dist 中不追蹤的大型目錄
+dist_embed/製令查詢/_python/
+dist_embed/製令查詢/_edge_data/
+dist_embed/製令查詢/__pycache__/
+dist_embed/製令查詢/_app/__pycache__/
+dist_embed/製令查詢/_app/*.db
+
+# 其他
+*.log
+error.log
