@@ -148,6 +148,44 @@ def fetch_report_csv(report_path, params=None):
     return resp.content.decode('utf-8-sig')
 
 
+def fetch_efficiency_all_groups():
+    """透過 SSRS SOAP Execution Service 取得加工部總效率(全部)報表 CSV"""
+    import base64 as _b64
+    import re as _re
+    session = get_ssrs_session()
+    soap_url = f'http://192.168.1.212/ReportServer/ReportExecution2005.asmx'
+
+    def _soap(body, action):
+        return session.post(soap_url, data=body.encode('utf-8'),
+            headers={'Content-Type': 'text/xml; charset=utf-8',
+                     'SOAPAction': f'"http://schemas.microsoft.com/sqlserver/2005/06/30/reporting/reportingservices/{action}"'},
+            timeout=30)
+
+    NS = 'xmlns:rs="http://schemas.microsoft.com/sqlserver/2005/06/30/reporting/reportingservices"'
+    ENV_OPEN = f'<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" {NS}>'
+
+    # Step 1: LoadReport
+    r1 = _soap(f'{ENV_OPEN}<soap:Body><rs:LoadReport><rs:Report>/加工課/加工部總效率</rs:Report></rs:LoadReport></soap:Body></soap:Envelope>', 'LoadReport')
+    r1.raise_for_status()
+    eid = _re.search(r'<ExecutionID>([^<]+)</ExecutionID>', r1.text)
+    if not eid:
+        raise RuntimeError('LoadReport: 無法取得 ExecutionID')
+    exec_id = eid.group(1)
+
+    # Step 2: SetExecutionParameters ORG=全部
+    r2 = _soap(f'{ENV_OPEN}<soap:Header><rs:ExecutionHeader><rs:ExecutionID>{exec_id}</rs:ExecutionID></rs:ExecutionHeader></soap:Header><soap:Body><rs:SetExecutionParameters><rs:Parameters><rs:ParameterValue><rs:Name>ORG</rs:Name><rs:Value>全部</rs:Value></rs:ParameterValue></rs:Parameters><rs:ParameterLanguage>zh-TW</rs:ParameterLanguage></rs:SetExecutionParameters></soap:Body></soap:Envelope>', 'SetExecutionParameters')
+    r2.raise_for_status()
+
+    # Step 3: Render as CSV
+    r3 = _soap(f'{ENV_OPEN}<soap:Header><rs:ExecutionHeader><rs:ExecutionID>{exec_id}</rs:ExecutionID></rs:ExecutionHeader></soap:Header><soap:Body><rs:Render><rs:Format>CSV</rs:Format><rs:DeviceInfo></rs:DeviceInfo></rs:Render></soap:Body></soap:Envelope>', 'Render')
+    r3.raise_for_status()
+    b64 = _re.search(r'<Result>([^<]+)</Result>', r3.text)
+    if not b64:
+        raise RuntimeError('Render: 無法取得 CSV 結果')
+    csv_bytes = _b64.b64decode(b64.group(1))
+    return csv_bytes.decode('utf-8-sig', errors='replace')
+
+
 def parse_csv(csv_text):
     """解析 CSV 為 dict list"""
     reader = csv.reader(io.StringIO(csv_text))
@@ -259,7 +297,7 @@ def fetch_efficiency_data():
         return {}
 
 
-APP_VERSION = 'V26032703'
+APP_VERSION = 'V20260328001'
 
 @app.route('/ver')
 def ver_check():
@@ -274,6 +312,50 @@ def index():
 @app.route('/drawing')
 def drawing_page():
     return render_template('drawing.html')
+
+
+@app.route('/production')
+def production_page():
+    return render_template('production.html', app_version=APP_VERSION)
+
+
+@app.route('/api/production', methods=['GET'])
+def production_data():
+    """生產中製令 API：用 SOAP 取得加工部總效率(全部)"""
+    try:
+        csv_text = fetch_efficiency_all_groups()
+        records = parse_csv(csv_text)
+        # 回傳原始欄位名稱供前端自動對應
+        raw_columns = list(records[0].keys()) if records else []
+        return jsonify({'success': True, 'data': records, 'count': len(records), 'columns': raw_columns})
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/production/debug')
+def production_debug():
+    """除錯：顯示 SSRS CSV 原始欄位名稱"""
+    try:
+        csv_text = fetch_report_csv(config.REPORT_PATHS['efficiency'], {})
+        reader = csv.reader(io.StringIO(csv_text))
+        rows = list(reader)
+        if not rows:
+            return '<h2>CSV 空白</h2>'
+        header = rows[0]
+        html = '<h2>SSRS CSV 欄位名稱</h2><ol>'
+        for i, col in enumerate(header):
+            html += f'<li><b>{col}</b> (repr: {repr(col)})</li>'
+        html += '</ol>'
+        if len(rows) > 1:
+            html += '<h3>第一筆資料</h3><table border="1" cellpadding="4"><tr><th>欄位</th><th>值</th></tr>'
+            for col, val in zip(header, rows[1]):
+                html += f'<tr><td>{col}</td><td>{val}</td></tr>'
+            html += '</table>'
+        return html
+    except Exception as e:
+        import traceback
+        return f'<pre>Error: {traceback.format_exc()}</pre>', 500
 
 
 @app.route('/api/query', methods=['GET'])
