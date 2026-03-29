@@ -368,7 +368,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260329003'
+APP_VERSION = 'V20260329004'
 
 @app.route('/ver')
 def ver_check():
@@ -1212,6 +1212,85 @@ def bom_detail():
             })
 
         return jsonify({'success': True, 'header': header, 'detail': detail})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bom/routing')
+def bom_routing():
+    """取得指定品號的產品途程（BOMME + BOMMF，最新版次，對應 BOMMI07）"""
+    item_no = request.args.get('item_no', '').strip()
+    if not item_no:
+        return jsonify({'success': False, 'error': '請提供品號'}), 400
+    try:
+        conn = get_erp_conn()
+        cur  = conn.cursor()
+
+        # 品號主檔
+        cur.execute("""
+            SELECT RTRIM(MB001), RTRIM(ISNULL(MB002,'')),
+                   RTRIM(ISNULL(MB003,'')), ISNULL(MB004,''), ISNULL(MB025,'')
+            FROM INVMB WHERE RTRIM(MB001) = ?
+        """, (item_no,))
+        hrow = cur.fetchone()
+        header = {}
+        if hrow:
+            header = {
+                'item_no':   hrow[0],
+                'item_name': hrow[1],
+                'spec':      hrow[2],
+                'unit':      hrow[3],
+                'attr':      _ATTR_MAP.get(str(hrow[4]).strip(), str(hrow[4]).strip()),
+            }
+
+        # 最新途程版次
+        cur.execute("""
+            SELECT MAX(ME002) FROM BOMME WHERE RTRIM(ME001) = ?
+        """, (item_no,))
+        vrow = cur.fetchone()
+        latest_ver = (vrow[0] or '').strip() if vrow else ''
+        if header:
+            header['version'] = latest_ver
+
+        # 途程明細（BOMMF）
+        routing = []
+        if latest_ver:
+            _NATURE = {'1': '1:廠內', '2': '2:訂外', '3': '3:外包'}
+            cur.execute("""
+                SELECT
+                    MF003,
+                    RTRIM(ISNULL(MF004,'')),
+                    MF005,
+                    RTRIM(ISNULL(MF006,'')),
+                    RTRIM(ISNULL(MF007,'')),
+                    RTRIM(ISNULL(MF008,'')),
+                    CAST(ISNULL(MF012,0) AS VARCHAR(20))
+                FROM BOMMF
+                WHERE RTRIM(MF001) = ? AND MF002 = ?
+                ORDER BY MF003
+            """, (item_no, latest_ver))
+            rows = cur.fetchall()
+            for r in rows:
+                nature_code = str(r[2] or '').strip()
+                routing.append({
+                    'seq':        str(r[0] or '').strip(),
+                    'proc_code':  str(r[1] or '').strip(),
+                    'nature':     _NATURE.get(nature_code, nature_code),
+                    'vendor_no':  str(r[3] or '').strip(),
+                    'vendor_name':str(r[4] or '').strip(),
+                    'description':str(r[5] or '').strip(),
+                    'man_hrs':    str(r[6] or '').strip(),
+                })
+
+        conn.close()
+        has_routing = bool(latest_ver and routing)
+        return jsonify({
+            'success': True,
+            'has_routing': has_routing,
+            'header': header,
+            'routing': routing,
+        })
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
