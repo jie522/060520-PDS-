@@ -297,7 +297,78 @@ def fetch_efficiency_data():
         return {}
 
 
-APP_VERSION = 'V20260328001'
+# ── ServCloud 設備稼動 ─────────────────────────────────────────────
+_servcloud_session = None
+_servcloud_session_lock = threading.Lock()
+SERVCLOUD_BASE = getattr(config, 'SERVCLOUD_BASE', 'http://192.168.1.69:58080/ServCloud')
+SERVCLOUD_USER = getattr(config, 'SERVCLOUD_USER', 'adminstd')
+SERVCLOUD_PASS = getattr(config, 'SERVCLOUD_PASS', 'adminstd')
+
+_STATUS_MAP = {
+    '0':  ('離線', '#bdbdbd'),
+    '11': ('運轉', '#43a047'),
+    '12': ('待機', '#fb8c00'),
+    '13': ('警報', '#e53935'),
+    'B':  ('離線', '#bdbdbd'),
+}
+
+def _sc_login(s):
+    s.post(f'{SERVCLOUD_BASE}/api/user/login',
+           data={'id': SERVCLOUD_USER, 'password': SERVCLOUD_PASS}, timeout=10)
+
+def get_servcloud_session():
+    global _servcloud_session
+    with _servcloud_session_lock:
+        if _servcloud_session is None:
+            s = requests.Session()
+            _sc_login(s)
+            _servcloud_session = s
+        return _servcloud_session
+
+def _sc_post(path, payload, retry=True):
+    """POST to ServCloud; auto re-login on session expiry (type==2)."""
+    session = get_servcloud_session()
+    resp = session.post(f'{SERVCLOUD_BASE}{path}', json=payload, timeout=30)
+    data = resp.json()
+    if data.get('type') == 2 and retry:
+        global _servcloud_session
+        with _servcloud_session_lock:
+            _sc_login(session)
+            _servcloud_session = session
+        return _sc_post(path, payload, retry=False)
+    return data
+
+def _sc_parse(raw):
+    """ServCloud data 欄位可能是 JSON 字串或已解析的 list/dict，統一回傳 list。"""
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
+        return json.loads(raw)
+    return []
+
+def servcloud_get_machines():
+    data = _sc_post('/api/getdata/db',
+                    {'table': 'm_device', 'columns': ['device_id', 'device_name']})
+    machines = _sc_parse(data.get('data', []))
+    return [m for m in machines if m.get('device_name') and m['device_name'] != m['device_id']]
+
+def servcloud_get_history(machine_ids, date_str):
+    """date_str: YYYYMMDD。最多 10 台/次，自動分批。"""
+    all_recs = []
+    for i in range(0, len(machine_ids), 10):
+        batch = machine_ids[i:i+10]
+        data = _sc_post('/api/hippo/simple', {
+            'space': 'machine_status_history',
+            'index': {'machine_id': batch},
+            'indexRange': {'key': 'date', 'start': date_str, 'end': date_str},
+            'columns': ['machine_id', 'status', 'start_time', 'end_time', 'duration']
+        })
+        if data.get('type') == 0 and data.get('data'):
+            all_recs.extend(_sc_parse(data['data']))
+    return all_recs
+
+
+APP_VERSION = 'V20260329002'
 
 @app.route('/ver')
 def ver_check():
@@ -909,6 +980,221 @@ def open_drawing():
                     pdm_hint = '（此電腦未安裝 SolidWorks PDM，無法自動取出圖面）' if 'ConisioLib' in msg or 'EdmVault' in msg or '無法建立' in msg else ''
                     return jsonify({'success': False,
                                     'error': f'無法開啟圖面：{msg}{pdm_hint}'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/equipment')
+def equipment_page():
+    return render_template('equipment.html', app_version=APP_VERSION)
+
+
+@app.route('/api/equipment/machines')
+def equipment_machines():
+    try:
+        machines = servcloud_get_machines()
+        return jsonify({'success': True, 'data': machines})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/equipment/history')
+def equipment_history():
+    date_str    = request.args.get('date', '')           # YYYY-MM-DD
+    start_hour  = int(request.args.get('start_hour', 7))
+    end_hour    = int(request.args.get('end_hour', 20))
+    machine_ids = request.args.getlist('machines')
+
+    if not date_str or not machine_ids:
+        return jsonify({'success': False, 'error': '請提供日期和機台'}), 400
+
+    date_api = date_str.replace('-', '')
+
+    try:
+        history = servcloud_get_history(machine_ids, date_api)
+        all_machines = servcloud_get_machines()
+        name_map = {m['device_id']: m['device_name'] for m in all_machines}
+
+        range_start_s = start_hour * 3600   # 秒
+        range_end_s   = end_hour   * 3600
+        total_min     = (range_end_s - range_start_s) // 60
+
+        # Group segments by machine (秒精度)
+        buckets = {mid: [] for mid in machine_ids}
+        for rec in history:
+            mid = rec.get('machine_id', '')
+            if mid not in buckets:
+                continue
+            st = rec.get('start_time', '')
+            et = rec.get('end_time',   '')
+            if len(st) < 14 or len(et) < 14:
+                continue
+            s_sec = int(st[8:10])*3600 + int(st[10:12])*60 + int(st[12:14])
+            e_sec = int(et[8:10])*3600 + int(et[10:12])*60 + int(et[12:14])
+            # Handle overnight
+            if e_sec < s_sec:
+                e_sec += 24 * 3600
+            s_clip = max(s_sec, range_start_s)
+            e_clip = min(e_sec, range_end_s)
+            if s_clip >= e_clip:
+                continue
+            status = rec.get('status', '0')
+            status_name, color = _STATUS_MAP.get(status, ('未知', '#9e9e9e'))
+            dur_sec = e_clip - s_clip
+            buckets[mid].append({
+                'status':      status,
+                'status_name': status_name,
+                'color':       color,
+                'start_min':   (s_clip - range_start_s) / 60,   # float，用於圖表定位
+                'end_min':     (e_clip - range_start_s) / 60,
+                'start_str':   f"{s_clip//3600%24:02d}:{s_clip%3600//60:02d}:{s_clip%60:02d}",
+                'end_str':     f"{e_clip//3600%24:02d}:{e_clip%3600//60:02d}:{e_clip%60:02d}",
+                'dur_sec':     dur_sec,
+            })
+
+        result = [
+            {'id': mid, 'name': name_map.get(mid, mid), 'segments': buckets[mid]}
+            for mid in machine_ids
+        ]
+        return jsonify({
+            'success': True, 'machines': result,
+            'date': date_str, 'start_hour': start_hour,
+            'end_hour': end_hour, 'total_minutes': total_min
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+# ── BOM 查詢系統 ───────────────────────────────────────────────────
+# 資料庫：192.168.1.140 / YC01（Computech ERP）
+# 品號主檔：INVMB  BOM表頭：BOMME  BOM明細：BOMMF
+_ERP_SQL_SERVER   = getattr(config, 'ERP_SQL_SERVER',   '192.168.1.140')
+_ERP_SQL_DATABASE = getattr(config, 'ERP_SQL_DATABASE', 'YC01')
+_ERP_SQL_USERNAME = getattr(config, 'ERP_SQL_USERNAME', 'sa')
+_ERP_SQL_PASSWORD = getattr(config, 'ERP_SQL_PASSWORD', 'dsc55877948')
+
+
+def get_erp_conn():
+    """建立 ERP SQL Server 連線（pyodbc）"""
+    try:
+        import pyodbc
+    except ImportError:
+        raise RuntimeError('未安裝 pyodbc，請執行: pip install pyodbc')
+
+    cs = (f'DRIVER={{ODBC Driver 17 for SQL Server}};'
+          f'SERVER={_ERP_SQL_SERVER};DATABASE={_ERP_SQL_DATABASE};'
+          f'UID={_ERP_SQL_USERNAME};PWD={_ERP_SQL_PASSWORD};'
+          f'TrustServerCertificate=yes;Connection Timeout=8;')
+    return pyodbc.connect(cs, timeout=8)
+
+
+@app.route('/bom')
+def bom_page():
+    return render_template('bom.html', app_version=APP_VERSION)
+
+
+@app.route('/api/bom/search')
+def bom_search():
+    """搜尋有BOM的品號（INVMB JOIN BOMME，品號或品名模糊搜尋）"""
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify({'success': False, 'error': '請輸入品號或品名'}), 400
+    try:
+        conn = get_erp_conn()
+        cur = conn.cursor()
+        like = f'%{q}%'
+        # 搜尋 INVMB（品號主檔），條件：有對應 BOMME 記錄，且 品號 或 品名 符合
+        cur.execute("""
+            SELECT TOP 100
+                RTRIM(b.MB001) AS item_no,
+                RTRIM(ISNULL(b.MB002,'')) AS item_name,
+                RTRIM(ISNULL(b.MB003,'')) AS spec,
+                ISNULL(b.MB004,'') AS unit
+            FROM INVMB b
+            WHERE EXISTS (
+                SELECT 1 FROM BOMME e WHERE RTRIM(e.ME001) = RTRIM(b.MB001)
+            )
+            AND (RTRIM(b.MB001) LIKE ? OR b.MB002 LIKE ?)
+            ORDER BY b.MB001
+        """, (like, like))
+        rows = cur.fetchall()
+        conn.close()
+        results = [
+            {'item_no': r[0], 'item_name': r[1], 'spec': r[2], 'unit': r[3]}
+            for r in rows
+        ]
+        return jsonify({'success': True, 'data': results, 'count': len(results)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bom/detail')
+def bom_detail():
+    """取得指定品號的工程BOM明細（INVMB + BOMME + BOMMF，取最新版次）"""
+    item_no = request.args.get('item_no', '').strip()
+    if not item_no:
+        return jsonify({'success': False, 'error': '請提供品號'}), 400
+    try:
+        conn = get_erp_conn()
+        cur = conn.cursor()
+
+        # 取品號主檔資訊
+        cur.execute("""
+            SELECT RTRIM(MB001), RTRIM(ISNULL(MB002,'')), RTRIM(ISNULL(MB003,'')), ISNULL(MB004,'')
+            FROM INVMB WHERE RTRIM(MB001) = ?
+        """, (item_no,))
+        hrow = cur.fetchone()
+        header = {}
+        if hrow:
+            header = {'item_no': hrow[0], 'item_name': hrow[1],
+                      'spec': hrow[2], 'unit': hrow[3]}
+
+        # 取最新版次（BOMME.ME002 MAX）
+        cur.execute("""
+            SELECT MAX(ME002) FROM BOMME WHERE RTRIM(ME001) = ?
+        """, (item_no,))
+        vrow = cur.fetchone()
+        latest_ver = (vrow[0] or '').strip() if vrow else ''
+        if header:
+            header['version'] = latest_ver
+
+        # 取工程BOM明細（BOMMF）
+        detail = []
+        if latest_ver:
+            cur.execute("""
+                SELECT
+                    ISNULL(MF003,'') AS seq,
+                    ISNULL(MF004,'') AS work_center,
+                    RTRIM(ISNULL(MF006,'')) AS supplier_no,
+                    RTRIM(ISNULL(MF007,'')) AS supplier_name,
+                    RTRIM(ISNULL(MF008,'')) AS spec,
+                    ISNULL(MF005,'') AS attr,
+                    ISNULL(MF017,'') AS unit,
+                    CAST(ISNULL(MF012,0) AS VARCHAR(30)) AS qty
+                FROM BOMMF
+                WHERE RTRIM(MF001) = ? AND MF002 = ?
+                ORDER BY MF003
+            """, (item_no, latest_ver))
+            rows = cur.fetchall()
+            for r in rows:
+                # attr: '1'=自製, '2'=外包, 其他顯示原值
+                attr_val = str(r[5] or '').strip()
+                attr_label = {'1': '自製', '2': '外包'}.get(attr_val, attr_val)
+                detail.append({
+                    'seq':           str(r[0] or '').strip(),
+                    'work_center':   str(r[1] or '').strip(),
+                    'supplier_no':   str(r[2] or '').strip(),
+                    'supplier_name': str(r[3] or '').strip(),
+                    'spec':          str(r[4] or '').strip(),
+                    'attr':          attr_label,
+                    'unit':          str(r[6] or '').strip(),
+                    'qty':           str(r[7] or '').strip(),
+                })
+
+        conn.close()
+        return jsonify({'success': True, 'header': header, 'detail': detail})
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
