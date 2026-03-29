@@ -31,12 +31,8 @@ WINDOW_HEIGHT = 900
 WINDOW_TITLE = '詠基-加工部查詢系統PDIS'
 
 # ── ERP SQL Server 連線設定（BOM查詢用）──────────────────────────
-# 請填入正確的 SQL Server 連線資訊，儲存後重新啟動程式即可生效
-ERP_SQL_SERVER   = '192.168.1.212'      # SQL Server 位址
-ERP_SQL_DATABASE = 'MCPDB'              # ERP 資料庫名稱（請確認）
-ERP_SQL_USERNAME = 'max'                # SQL Server 帳號（空字串=使用 Windows 驗證）
-ERP_SQL_PASSWORD = 'max'               # SQL Server 密碼
-
-# BOM 查詢資料表名稱（Computech ERP 預設）
-BOM_HEADER_TABLE = 'BOMMH'   # BOM 母件主檔
-BOM_DETAIL_TABLE = 'BOMMD'   # BOM 子件明細
+# 連線至 192.168.1.140 的 Computech ERP YC01 資料庫
+ERP_SQL_SERVER   = '192.168.1.140'      # SFT/ERP SQL Server 位址
+ERP_SQL_DATABASE = 'YC01'               # YC01 公司 ERP 資料庫
+ERP_SQL_USERNAME = 'sa'                 # SQL Server 帳號
+ERP_SQL_PASSWORD = 'dsc55877948'        # SQL Server 密碼

@@ -368,7 +368,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260329001'
+APP_VERSION = 'V20260329002'
 
 @app.route('/ver')
 def ver_check():
@@ -1067,12 +1067,12 @@ def equipment_history():
 
 
 # ── BOM 查詢系統 ───────────────────────────────────────────────────
-_ERP_SQL_SERVER   = getattr(config, 'ERP_SQL_SERVER',   '192.168.1.212')
-_ERP_SQL_DATABASE = getattr(config, 'ERP_SQL_DATABASE', 'MCPDB')
-_ERP_SQL_USERNAME = getattr(config, 'ERP_SQL_USERNAME', '')
-_ERP_SQL_PASSWORD = getattr(config, 'ERP_SQL_PASSWORD', '')
-_BOM_HEADER_TABLE = getattr(config, 'BOM_HEADER_TABLE', 'BOMMH')
-_BOM_DETAIL_TABLE = getattr(config, 'BOM_DETAIL_TABLE', 'BOMMD')
+# 資料庫：192.168.1.140 / YC01（Computech ERP）
+# 品號主檔：INVMB  BOM表頭：BOMME  BOM明細：BOMMF
+_ERP_SQL_SERVER   = getattr(config, 'ERP_SQL_SERVER',   '192.168.1.140')
+_ERP_SQL_DATABASE = getattr(config, 'ERP_SQL_DATABASE', 'YC01')
+_ERP_SQL_USERNAME = getattr(config, 'ERP_SQL_USERNAME', 'sa')
+_ERP_SQL_PASSWORD = getattr(config, 'ERP_SQL_PASSWORD', 'dsc55877948')
 
 
 def get_erp_conn():
@@ -1082,49 +1082,11 @@ def get_erp_conn():
     except ImportError:
         raise RuntimeError('未安裝 pyodbc，請執行: pip install pyodbc')
 
-    if _ERP_SQL_USERNAME:
-        cs = (f'DRIVER={{ODBC Driver 17 for SQL Server}};'
-              f'SERVER={_ERP_SQL_SERVER};DATABASE={_ERP_SQL_DATABASE};'
-              f'UID={_ERP_SQL_USERNAME};PWD={_ERP_SQL_PASSWORD};'
-              f'Connection Timeout=5;')
-    else:
-        cs = (f'DRIVER={{ODBC Driver 17 for SQL Server}};'
-              f'SERVER={_ERP_SQL_SERVER};DATABASE={_ERP_SQL_DATABASE};'
-              f'Trusted_Connection=yes;Connection Timeout=5;')
-    return pyodbc.connect(cs, timeout=5)
-
-
-def _bom_get_columns(cur, table):
-    """取得資料表的欄位名稱清單（用於自動偵測欄位）"""
-    cur.execute(
-        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
-        "WHERE TABLE_NAME=? ORDER BY ORDINAL_POSITION", (table,)
-    )
-    return [r[0] for r in cur.fetchall()]
-
-
-def _bom_search_sql(cols_h):
-    """依實際欄位自動選擇查詢欄位名稱（相容多種 Computech ERP 版本）"""
-    # 品號欄位候補
-    no_c   = next((c for c in cols_h if c in ('品號', 'ItemNo', 'ITEM_NO', 'item_no', 'C001')), cols_h[0] if cols_h else '品號')
-    name_c = next((c for c in cols_h if c in ('品名', 'ItemName', 'ITEM_NAME', 'item_name', 'C002')), None)
-    spec_c = next((c for c in cols_h if c in ('規格', 'Spec', 'SPEC', 'C003')), None)
-    return no_c, name_c, spec_c
-
-
-def _bom_detail_sql(cols_d):
-    """依實際欄位自動選擇明細查詢欄位"""
-    def pick(candidates):
-        return next((c for c in cols_d if c in candidates), None)
-    seq_c    = pick(['序號', 'Seq', 'SEQ', 'C002'])
-    child_c  = pick(['元件品號', '子件品號', 'ChildNo', 'CHILD_NO', 'C003'])
-    cname_c  = pick(['品名', 'ItemName', 'ITEM_NAME', 'C004'])
-    cspec_c  = pick(['規格', 'Spec', 'SPEC', 'C005'])
-    unit_c   = pick(['單位', 'Unit', 'UNIT', 'C006'])
-    sunit_c  = pick(['小單位', 'SubUnit', 'SUB_UNIT', 'C007'])
-    attr_c   = pick(['屬性', 'Attr', 'ATTR', 'C008'])
-    qty_c    = pick(['組成用量', 'Qty', 'QTY', 'UsageQty', 'USAGE_QTY', 'C009'])
-    return seq_c, child_c, cname_c, cspec_c, unit_c, sunit_c, attr_c, qty_c
+    cs = (f'DRIVER={{ODBC Driver 17 for SQL Server}};'
+          f'SERVER={_ERP_SQL_SERVER};DATABASE={_ERP_SQL_DATABASE};'
+          f'UID={_ERP_SQL_USERNAME};PWD={_ERP_SQL_PASSWORD};'
+          f'TrustServerCertificate=yes;Connection Timeout=8;')
+    return pyodbc.connect(cs, timeout=8)
 
 
 @app.route('/bom')
@@ -1134,59 +1096,42 @@ def bom_page():
 
 @app.route('/api/bom/search')
 def bom_search():
-    """搜尋 BOM 母件（品號或品名模糊搜尋）"""
+    """搜尋有BOM的品號（INVMB JOIN BOMME，品號或品名模糊搜尋）"""
     q = request.args.get('q', '').strip()
     if not q:
         return jsonify({'success': False, 'error': '請輸入品號或品名'}), 400
     try:
         conn = get_erp_conn()
         cur = conn.cursor()
-
-        # 自動偵測欄位
-        cols_h = _bom_get_columns(cur, _BOM_HEADER_TABLE)
-        no_c, name_c, spec_c = _bom_search_sql(cols_h)
-
-        # 選擇欄位
-        sel = f'[{no_c}]'
-        if name_c:
-            sel += f', [{name_c}]'
-        if spec_c:
-            sel += f', [{spec_c}]'
-
-        # 條件
         like = f'%{q}%'
-        where_parts = [f'[{no_c}] LIKE ?']
-        params = [like]
-        if name_c:
-            where_parts.append(f'[{name_c}] LIKE ?')
-            params.append(like)
-        where = ' OR '.join(where_parts)
-
-        cur.execute(
-            f'SELECT TOP 100 {sel} FROM [{_BOM_HEADER_TABLE}] WHERE {where} ORDER BY [{no_c}]',
-            params
-        )
+        # 搜尋 INVMB（品號主檔），條件：有對應 BOMME 記錄，且 品號 或 品名 符合
+        cur.execute("""
+            SELECT TOP 100
+                RTRIM(b.MB001) AS item_no,
+                RTRIM(ISNULL(b.MB002,'')) AS item_name,
+                RTRIM(ISNULL(b.MB003,'')) AS spec,
+                ISNULL(b.MB004,'') AS unit
+            FROM INVMB b
+            WHERE EXISTS (
+                SELECT 1 FROM BOMME e WHERE RTRIM(e.ME001) = RTRIM(b.MB001)
+            )
+            AND (RTRIM(b.MB001) LIKE ? OR b.MB002 LIKE ?)
+            ORDER BY b.MB001
+        """, (like, like))
         rows = cur.fetchall()
         conn.close()
-
-        results = []
-        for row in rows:
-            d = {'item_no': str(row[0] or '').strip()}
-            if name_c:
-                d['item_name'] = str(row[1] or '').strip() if len(row) > 1 else ''
-            if spec_c:
-                d['spec'] = str(row[2] or '').strip() if len(row) > 2 else ''
-            results.append(d)
-
+        results = [
+            {'item_no': r[0], 'item_name': r[1], 'spec': r[2], 'unit': r[3]}
+            for r in rows
+        ]
         return jsonify({'success': True, 'data': results, 'count': len(results)})
-
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/bom/detail')
 def bom_detail():
-    """取得指定品號的 BOM 子件明細"""
+    """取得指定品號的工程BOM明細（INVMB + BOMME + BOMMF，取最新版次）"""
     item_no = request.args.get('item_no', '').strip()
     if not item_no:
         return jsonify({'success': False, 'error': '請提供品號'}), 400
@@ -1194,55 +1139,61 @@ def bom_detail():
         conn = get_erp_conn()
         cur = conn.cursor()
 
-        # 取母件資訊
-        cols_h = _bom_get_columns(cur, _BOM_HEADER_TABLE)
-        no_c, name_c, spec_c = _bom_search_sql(cols_h)
-        sel_h = f'[{no_c}]'
-        if name_c: sel_h += f', [{name_c}]'
-        if spec_c: sel_h += f', [{spec_c}]'
-        cur.execute(f'SELECT {sel_h} FROM [{_BOM_HEADER_TABLE}] WHERE [{no_c}]=?', (item_no,))
+        # 取品號主檔資訊
+        cur.execute("""
+            SELECT RTRIM(MB001), RTRIM(ISNULL(MB002,'')), RTRIM(ISNULL(MB003,'')), ISNULL(MB004,'')
+            FROM INVMB WHERE RTRIM(MB001) = ?
+        """, (item_no,))
         hrow = cur.fetchone()
         header = {}
         if hrow:
-            header = {'item_no': str(hrow[0] or '').strip()}
-            if name_c and len(hrow) > 1: header['item_name'] = str(hrow[1] or '').strip()
-            if spec_c and len(hrow) > 2: header['spec'] = str(hrow[2] or '').strip()
+            header = {'item_no': hrow[0], 'item_name': hrow[1],
+                      'spec': hrow[2], 'unit': hrow[3]}
 
-        # 取子件明細
-        cols_d = _bom_get_columns(cur, _BOM_DETAIL_TABLE)
-        no_c_d = next((c for c in cols_d if c in ('品號', 'ItemNo', 'ITEM_NO', 'C001')), cols_d[0] if cols_d else '品號')
-        seq_c, child_c, cname_c, cspec_c, unit_c, sunit_c, attr_c, qty_c = _bom_detail_sql(cols_d)
+        # 取最新版次（BOMME.ME002 MAX）
+        cur.execute("""
+            SELECT MAX(ME002) FROM BOMME WHERE RTRIM(ME001) = ?
+        """, (item_no,))
+        vrow = cur.fetchone()
+        latest_ver = (vrow[0] or '').strip() if vrow else ''
+        if header:
+            header['version'] = latest_ver
 
-        sel_parts = [f'[{no_c_d}]']
-        for c in [seq_c, child_c, cname_c, cspec_c, unit_c, sunit_c, attr_c, qty_c]:
-            if c:
-                sel_parts.append(f'[{c}]')
-        sel_d = ', '.join(sel_parts)
-        order = f'[{seq_c}]' if seq_c else f'[{no_c_d}]'
-        cur.execute(
-            f'SELECT {sel_d} FROM [{_BOM_DETAIL_TABLE}] WHERE [{no_c_d}]=? ORDER BY {order}',
-            (item_no,)
-        )
-        drows = cur.fetchall()
-        conn.close()
-
+        # 取工程BOM明細（BOMMF）
         detail = []
-        for row in drows:
-            vals = [str(v or '').strip() for v in row]
-            i = 1  # skip parent no at index 0
-            d = {
-                'seq':        vals[i] if seq_c   else '',
-                'child_no':   vals[i + (1 if seq_c else 0)] if child_c else '',
-                'child_name': vals[i + (2 if seq_c else 1)] if cname_c else '',
-                'spec':       vals[i + (3 if seq_c else 2)] if cspec_c else '',
-                'unit':       vals[i + (4 if seq_c else 3)] if unit_c  else '',
-                'sub_unit':   vals[i + (5 if seq_c else 4)] if sunit_c else '',
-                'attr':       vals[i + (6 if seq_c else 5)] if attr_c  else '',
-                'qty':        vals[i + (7 if seq_c else 6)] if qty_c   else '',
-            }
-            detail.append(d)
+        if latest_ver:
+            cur.execute("""
+                SELECT
+                    ISNULL(MF003,'') AS seq,
+                    ISNULL(MF004,'') AS work_center,
+                    RTRIM(ISNULL(MF006,'')) AS supplier_no,
+                    RTRIM(ISNULL(MF007,'')) AS supplier_name,
+                    RTRIM(ISNULL(MF008,'')) AS spec,
+                    ISNULL(MF005,'') AS attr,
+                    ISNULL(MF017,'') AS unit,
+                    CAST(ISNULL(MF012,0) AS VARCHAR(30)) AS qty
+                FROM BOMMF
+                WHERE RTRIM(MF001) = ? AND MF002 = ?
+                ORDER BY MF003
+            """, (item_no, latest_ver))
+            rows = cur.fetchall()
+            for r in rows:
+                # attr: '1'=自製, '2'=外包, 其他顯示原值
+                attr_val = str(r[5] or '').strip()
+                attr_label = {'1': '自製', '2': '外包'}.get(attr_val, attr_val)
+                detail.append({
+                    'seq':           str(r[0] or '').strip(),
+                    'work_center':   str(r[1] or '').strip(),
+                    'supplier_no':   str(r[2] or '').strip(),
+                    'supplier_name': str(r[3] or '').strip(),
+                    'spec':          str(r[4] or '').strip(),
+                    'attr':          attr_label,
+                    'unit':          str(r[6] or '').strip(),
+                    'qty':           str(r[7] or '').strip(),
+                })
 
-        return jsonify({'success': True, 'header': header, 'detail': detail, 'count': len(detail)})
+        conn.close()
+        return jsonify({'success': True, 'header': header, 'detail': detail})
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
