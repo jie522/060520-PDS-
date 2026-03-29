@@ -368,7 +368,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260329004'
+APP_VERSION = 'V20260329005'
 
 @app.route('/ver')
 def ver_check():
@@ -1253,34 +1253,37 @@ def bom_routing():
         if header:
             header['version'] = latest_ver
 
-        # 途程明細（BOMMF）
+        # 途程明細（BOMMF JOIN CMSMW 取製程名稱）
         routing = []
         if latest_ver:
             _NATURE = {'1': '1:廠內', '2': '2:訂外', '3': '3:外包'}
             cur.execute("""
                 SELECT
-                    MF003,
-                    RTRIM(ISNULL(MF004,'')),
-                    MF005,
-                    RTRIM(ISNULL(MF006,'')),
-                    RTRIM(ISNULL(MF007,'')),
-                    RTRIM(ISNULL(MF008,'')),
-                    CAST(ISNULL(MF012,0) AS VARCHAR(20))
-                FROM BOMMF
-                WHERE RTRIM(MF001) = ? AND MF002 = ?
-                ORDER BY MF003
+                    f.MF003,
+                    RTRIM(ISNULL(f.MF004,'')),
+                    RTRIM(ISNULL(w.MW002,'')) AS proc_name,
+                    f.MF005,
+                    RTRIM(ISNULL(f.MF006,'')),
+                    RTRIM(ISNULL(f.MF007,'')),
+                    RTRIM(ISNULL(f.MF008,'')),
+                    CAST(ISNULL(f.MF012,0) AS VARCHAR(20))
+                FROM BOMMF f
+                LEFT JOIN CMSMW w ON RTRIM(w.MW001) = RTRIM(f.MF004)
+                WHERE RTRIM(f.MF001) = ? AND f.MF002 = ?
+                ORDER BY f.MF003
             """, (item_no, latest_ver))
             rows = cur.fetchall()
             for r in rows:
-                nature_code = str(r[2] or '').strip()
+                nature_code = str(r[3] or '').strip()
                 routing.append({
                     'seq':        str(r[0] or '').strip(),
                     'proc_code':  str(r[1] or '').strip(),
+                    'proc_name':  str(r[2] or '').strip(),
                     'nature':     _NATURE.get(nature_code, nature_code),
-                    'vendor_no':  str(r[3] or '').strip(),
-                    'vendor_name':str(r[4] or '').strip(),
-                    'description':str(r[5] or '').strip(),
-                    'man_hrs':    str(r[6] or '').strip(),
+                    'vendor_no':  str(r[4] or '').strip(),
+                    'vendor_name':str(r[5] or '').strip(),
+                    'description':str(r[6] or '').strip(),
+                    'man_hrs':    str(r[7] or '').strip(),
                 })
 
         conn.close()

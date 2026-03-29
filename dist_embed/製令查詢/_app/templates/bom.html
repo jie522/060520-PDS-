@@ -630,7 +630,8 @@
         <td class="check-col"><input type="checkbox" id="chk${i}" onclick="event.stopPropagation();toggleRow(${i},true)"></td>
         <td>${escHtml(d.seq)}</td>
         <td class="no-col">
-          <span class="item-link" onclick="event.stopPropagation();openRouting(${JSON.stringify(d.child_no)})"
+          <span class="item-link" data-no="${escHtml(d.child_no)}"
+                onclick="event.stopPropagation();openRouting(this.dataset.no)"
                 title="點擊查看途程">${escHtml(d.child_no)}</span>
         </td>
         <td>${escHtml(d.child_name)}</td>
@@ -769,6 +770,7 @@
           <tr>
             <td>${escHtml(r.seq)}</td>
             <td>${escHtml(r.proc_code)}</td>
+            <td>${escHtml(r.proc_name)}</td>
             <td>${escHtml(r.nature)}</td>
             <td>${escHtml(r.vendor_no)}</td>
             <td>${escHtml(r.vendor_name)}</td>
@@ -782,6 +784,7 @@
               <tr>
                 <th>加工順序</th>
                 <th>製程代號</th>
+                <th>製程名稱</th>
                 <th>性質</th>
                 <th>廠商代號</th>
                 <th>廠商名稱</th>
