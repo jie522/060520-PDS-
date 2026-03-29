@@ -264,6 +264,39 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Prefix filter ── */
+    .prefix-filter {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.45rem;
+      flex-wrap: wrap;
+    }
+    .prefix-label { font-size: 0.77rem; color: var(--muted); white-space: nowrap; }
+    .prefix-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .prefix-btn input[type=radio] { display: none; }
+    .prefix-btn span {
+      padding: 0.2rem 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: white;
+      color: var(--text);
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .prefix-btn input[type=radio]:checked + span {
+      background: var(--blue);
+      color: white;
+      border-color: var(--blue);
+    }
+    .prefix-btn:hover span { background: var(--blue-pale); }
+
     /* ── Count badge ── */
     .badge {
       display: inline-block;
@@ -314,7 +347,15 @@
           <input type="text" id="searchInput" placeholder="輸入品號或品名…" autocomplete="off">
           <button class="btn btn-primary" onclick="doSearch()">搜尋</button>
         </div>
-        <div style="font-size:0.77rem;color:var(--muted);margin-top:0.35rem;">
+        <!-- 品號開頭篩選 -->
+        <div class="prefix-filter">
+          <span class="prefix-label">品號篩選：</span>
+          <label class="prefix-btn"><input type="radio" name="prefix" value="" checked onchange="doSearch()"><span>全部</span></label>
+          <label class="prefix-btn"><input type="radio" name="prefix" value="5" onchange="doSearch()"><span>5開頭</span></label>
+          <label class="prefix-btn"><input type="radio" name="prefix" value="6" onchange="doSearch()"><span>6開頭</span></label>
+          <label class="prefix-btn"><input type="radio" name="prefix" value="56" onchange="doSearch()"><span>5或6</span></label>
+        </div>
+        <div style="font-size:0.77rem;color:var(--muted);margin-top:0.3rem;">
           支援模糊搜尋，Enter 鍵搜尋
         </div>
       </div>
@@ -356,7 +397,8 @@
         <div><span>母件品號：</span><strong id="dhItemNo">-</strong></div>
         <div><span>品名：</span><strong id="dhItemName">-</strong></div>
         <div><span>規格：</span><strong id="dhSpec">-</strong></div>
-        <div><span>版次：</span><strong id="dhVersion">-</strong></div>
+        <div><span>屬性：</span><strong id="dhAttr">-</strong></div>
+        <div><span>單位：</span><strong id="dhUnit">-</strong></div>
       </div>
 
       <!-- Toolbar -->
@@ -406,11 +448,14 @@
     const q = document.getElementById('searchInput').value.trim();
     if (!q) return;
 
+    const prefixEl = document.querySelector('input[name="prefix"]:checked');
+    const prefix = prefixEl ? prefixEl.value : '';
+
     const list = document.getElementById('resultList');
     list.innerHTML = '<div class="msg-empty"><span class="spinner"></span><span style="margin-left:.5rem">搜尋中…</span></div>';
     document.getElementById('resultCountBadge').textContent = '…';
 
-    fetch('/api/bom/search?q=' + encodeURIComponent(q))
+    fetch('/api/bom/search?q=' + encodeURIComponent(q) + '&prefix=' + encodeURIComponent(prefix))
       .then(r => r.json())
       .then(data => {
         if (!data.success) {
@@ -472,10 +517,11 @@
 
         // Header info
         const h = data.header || {};
-        document.getElementById('dhItemNo').textContent      = h.item_no   || item.item_no;
-        document.getElementById('dhItemName').textContent    = h.item_name || item.item_name || '-';
-        document.getElementById('dhSpec').textContent        = h.spec      || item.spec      || '-';
-        document.getElementById('dhVersion').textContent     = h.version   || '-';
+        document.getElementById('dhItemNo').textContent   = h.item_no   || item.item_no;
+        document.getElementById('dhItemName').textContent = h.item_name || item.item_name || '-';
+        document.getElementById('dhSpec').textContent     = h.spec      || item.spec      || '-';
+        document.getElementById('dhAttr').textContent     = h.attr      || item.attr      || '-';
+        document.getElementById('dhUnit').textContent     = h.unit      || item.unit      || '-';
         document.getElementById('detailHeaderInfo').style.display = 'flex';
         document.getElementById('detailToolbar').style.display = 'flex';
         document.getElementById('detailCountBadge').textContent = _detailData.length + ' 項';
@@ -500,12 +546,12 @@
       <tr id="row${i}" onclick="toggleRow(${i})">
         <td class="check-col"><input type="checkbox" id="chk${i}" onclick="event.stopPropagation();toggleRow(${i},true)"></td>
         <td>${escHtml(d.seq)}</td>
-        <td class="no-col">${escHtml(d.work_center)}</td>
-        <td>${escHtml(d.supplier_no)}</td>
-        <td>${escHtml(d.supplier_name)}</td>
+        <td class="no-col">${escHtml(d.child_no)}</td>
+        <td>${escHtml(d.child_name)}</td>
         <td>${escHtml(d.spec)}</td>
-        <td>${escHtml(d.attr)}</td>
         <td>${escHtml(d.unit)}</td>
+        <td>${escHtml(d.sub_unit)}</td>
+        <td>${escHtml(d.attr)}</td>
         <td class="qty-col">${escHtml(d.qty)}</td>
       </tr>
     `).join('');
@@ -518,12 +564,12 @@
               <input type="checkbox" id="chkAll" onclick="selectAll(this.checked)" title="全選/全消">
             </th>
             <th>序號</th>
-            <th>工站代碼</th>
-            <th>廠商代號</th>
-            <th>廠商名稱</th>
-            <th>加工說明</th>
-            <th>屬性</th>
+            <th>元件品號</th>
+            <th>品名</th>
+            <th>規格</th>
             <th>單位</th>
+            <th>小單位</th>
+            <th>屬性</th>
             <th>組成用量</th>
           </tr>
         </thead>
@@ -584,12 +630,12 @@
     if (selected.length === 0) return;
 
     const BOM = ['\uFEFF']; // UTF-8 BOM for Excel
-    BOM.push('母件品號,母件品名,序號,工站代碼,廠商代號,廠商名稱,加工說明,屬性,單位,組成用量\r\n');
+    BOM.push('母件品號,母件品名,序號,元件品號,品名,規格,單位,小單位,屬性,組成用量\r\n');
     selected.forEach(d => {
       const cols = [
         header, headerName,
-        d.seq, d.work_center, d.supplier_no, d.supplier_name,
-        d.spec, d.attr, d.unit, d.qty
+        d.seq, d.child_no, d.child_name, d.spec,
+        d.unit, d.sub_unit, d.attr, d.qty
       ];
       BOM.push(cols.map(c => '"' + (c || '').replace(/"/g, '""') + '"').join(',') + '\r\n');
     });

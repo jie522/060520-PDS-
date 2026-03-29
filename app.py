@@ -368,7 +368,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260329002'
+APP_VERSION = 'V20260329003'
 
 @app.route('/ver')
 def ver_check():
@@ -1068,11 +1068,15 @@ def equipment_history():
 
 # ── BOM 查詢系統 ───────────────────────────────────────────────────
 # 資料庫：192.168.1.140 / YC01（Computech ERP）
-# 品號主檔：INVMB  BOM表頭：BOMME  BOM明細：BOMMF
+# 品號主檔：INVMB  材料BOM：BOMMD（MCPI11模組）
 _ERP_SQL_SERVER   = getattr(config, 'ERP_SQL_SERVER',   '192.168.1.140')
 _ERP_SQL_DATABASE = getattr(config, 'ERP_SQL_DATABASE', 'YC01')
 _ERP_SQL_USERNAME = getattr(config, 'ERP_SQL_USERNAME', 'sa')
 _ERP_SQL_PASSWORD = getattr(config, 'ERP_SQL_PASSWORD', 'dsc55877948')
+
+# 屬性代碼對照表（INVMB.MB025）
+_ATTR_MAP = {'M': 'M:自製件', 'S': 'S:訂外加工', 'P': 'P:採購件',
+             'R': 'R:委外', 'F': 'F:虛擬件'}
 
 
 def get_erp_conn():
@@ -1096,34 +1100,50 @@ def bom_page():
 
 @app.route('/api/bom/search')
 def bom_search():
-    """搜尋有BOM的品號（INVMB JOIN BOMME，品號或品名模糊搜尋）"""
-    q = request.args.get('q', '').strip()
+    """搜尋有材料BOM的品號（INVMB + BOMMD，品號/品名模糊搜尋，可篩選品號開頭）"""
+    q      = request.args.get('q', '').strip()
+    prefix = request.args.get('prefix', '').strip()   # '5', '6', '56' 或空
     if not q:
         return jsonify({'success': False, 'error': '請輸入品號或品名'}), 400
     try:
         conn = get_erp_conn()
-        cur = conn.cursor()
+        cur  = conn.cursor()
         like = f'%{q}%'
-        # 搜尋 INVMB（品號主檔），條件：有對應 BOMME 記錄，且 品號 或 品名 符合
-        cur.execute("""
-            SELECT TOP 100
-                RTRIM(b.MB001) AS item_no,
+
+        # 品號開頭篩選條件
+        if prefix == '5':
+            prefix_cond = "AND RTRIM(b.MB001) LIKE '5%'"
+        elif prefix == '6':
+            prefix_cond = "AND RTRIM(b.MB001) LIKE '6%'"
+        elif prefix in ('56', '65'):
+            prefix_cond = "AND (RTRIM(b.MB001) LIKE '5%' OR RTRIM(b.MB001) LIKE '6%')"
+        else:
+            prefix_cond = ''
+
+        cur.execute(f"""
+            SELECT TOP 200
+                RTRIM(b.MB001)          AS item_no,
                 RTRIM(ISNULL(b.MB002,'')) AS item_name,
                 RTRIM(ISNULL(b.MB003,'')) AS spec,
-                ISNULL(b.MB004,'') AS unit
+                ISNULL(b.MB004,'')      AS unit,
+                ISNULL(b.MB025,'')      AS attr_code
             FROM INVMB b
             WHERE EXISTS (
-                SELECT 1 FROM BOMME e WHERE RTRIM(e.ME001) = RTRIM(b.MB001)
+                SELECT 1 FROM BOMMD d WHERE RTRIM(d.MD001) = RTRIM(b.MB001)
             )
+            {prefix_cond}
             AND (RTRIM(b.MB001) LIKE ? OR b.MB002 LIKE ?)
             ORDER BY b.MB001
         """, (like, like))
         rows = cur.fetchall()
         conn.close()
-        results = [
-            {'item_no': r[0], 'item_name': r[1], 'spec': r[2], 'unit': r[3]}
-            for r in rows
-        ]
+        results = [{
+            'item_no':   r[0],
+            'item_name': r[1],
+            'spec':      r[2],
+            'unit':      r[3],
+            'attr':      _ATTR_MAP.get(str(r[4]).strip(), str(r[4]).strip()),
+        } for r in rows]
         return jsonify({'success': True, 'data': results, 'count': len(results)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1131,68 +1151,66 @@ def bom_search():
 
 @app.route('/api/bom/detail')
 def bom_detail():
-    """取得指定品號的工程BOM明細（INVMB + BOMME + BOMMF，取最新版次）"""
+    """取得指定品號的材料BOM明細（BOMMD JOIN INVMB，對應 MCPI11 BOM用量資料）"""
     item_no = request.args.get('item_no', '').strip()
     if not item_no:
         return jsonify({'success': False, 'error': '請提供品號'}), 400
     try:
         conn = get_erp_conn()
-        cur = conn.cursor()
+        cur  = conn.cursor()
 
-        # 取品號主檔資訊
+        # 取品號主檔（母件資訊）
         cur.execute("""
-            SELECT RTRIM(MB001), RTRIM(ISNULL(MB002,'')), RTRIM(ISNULL(MB003,'')), ISNULL(MB004,'')
+            SELECT RTRIM(MB001), RTRIM(ISNULL(MB002,'')),
+                   RTRIM(ISNULL(MB003,'')), ISNULL(MB004,''),
+                   ISNULL(MB005,''), ISNULL(MB025,'')
             FROM INVMB WHERE RTRIM(MB001) = ?
         """, (item_no,))
         hrow = cur.fetchone()
         header = {}
         if hrow:
-            header = {'item_no': hrow[0], 'item_name': hrow[1],
-                      'spec': hrow[2], 'unit': hrow[3]}
+            header = {
+                'item_no':   hrow[0],
+                'item_name': hrow[1],
+                'spec':      hrow[2],
+                'unit':      hrow[3],
+                'sub_unit':  hrow[4],
+                'attr':      _ATTR_MAP.get(str(hrow[5]).strip(), str(hrow[5]).strip()),
+            }
 
-        # 取最新版次（BOMME.ME002 MAX）
+        # 取材料BOM明細（BOMMD JOIN INVMB 取子件品名/規格/屬性）
         cur.execute("""
-            SELECT MAX(ME002) FROM BOMME WHERE RTRIM(ME001) = ?
+            SELECT
+                d.MD002                           AS seq,
+                RTRIM(d.MD003)                    AS child_no,
+                RTRIM(ISNULL(b.MB002,''))         AS child_name,
+                RTRIM(ISNULL(b.MB003,''))         AS spec,
+                ISNULL(d.MD004,'')                AS unit,
+                ISNULL(d.MD005,'')                AS sub_unit,
+                ISNULL(b.MB025,'')                AS attr_code,
+                CAST(ISNULL(d.MD006,0) AS VARCHAR(20)) AS qty
+            FROM BOMMD d
+            LEFT JOIN INVMB b ON RTRIM(b.MB001) = RTRIM(d.MD003)
+            WHERE RTRIM(d.MD001) = ?
+            ORDER BY d.MD002
         """, (item_no,))
-        vrow = cur.fetchone()
-        latest_ver = (vrow[0] or '').strip() if vrow else ''
-        if header:
-            header['version'] = latest_ver
-
-        # 取工程BOM明細（BOMMF）
-        detail = []
-        if latest_ver:
-            cur.execute("""
-                SELECT
-                    ISNULL(MF003,'') AS seq,
-                    ISNULL(MF004,'') AS work_center,
-                    RTRIM(ISNULL(MF006,'')) AS supplier_no,
-                    RTRIM(ISNULL(MF007,'')) AS supplier_name,
-                    RTRIM(ISNULL(MF008,'')) AS spec,
-                    ISNULL(MF005,'') AS attr,
-                    ISNULL(MF017,'') AS unit,
-                    CAST(ISNULL(MF012,0) AS VARCHAR(30)) AS qty
-                FROM BOMMF
-                WHERE RTRIM(MF001) = ? AND MF002 = ?
-                ORDER BY MF003
-            """, (item_no, latest_ver))
-            rows = cur.fetchall()
-            for r in rows:
-                # attr: '1'=自製, '2'=外包, 其他顯示原值
-                attr_val = str(r[5] or '').strip()
-                attr_label = {'1': '自製', '2': '外包'}.get(attr_val, attr_val)
-                detail.append({
-                    'seq':           str(r[0] or '').strip(),
-                    'work_center':   str(r[1] or '').strip(),
-                    'supplier_no':   str(r[2] or '').strip(),
-                    'supplier_name': str(r[3] or '').strip(),
-                    'spec':          str(r[4] or '').strip(),
-                    'attr':          attr_label,
-                    'unit':          str(r[6] or '').strip(),
-                    'qty':           str(r[7] or '').strip(),
-                })
-
+        rows = cur.fetchall()
         conn.close()
+
+        detail = []
+        for r in rows:
+            attr_code = str(r[6] or '').strip()
+            detail.append({
+                'seq':        str(r[0] or '').strip(),
+                'child_no':   str(r[1] or '').strip(),
+                'child_name': str(r[2] or '').strip(),
+                'spec':       str(r[3] or '').strip(),
+                'unit':       str(r[4] or '').strip(),
+                'sub_unit':   str(r[5] or '').strip(),
+                'attr':       _ATTR_MAP.get(attr_code, attr_code),
+                'qty':        str(r[7] or '').strip(),
+            })
+
         return jsonify({'success': True, 'header': header, 'detail': detail})
 
     except Exception as e:
