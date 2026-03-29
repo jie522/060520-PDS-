@@ -297,7 +297,78 @@ def fetch_efficiency_data():
         return {}
 
 
-APP_VERSION = 'V20260328001'
+# ── ServCloud 設備稼動 ─────────────────────────────────────────────
+_servcloud_session = None
+_servcloud_session_lock = threading.Lock()
+SERVCLOUD_BASE = getattr(config, 'SERVCLOUD_BASE', 'http://192.168.1.69:58080/ServCloud')
+SERVCLOUD_USER = getattr(config, 'SERVCLOUD_USER', 'adminstd')
+SERVCLOUD_PASS = getattr(config, 'SERVCLOUD_PASS', 'adminstd')
+
+_STATUS_MAP = {
+    '0':  ('離線', '#bdbdbd'),
+    '11': ('運轉', '#43a047'),
+    '12': ('待機', '#fb8c00'),
+    '13': ('警報', '#e53935'),
+    'B':  ('離線', '#bdbdbd'),
+}
+
+def _sc_login(s):
+    s.post(f'{SERVCLOUD_BASE}/api/user/login',
+           data={'id': SERVCLOUD_USER, 'password': SERVCLOUD_PASS}, timeout=10)
+
+def get_servcloud_session():
+    global _servcloud_session
+    with _servcloud_session_lock:
+        if _servcloud_session is None:
+            s = requests.Session()
+            _sc_login(s)
+            _servcloud_session = s
+        return _servcloud_session
+
+def _sc_post(path, payload, retry=True):
+    """POST to ServCloud; auto re-login on session expiry (type==2)."""
+    session = get_servcloud_session()
+    resp = session.post(f'{SERVCLOUD_BASE}{path}', json=payload, timeout=30)
+    data = resp.json()
+    if data.get('type') == 2 and retry:
+        global _servcloud_session
+        with _servcloud_session_lock:
+            _sc_login(session)
+            _servcloud_session = session
+        return _sc_post(path, payload, retry=False)
+    return data
+
+def _sc_parse(raw):
+    """ServCloud data 欄位可能是 JSON 字串或已解析的 list/dict，統一回傳 list。"""
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
+        return json.loads(raw)
+    return []
+
+def servcloud_get_machines():
+    data = _sc_post('/api/getdata/db',
+                    {'table': 'm_device', 'columns': ['device_id', 'device_name']})
+    machines = _sc_parse(data.get('data', []))
+    return [m for m in machines if m.get('device_name') and m['device_name'] != m['device_id']]
+
+def servcloud_get_history(machine_ids, date_str):
+    """date_str: YYYYMMDD。最多 10 台/次，自動分批。"""
+    all_recs = []
+    for i in range(0, len(machine_ids), 10):
+        batch = machine_ids[i:i+10]
+        data = _sc_post('/api/hippo/simple', {
+            'space': 'machine_status_history',
+            'index': {'machine_id': batch},
+            'indexRange': {'key': 'date', 'start': date_str, 'end': date_str},
+            'columns': ['machine_id', 'status', 'start_time', 'end_time', 'duration']
+        })
+        if data.get('type') == 0 and data.get('data'):
+            all_recs.extend(_sc_parse(data['data']))
+    return all_recs
+
+
+APP_VERSION = 'V20260329001'
 
 @app.route('/ver')
 def ver_check():
@@ -909,6 +980,270 @@ def open_drawing():
                     pdm_hint = '（此電腦未安裝 SolidWorks PDM，無法自動取出圖面）' if 'ConisioLib' in msg or 'EdmVault' in msg or '無法建立' in msg else ''
                     return jsonify({'success': False,
                                     'error': f'無法開啟圖面：{msg}{pdm_hint}'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/equipment')
+def equipment_page():
+    return render_template('equipment.html', app_version=APP_VERSION)
+
+
+@app.route('/api/equipment/machines')
+def equipment_machines():
+    try:
+        machines = servcloud_get_machines()
+        return jsonify({'success': True, 'data': machines})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/equipment/history')
+def equipment_history():
+    date_str    = request.args.get('date', '')           # YYYY-MM-DD
+    start_hour  = int(request.args.get('start_hour', 7))
+    end_hour    = int(request.args.get('end_hour', 20))
+    machine_ids = request.args.getlist('machines')
+
+    if not date_str or not machine_ids:
+        return jsonify({'success': False, 'error': '請提供日期和機台'}), 400
+
+    date_api = date_str.replace('-', '')
+
+    try:
+        history = servcloud_get_history(machine_ids, date_api)
+        all_machines = servcloud_get_machines()
+        name_map = {m['device_id']: m['device_name'] for m in all_machines}
+
+        range_start_s = start_hour * 3600   # 秒
+        range_end_s   = end_hour   * 3600
+        total_min     = (range_end_s - range_start_s) // 60
+
+        # Group segments by machine (秒精度)
+        buckets = {mid: [] for mid in machine_ids}
+        for rec in history:
+            mid = rec.get('machine_id', '')
+            if mid not in buckets:
+                continue
+            st = rec.get('start_time', '')
+            et = rec.get('end_time',   '')
+            if len(st) < 14 or len(et) < 14:
+                continue
+            s_sec = int(st[8:10])*3600 + int(st[10:12])*60 + int(st[12:14])
+            e_sec = int(et[8:10])*3600 + int(et[10:12])*60 + int(et[12:14])
+            # Handle overnight
+            if e_sec < s_sec:
+                e_sec += 24 * 3600
+            s_clip = max(s_sec, range_start_s)
+            e_clip = min(e_sec, range_end_s)
+            if s_clip >= e_clip:
+                continue
+            status = rec.get('status', '0')
+            status_name, color = _STATUS_MAP.get(status, ('未知', '#9e9e9e'))
+            dur_sec = e_clip - s_clip
+            buckets[mid].append({
+                'status':      status,
+                'status_name': status_name,
+                'color':       color,
+                'start_min':   (s_clip - range_start_s) / 60,   # float，用於圖表定位
+                'end_min':     (e_clip - range_start_s) / 60,
+                'start_str':   f"{s_clip//3600%24:02d}:{s_clip%3600//60:02d}:{s_clip%60:02d}",
+                'end_str':     f"{e_clip//3600%24:02d}:{e_clip%3600//60:02d}:{e_clip%60:02d}",
+                'dur_sec':     dur_sec,
+            })
+
+        result = [
+            {'id': mid, 'name': name_map.get(mid, mid), 'segments': buckets[mid]}
+            for mid in machine_ids
+        ]
+        return jsonify({
+            'success': True, 'machines': result,
+            'date': date_str, 'start_hour': start_hour,
+            'end_hour': end_hour, 'total_minutes': total_min
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+# ── BOM 查詢系統 ───────────────────────────────────────────────────
+_ERP_SQL_SERVER   = getattr(config, 'ERP_SQL_SERVER',   '192.168.1.212')
+_ERP_SQL_DATABASE = getattr(config, 'ERP_SQL_DATABASE', 'MCPDB')
+_ERP_SQL_USERNAME = getattr(config, 'ERP_SQL_USERNAME', '')
+_ERP_SQL_PASSWORD = getattr(config, 'ERP_SQL_PASSWORD', '')
+_BOM_HEADER_TABLE = getattr(config, 'BOM_HEADER_TABLE', 'BOMMH')
+_BOM_DETAIL_TABLE = getattr(config, 'BOM_DETAIL_TABLE', 'BOMMD')
+
+
+def get_erp_conn():
+    """建立 ERP SQL Server 連線（pyodbc）"""
+    try:
+        import pyodbc
+    except ImportError:
+        raise RuntimeError('未安裝 pyodbc，請執行: pip install pyodbc')
+
+    if _ERP_SQL_USERNAME:
+        cs = (f'DRIVER={{ODBC Driver 17 for SQL Server}};'
+              f'SERVER={_ERP_SQL_SERVER};DATABASE={_ERP_SQL_DATABASE};'
+              f'UID={_ERP_SQL_USERNAME};PWD={_ERP_SQL_PASSWORD};'
+              f'Connection Timeout=5;')
+    else:
+        cs = (f'DRIVER={{ODBC Driver 17 for SQL Server}};'
+              f'SERVER={_ERP_SQL_SERVER};DATABASE={_ERP_SQL_DATABASE};'
+              f'Trusted_Connection=yes;Connection Timeout=5;')
+    return pyodbc.connect(cs, timeout=5)
+
+
+def _bom_get_columns(cur, table):
+    """取得資料表的欄位名稱清單（用於自動偵測欄位）"""
+    cur.execute(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_NAME=? ORDER BY ORDINAL_POSITION", (table,)
+    )
+    return [r[0] for r in cur.fetchall()]
+
+
+def _bom_search_sql(cols_h):
+    """依實際欄位自動選擇查詢欄位名稱（相容多種 Computech ERP 版本）"""
+    # 品號欄位候補
+    no_c   = next((c for c in cols_h if c in ('品號', 'ItemNo', 'ITEM_NO', 'item_no', 'C001')), cols_h[0] if cols_h else '品號')
+    name_c = next((c for c in cols_h if c in ('品名', 'ItemName', 'ITEM_NAME', 'item_name', 'C002')), None)
+    spec_c = next((c for c in cols_h if c in ('規格', 'Spec', 'SPEC', 'C003')), None)
+    return no_c, name_c, spec_c
+
+
+def _bom_detail_sql(cols_d):
+    """依實際欄位自動選擇明細查詢欄位"""
+    def pick(candidates):
+        return next((c for c in cols_d if c in candidates), None)
+    seq_c    = pick(['序號', 'Seq', 'SEQ', 'C002'])
+    child_c  = pick(['元件品號', '子件品號', 'ChildNo', 'CHILD_NO', 'C003'])
+    cname_c  = pick(['品名', 'ItemName', 'ITEM_NAME', 'C004'])
+    cspec_c  = pick(['規格', 'Spec', 'SPEC', 'C005'])
+    unit_c   = pick(['單位', 'Unit', 'UNIT', 'C006'])
+    sunit_c  = pick(['小單位', 'SubUnit', 'SUB_UNIT', 'C007'])
+    attr_c   = pick(['屬性', 'Attr', 'ATTR', 'C008'])
+    qty_c    = pick(['組成用量', 'Qty', 'QTY', 'UsageQty', 'USAGE_QTY', 'C009'])
+    return seq_c, child_c, cname_c, cspec_c, unit_c, sunit_c, attr_c, qty_c
+
+
+@app.route('/bom')
+def bom_page():
+    return render_template('bom.html', app_version=APP_VERSION)
+
+
+@app.route('/api/bom/search')
+def bom_search():
+    """搜尋 BOM 母件（品號或品名模糊搜尋）"""
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify({'success': False, 'error': '請輸入品號或品名'}), 400
+    try:
+        conn = get_erp_conn()
+        cur = conn.cursor()
+
+        # 自動偵測欄位
+        cols_h = _bom_get_columns(cur, _BOM_HEADER_TABLE)
+        no_c, name_c, spec_c = _bom_search_sql(cols_h)
+
+        # 選擇欄位
+        sel = f'[{no_c}]'
+        if name_c:
+            sel += f', [{name_c}]'
+        if spec_c:
+            sel += f', [{spec_c}]'
+
+        # 條件
+        like = f'%{q}%'
+        where_parts = [f'[{no_c}] LIKE ?']
+        params = [like]
+        if name_c:
+            where_parts.append(f'[{name_c}] LIKE ?')
+            params.append(like)
+        where = ' OR '.join(where_parts)
+
+        cur.execute(
+            f'SELECT TOP 100 {sel} FROM [{_BOM_HEADER_TABLE}] WHERE {where} ORDER BY [{no_c}]',
+            params
+        )
+        rows = cur.fetchall()
+        conn.close()
+
+        results = []
+        for row in rows:
+            d = {'item_no': str(row[0] or '').strip()}
+            if name_c:
+                d['item_name'] = str(row[1] or '').strip() if len(row) > 1 else ''
+            if spec_c:
+                d['spec'] = str(row[2] or '').strip() if len(row) > 2 else ''
+            results.append(d)
+
+        return jsonify({'success': True, 'data': results, 'count': len(results)})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bom/detail')
+def bom_detail():
+    """取得指定品號的 BOM 子件明細"""
+    item_no = request.args.get('item_no', '').strip()
+    if not item_no:
+        return jsonify({'success': False, 'error': '請提供品號'}), 400
+    try:
+        conn = get_erp_conn()
+        cur = conn.cursor()
+
+        # 取母件資訊
+        cols_h = _bom_get_columns(cur, _BOM_HEADER_TABLE)
+        no_c, name_c, spec_c = _bom_search_sql(cols_h)
+        sel_h = f'[{no_c}]'
+        if name_c: sel_h += f', [{name_c}]'
+        if spec_c: sel_h += f', [{spec_c}]'
+        cur.execute(f'SELECT {sel_h} FROM [{_BOM_HEADER_TABLE}] WHERE [{no_c}]=?', (item_no,))
+        hrow = cur.fetchone()
+        header = {}
+        if hrow:
+            header = {'item_no': str(hrow[0] or '').strip()}
+            if name_c and len(hrow) > 1: header['item_name'] = str(hrow[1] or '').strip()
+            if spec_c and len(hrow) > 2: header['spec'] = str(hrow[2] or '').strip()
+
+        # 取子件明細
+        cols_d = _bom_get_columns(cur, _BOM_DETAIL_TABLE)
+        no_c_d = next((c for c in cols_d if c in ('品號', 'ItemNo', 'ITEM_NO', 'C001')), cols_d[0] if cols_d else '品號')
+        seq_c, child_c, cname_c, cspec_c, unit_c, sunit_c, attr_c, qty_c = _bom_detail_sql(cols_d)
+
+        sel_parts = [f'[{no_c_d}]']
+        for c in [seq_c, child_c, cname_c, cspec_c, unit_c, sunit_c, attr_c, qty_c]:
+            if c:
+                sel_parts.append(f'[{c}]')
+        sel_d = ', '.join(sel_parts)
+        order = f'[{seq_c}]' if seq_c else f'[{no_c_d}]'
+        cur.execute(
+            f'SELECT {sel_d} FROM [{_BOM_DETAIL_TABLE}] WHERE [{no_c_d}]=? ORDER BY {order}',
+            (item_no,)
+        )
+        drows = cur.fetchall()
+        conn.close()
+
+        detail = []
+        for row in drows:
+            vals = [str(v or '').strip() for v in row]
+            i = 1  # skip parent no at index 0
+            d = {
+                'seq':        vals[i] if seq_c   else '',
+                'child_no':   vals[i + (1 if seq_c else 0)] if child_c else '',
+                'child_name': vals[i + (2 if seq_c else 1)] if cname_c else '',
+                'spec':       vals[i + (3 if seq_c else 2)] if cspec_c else '',
+                'unit':       vals[i + (4 if seq_c else 3)] if unit_c  else '',
+                'sub_unit':   vals[i + (5 if seq_c else 4)] if sunit_c else '',
+                'attr':       vals[i + (6 if seq_c else 5)] if attr_c  else '',
+                'qty':        vals[i + (7 if seq_c else 6)] if qty_c   else '',
+            }
+            detail.append(d)
+
+        return jsonify({'success': True, 'header': header, 'detail': detail, 'count': len(detail)})
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

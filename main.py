@@ -44,10 +44,10 @@ for _sp in [
 try:
     import config
     PORT = getattr(config, 'FLASK_PORT', 5002)
-    WIN_TITLE = getattr(config, 'WINDOW_TITLE', '製令查詢系統')
+    WIN_TITLE = getattr(config, 'WINDOW_TITLE', '詠基-加工部查詢系統PDIS')
 except Exception:
     PORT = 5002
-    WIN_TITLE = '製令查詢系統'
+    WIN_TITLE = '詠基-加工部查詢系統PDIS'
 
 URL = f"http://127.0.0.1:{PORT}/"
 

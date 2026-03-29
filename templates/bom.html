@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>詠基-加工部查詢系統PDIS</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='12' fill='%231565C0'/%3E<path d='M12 4v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 12.8A5.87 5.87 0 0 1 6 10c0-3.31 2.69-6 6-6zm6.76 1.74L17.3 7.2A5.87 5.87 0 0 1 18 10c0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z' fill='white'/%3E</svg>">
+  <style>
+    :root {
+      --blue:       #1565C0;
+      --blue-d:     #0D47A1;
+      --blue-mid:   #1976D2;
+      --blue-pale:  #E3F2FD;
+      --bg:         #ECF0F5;
+      --surface:    #FFFFFF;
+      --border:     #BDC3C7;
+      --text:       #212121;
+      --muted:      #546E7A;
+      --row-even:   #F5F9FF;
+      --row-hover:  #DDEEFF;
+      --success:    #2E7D32;
+      --green-light:#E8F5E9;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif;
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(180deg,#4A90D9 0%,#1565C0 40%,#0D47A1 100%);
+      color: white;
+      padding: 0;
+      user-select: none;
+    }
+    .header-inner {
+      display: flex;
+      align-items: flex-end;
+      padding: 0.4rem 0.75rem 0 0.75rem;
+      gap: 0.5rem;
+    }
+    .header-title {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      padding-bottom: 0.55rem;
+      flex-shrink: 0;
+    }
+    .header-tabs { display: flex; align-items: flex-end; gap: 2px; }
+    .header-tab {
+      display: inline-block;
+      padding: .3rem 1rem;
+      font-size: .82rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.85);
+      background: rgba(255,255,255,0.12);
+      border-radius: 4px 4px 0 0;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .header-tab.active,
+    .header-tab:hover { background: white; color: var(--blue-d); }
+    .header-tab.active { color: var(--blue-d); }
+
+    /* ── Layout ── */
+    .page-body {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      height: calc(100vh - 56px);
+    }
+
+    /* ── Left panel: search + result list ── */
+    .panel-left {
+      width: 340px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    /* ── Right panel: BOM detail ── */
+    .panel-right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      min-width: 0;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .card-header {
+      background: linear-gradient(180deg,#1976D2,#1565C0);
+      color: white;
+      padding: 0.35rem 0.75rem;
+      font-weight: 700;
+      font-size: 0.82rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card-body { padding: 0.5rem 0.75rem; }
+
+    /* ── Search form ── */
+    .search-row {
+      display: flex;
+      gap: 0.4rem;
+    }
+    .search-row input {
+      flex: 1;
+      padding: 0.35rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-size: 0.85rem;
+      font-family: inherit;
+    }
+    .search-row input:focus {
+      outline: none;
+      border-color: var(--blue-mid);
+      box-shadow: 0 0 0 2px rgba(25,118,210,.15);
+    }
+    .btn {
+      padding: 0.35rem 0.75rem;
+      border: none;
+      border-radius: 3px;
+      font-size: 0.82rem;
+      font-family: inherit;
+      cursor: pointer;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .btn-primary { background: var(--blue); color: white; }
+    .btn-primary:hover { background: var(--blue-d); }
+    .btn-success { background: #2E7D32; color: white; }
+    .btn-success:hover { background: #1B5E20; }
+    .btn-success:disabled { background: #9e9e9e; cursor: default; }
+    .btn-sm { padding: 0.25rem 0.55rem; font-size: 0.78rem; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-outline:hover { background: var(--bg); }
+
+    /* ── Search result list ── */
+    .result-list {
+      flex: 1;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+    }
+    .result-item {
+      padding: 0.45rem 0.65rem;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+      transition: background .1s;
+    }
+    .result-item:last-child { border-bottom: none; }
+    .result-item:hover { background: var(--row-hover); }
+    .result-item.selected { background: var(--blue-pale); border-left: 3px solid var(--blue); }
+    .result-item .item-no { font-weight: 700; color: var(--blue-d); font-size: 0.83rem; }
+    .result-item .item-name { color: var(--text); font-size: 0.82rem; }
+    .result-item .item-spec { color: var(--muted); font-size: 0.78rem; }
+
+    /* ── BOM detail table ── */
+    .detail-header-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      padding: 0.4rem 0.75rem;
+      background: #f8f9fa;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+    .detail-header-info span { color: var(--muted); }
+    .detail-header-info strong { color: var(--text); }
+
+    .table-wrap {
+      flex: 1;
+      overflow: auto;
+    }
+    table.bom-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    table.bom-table thead th {
+      background: var(--blue);
+      color: white;
+      padding: 0.4rem 0.5rem;
+      text-align: left;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    table.bom-table thead th.check-col { width: 32px; text-align: center; }
+    table.bom-table tbody td {
+      padding: 0.35rem 0.5rem;
+      border-bottom: 1px solid #e8ecf0;
+      vertical-align: middle;
+    }
+    table.bom-table tbody tr:nth-child(even) td { background: var(--row-even); }
+    table.bom-table tbody tr:hover td { background: var(--row-hover) !important; }
+    table.bom-table tbody tr.checked td { background: #e8f5e9 !important; }
+    table.bom-table td.check-col { text-align: center; }
+    table.bom-table td.no-col { font-family: Consolas, monospace; font-weight: 600; color: var(--blue-d); }
+    table.bom-table td.qty-col { font-weight: 700; text-align: right; color: #1B5E20; }
+
+    /* ── Toolbar ── */
+    .detail-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      background: #f8f9fa;
+      flex-wrap: wrap;
+    }
+    .check-count {
+      margin-left: auto;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .check-count strong { color: var(--success); }
+
+    /* ── Status messages ── */
+    .msg-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      gap: 0.5rem;
+    }
+    .msg-empty svg { opacity: 0.3; }
+    .msg-error {
+      padding: 1rem;
+      color: #c62828;
+      background: #fff3f3;
+      border-left: 4px solid #c62828;
+      font-size: 0.82rem;
+    }
+    .spinner {
+      display: inline-block;
+      width: 20px; height: 20px;
+      border: 2px solid rgba(25,118,210,.3);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Count badge ── */
+    .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.25);
+      border-radius: 10px;
+      padding: 0 0.5rem;
+      font-size: 0.75rem;
+      font-weight: normal;
+      margin-left: 0.4rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:5px;flex-shrink:0">
+        <circle cx="12" cy="12" r="12" fill="rgba(255,255,255,0.25)"/>
+        <path d="M12 4v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 12.8A5.87 5.87 0 0 1 6 10c0-3.31 2.69-6 6-6zm6.76 1.74L17.3 7.2A5.87 5.87 0 0 1 18 10c0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z" fill="white"/>
+      </svg>
+      詠基-加工部查詢系統PDIS
+      <span id="app-ver" style="font-size:0.75rem;color:rgba(255,255,255,0.7);font-weight:normal;margin-left:12px;"></span>
+    </div>
+    <div class="header-tabs">
+      <a href="/"           class="header-tab">製令查詢</a>
+      <a href="/production" class="header-tab">生產中製令</a>
+      <a href="/equipment"  class="header-tab">設備稼動</a>
+      <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
+      <span                 class="header-tab active">BOM查詢</span>
+    </div>
+  </div>
+</div>
+
+<div class="page-body">
+
+  <!-- ── Left: search + product list ── -->
+  <div class="panel-left">
+    <div class="card">
+      <div class="card-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+          <path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+        </svg>
+        品號 / 品名 搜尋
+      </div>
+      <div class="card-body">
+        <div class="search-row">
+          <input type="text" id="searchInput" placeholder="輸入品號或品名…" autocomplete="off">
+          <button class="btn btn-primary" onclick="doSearch()">搜尋</button>
+        </div>
+        <div style="font-size:0.77rem;color:var(--muted);margin-top:0.35rem;">
+          支援模糊搜尋，Enter 鍵搜尋
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+      <div class="card-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/>
+        </svg>
+        搜尋結果
+        <span class="badge" id="resultCountBadge">0</span>
+      </div>
+      <div class="result-list" id="resultList">
+        <div class="msg-empty">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="#546E7A">
+            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z"/>
+          </svg>
+          <span>請輸入品號或品名查詢</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Right: BOM detail ── -->
+  <div class="panel-right">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+      <div class="card-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+          <path d="M22 9V7h-2V5c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2v-2h-2V9h2zm-4 10H4V5h14v14z"/>
+          <path d="M6 13h5v4H6zm6-6h4v3h-4zm0 4h4v2h-4zM6 7h5v5H6z"/>
+        </svg>
+        BOM 組成明細
+        <span class="badge" id="detailCountBadge"></span>
+      </div>
+
+      <!-- Detail header info bar -->
+      <div class="detail-header-info" id="detailHeaderInfo" style="display:none;">
+        <div><span>母件品號：</span><strong id="dhItemNo">-</strong></div>
+        <div><span>品名：</span><strong id="dhItemName">-</strong></div>
+        <div><span>規格：</span><strong id="dhSpec">-</strong></div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="detail-toolbar" id="detailToolbar" style="display:none;">
+        <button class="btn btn-sm btn-outline" onclick="selectAll(true)">全選</button>
+        <button class="btn btn-sm btn-outline" onclick="selectAll(false)">全消</button>
+        <button class="btn btn-sm btn-success" id="exportBtn" onclick="exportCSV()" disabled>
+          ⬇ 匯出選取 CSV
+        </button>
+        <div class="check-count">
+          已選 <strong id="checkedCount">0</strong> / <span id="totalCount">0</span> 項
+        </div>
+      </div>
+
+      <!-- Table area -->
+      <div class="table-wrap" id="tableWrap">
+        <div class="msg-empty" id="detailEmpty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="#546E7A">
+            <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/>
+          </svg>
+          <span>點選左側品號以查看 BOM 組成</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────
+  let _searchResults = [];
+  let _detailData    = [];
+  let _currentItemNo = '';
+
+  // Version badge
+  const _ver = '{{ app_version }}';
+  const _av = document.getElementById('app-ver');
+  if (_av && _ver) _av.textContent = '版本:' + _ver;
+
+  // ── Search ──────────────────────────────────────────────────────
+  document.getElementById('searchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doSearch();
+  });
+
+  function doSearch() {
+    const q = document.getElementById('searchInput').value.trim();
+    if (!q) return;
+
+    const list = document.getElementById('resultList');
+    list.innerHTML = '<div class="msg-empty"><span class="spinner"></span><span style="margin-left:.5rem">搜尋中…</span></div>';
+    document.getElementById('resultCountBadge').textContent = '…';
+
+    fetch('/api/bom/search?q=' + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) {
+          list.innerHTML = '<div class="msg-error">❌ ' + escHtml(data.error || '搜尋失敗') + '</div>';
+          document.getElementById('resultCountBadge').textContent = '0';
+          return;
+        }
+        _searchResults = data.data || [];
+        document.getElementById('resultCountBadge').textContent = _searchResults.length;
+        renderResultList();
+      })
+      .catch(err => {
+        list.innerHTML = '<div class="msg-error">❌ 連線失敗：' + escHtml(String(err)) + '</div>';
+        document.getElementById('resultCountBadge').textContent = '0';
+      });
+  }
+
+  function renderResultList() {
+    const list = document.getElementById('resultList');
+    if (_searchResults.length === 0) {
+      list.innerHTML = '<div class="msg-empty"><span style="font-size:1.5rem">🔍</span><span>查無資料</span></div>';
+      return;
+    }
+    list.innerHTML = _searchResults.map((it, i) => `
+      <div class="result-item${_currentItemNo === it.item_no ? ' selected' : ''}"
+           onclick="loadDetail(${i})">
+        <div class="item-no">${escHtml(it.item_no)}</div>
+        ${it.item_name ? `<div class="item-name">${escHtml(it.item_name)}</div>` : ''}
+        ${it.spec ? `<div class="item-spec">${escHtml(it.spec)}</div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  // ── Load BOM detail ──────────────────────────────────────────────
+  function loadDetail(idx) {
+    const item = _searchResults[idx];
+    if (!item) return;
+    _currentItemNo = item.item_no;
+
+    // Highlight selected
+    document.querySelectorAll('.result-item').forEach((el, i) => {
+      el.classList.toggle('selected', i === idx);
+    });
+
+    const wrap = document.getElementById('tableWrap');
+    wrap.innerHTML = '<div class="msg-empty"><span class="spinner"></span><span style="margin-left:.5rem">讀取 BOM 中…</span></div>';
+    document.getElementById('detailHeaderInfo').style.display = 'none';
+    document.getElementById('detailToolbar').style.display = 'none';
+    document.getElementById('detailCountBadge').textContent = '';
+
+    fetch('/api/bom/detail?item_no=' + encodeURIComponent(item.item_no))
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) {
+          wrap.innerHTML = '<div class="msg-error">❌ ' + escHtml(data.error || '讀取失敗') + '</div>';
+          return;
+        }
+        _detailData = data.detail || [];
+
+        // Header info
+        const h = data.header || {};
+        document.getElementById('dhItemNo').textContent   = h.item_no   || item.item_no;
+        document.getElementById('dhItemName').textContent = h.item_name || item.item_name || '-';
+        document.getElementById('dhSpec').textContent     = h.spec      || item.spec      || '-';
+        document.getElementById('detailHeaderInfo').style.display = 'flex';
+        document.getElementById('detailToolbar').style.display = 'flex';
+        document.getElementById('detailCountBadge').textContent = _detailData.length + ' 項';
+        document.getElementById('totalCount').textContent = _detailData.length;
+        renderDetailTable();
+      })
+      .catch(err => {
+        wrap.innerHTML = '<div class="msg-error">❌ 連線失敗：' + escHtml(String(err)) + '</div>';
+      });
+  }
+
+  // ── Render BOM detail table ──────────────────────────────────────
+  function renderDetailTable() {
+    const wrap = document.getElementById('tableWrap');
+    if (_detailData.length === 0) {
+      wrap.innerHTML = '<div class="msg-empty"><span style="font-size:1.5rem">📋</span><span>此品號無 BOM 組成資料</span></div>';
+      document.getElementById('detailToolbar').style.display = 'none';
+      return;
+    }
+
+    const rows = _detailData.map((d, i) => `
+      <tr id="row${i}" onclick="toggleRow(${i})">
+        <td class="check-col"><input type="checkbox" id="chk${i}" onclick="event.stopPropagation();toggleRow(${i},true)"></td>
+        <td>${escHtml(d.seq)}</td>
+        <td class="no-col">${escHtml(d.child_no)}</td>
+        <td>${escHtml(d.child_name)}</td>
+        <td>${escHtml(d.spec)}</td>
+        <td>${escHtml(d.unit)}</td>
+        <td>${escHtml(d.sub_unit)}</td>
+        <td>${escHtml(d.attr)}</td>
+        <td class="qty-col">${escHtml(d.qty)}</td>
+      </tr>
+    `).join('');
+
+    wrap.innerHTML = `
+      <table class="bom-table">
+        <thead>
+          <tr>
+            <th class="check-col">
+              <input type="checkbox" id="chkAll" onclick="selectAll(this.checked)" title="全選/全消">
+            </th>
+            <th>序號</th>
+            <th>元件品號</th>
+            <th>品名</th>
+            <th>規格</th>
+            <th>單位</th>
+            <th>小單位</th>
+            <th>屬性</th>
+            <th>組成用量</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+    updateCheckedCount();
+  }
+
+  function toggleRow(i, fromCheckbox) {
+    const chk = document.getElementById('chk' + i);
+    if (!fromCheckbox) chk.checked = !chk.checked;
+    const row = document.getElementById('row' + i);
+    row.classList.toggle('checked', chk.checked);
+    updateCheckedCount();
+  }
+
+  function selectAll(checked) {
+    _detailData.forEach((_, i) => {
+      const chk = document.getElementById('chk' + i);
+      const row = document.getElementById('row' + i);
+      if (chk) {
+        chk.checked = checked;
+        if (row) row.classList.toggle('checked', checked);
+      }
+    });
+    const allChk = document.getElementById('chkAll');
+    if (allChk) allChk.checked = checked;
+    updateCheckedCount();
+  }
+
+  function updateCheckedCount() {
+    let count = 0;
+    _detailData.forEach((_, i) => {
+      const chk = document.getElementById('chk' + i);
+      if (chk && chk.checked) count++;
+    });
+    document.getElementById('checkedCount').textContent = count;
+    document.getElementById('exportBtn').disabled = count === 0;
+    // Update chkAll indeterminate
+    const allChk = document.getElementById('chkAll');
+    if (allChk) {
+      const total = _detailData.length;
+      allChk.indeterminate = count > 0 && count < total;
+      allChk.checked = count === total;
+    }
+  }
+
+  // ── CSV export ──────────────────────────────────────────────────
+  function exportCSV() {
+    const header = document.getElementById('dhItemNo').textContent;
+    const headerName = document.getElementById('dhItemName').textContent;
+
+    const selected = _detailData.filter((_, i) => {
+      const chk = document.getElementById('chk' + i);
+      return chk && chk.checked;
+    });
+    if (selected.length === 0) return;
+
+    const BOM = ['\uFEFF']; // UTF-8 BOM for Excel
+    BOM.push('母件品號,母件品名,序號,元件品號,品名,規格,單位,小單位,屬性,組成用量\r\n');
+    selected.forEach(d => {
+      const cols = [
+        header, headerName,
+        d.seq, d.child_no, d.child_name, d.spec,
+        d.unit, d.sub_unit, d.attr, d.qty
+      ];
+      BOM.push(cols.map(c => '"' + (c || '').replace(/"/g, '""') + '"').join(',') + '\r\n');
+    });
+
+    const blob = new Blob(BOM, { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `BOM_${header}_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'-')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Helper ──────────────────────────────────────────────────────
+  function escHtml(s) {
+    if (!s) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>
