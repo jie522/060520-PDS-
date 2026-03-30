@@ -25,7 +25,8 @@ if getattr(sys, 'frozen', False):
     sys.path.insert(0, _APP_DIR)  # 讓 import config 找到 EXE 旁的 config.py
 else:
     _BASE = os.path.dirname(os.path.abspath(__file__))
-    _APP_DIR = _BASE
+    _APP_DIR = os.path.dirname(_BASE)   # 製令查詢/ (config.py 在此)
+    sys.path.insert(0, _APP_DIR)
 
 import config
 
