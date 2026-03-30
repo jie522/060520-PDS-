@@ -34,36 +34,15 @@
         }
 
         /* ── 標題列 ── */
-        .header {
-            background: linear-gradient(180deg, #4A90D9 0%, #1565C0 40%, #0D47A1 100%);
-            color: white;
-            border-bottom: 2px solid #0A2E6E;
-        }
-        .header-inner { display: flex; align-items: stretch; padding: 0; }
-        .header-title {
-            padding: 0.45rem 1.2rem;
-            font-size: 0.95rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-        }
-        .header-tabs { display: flex; align-items: flex-end; padding-left: 0.5rem; gap: 2px; }
-        .header-tab {
-            background: rgba(255,255,255,0.15);
-            color: rgba(255,255,255,0.8);
-            border: 1px solid rgba(255,255,255,0.25);
-            border-bottom: none;
-            padding: 0.3rem 1.1rem;
-            font-size: 0.82rem;
-            cursor: pointer;
-            border-radius: 4px 4px 0 0;
-            text-decoration: none;
-            transition: background .15s;
-        }
-        .header-tab.active, .header-tab:hover {
-            background: var(--erp-surface);
-            color: var(--erp-blue);
+        .header{background:linear-gradient(180deg,#1976D2,#0D47A1);color:#fff;
+          position:sticky;top:0;z-index:200;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+        .header-inner{display:flex;align-items:flex-end;padding:.4rem 1rem 0}
+        .header-title{font-size:1.1rem;font-weight:700;padding-bottom:.45rem;white-space:nowrap;margin-right:.5rem}
+        .header-tabs{display:flex;align-items:flex-end;gap:2px}
+        .header-tab{display:inline-block;padding:.3rem 1rem;font-size:.82rem;font-weight:600;
+          color:rgba(255,255,255,.85);text-decoration:none;border-radius:6px 6px 0 0;
+          background:rgba(255,255,255,.15);cursor:pointer;transition:background .15s}
+        .header-tab.active,.header-tab:hover{background:#fff;color:var(--erp-blue);
             font-weight: 600;
         }
 

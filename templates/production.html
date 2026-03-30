@@ -35,14 +35,12 @@
             box-shadow: 0 2px 6px rgba(0,0,0,0.3);
         }
         .header-inner { display: flex; align-items: flex-end; padding: 0.4rem 1rem 0; }
-        .header-title { font-size: 1.15rem; font-weight: 700; padding-bottom: 0.45rem; white-space: nowrap; }
-        .header-tabs { display: flex; align-items: flex-end; padding-left: 0.5rem; gap: 2px; }
-        .header-tab {
-            display: inline-block; padding: 0.3rem 1.2rem; font-size: 0.82rem; font-weight: 600;
-            color: rgba(255,255,255,0.85); text-decoration: none; border-radius: 6px 6px 0 0;
-            background: rgba(255,255,255,0.15); cursor: pointer; transition: background .15s;
-        }
-        .header-tab.active, .header-tab:hover { background: white; color: var(--erp-blue-dark); }
+        .header-title{font-size:1.1rem;font-weight:700;padding-bottom:.45rem;white-space:nowrap;margin-right:.5rem}
+        .header-tabs{display:flex;align-items:flex-end;gap:2px}
+        .header-tab{display:inline-block;padding:.3rem 1rem;font-size:.82rem;font-weight:600;
+          color:rgba(255,255,255,.85);text-decoration:none;border-radius:6px 6px 0 0;
+          background:rgba(255,255,255,.15);cursor:pointer;transition:background .15s}
+        .header-tab.active,.header-tab:hover{background:#fff;color:var(--erp-blue-dark)}
 
         /* ── Toolbar ── */
         .toolbar-wrap {
@@ -138,7 +136,7 @@
     <!-- ── Header ── -->
     <div class="header">
         <div class="header-inner">
-            <div class="header-title"><svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:5px;flex-shrink:0"><circle cx="12" cy="12" r="12" fill="rgba(255,255,255,0.25)"/><path d="M12 4v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 12.8A5.87 5.87 0 0 1 6 10c0-3.31 2.69-6 6-6zm6.76 1.74L17.3 7.2A5.87 5.87 0 0 1 18 10c0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z" fill="white"/></svg>詠基-加工部查詢系統PDIS <span id="app-ver" style="font-size:0.75rem; color:rgba(255,255,255,0.7); font-weight:normal; margin-left:12px;"></span></div>
+            <div class="header-title"><svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:5px;flex-shrink:0"><circle cx="12" cy="12" r="12" fill="rgba(255,255,255,0.25)"/><path d="M12 4v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 12.8A5.87 5.87 0 0 1 6 10c0-3.31 2.69-6 6-6zm6.76 1.74L17.3 7.2A5.87 5.87 0 0 1 18 10c0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z" fill="white"/></svg>詠基-加工部查詢系統PDIS</div>
             <div class="header-tabs">
                 <a href="/" class="header-tab">製令查詢</a>
                 <span class="header-tab active">生產中製令</span>

@@ -54,10 +54,7 @@ def set_no_cache(response):
         try:
             html = response.get_data(as_text=True)
             if '</head>' in html and APP_VERSION not in html:
-                inject = f'<script>document.title="製令查詢 {APP_VERSION}";'
-                inject += 'document.addEventListener("DOMContentLoaded",function(){'
-                inject += f'var v=document.getElementById("app-ver");if(v)v.textContent="版本:{APP_VERSION}";'
-                inject += '});</script>\n</head>'
+                inject = f'<script>document.title="製令查詢 {APP_VERSION}";</script>\n</head>'
                 html = html.replace('</head>', inject)
                 response.set_data(html)
         except Exception:
@@ -368,7 +365,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260329005'
+APP_VERSION = 'V20260330001'
 
 @app.route('/ver')
 def ver_check():
