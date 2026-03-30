@@ -8,6 +8,8 @@ import sqlite3
 import time
 import threading
 import uuid
+import webbrowser
+import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
@@ -25,8 +27,7 @@ if getattr(sys, 'frozen', False):
     sys.path.insert(0, _APP_DIR)  # 讓 import config 找到 EXE 旁的 config.py
 else:
     _BASE = os.path.dirname(os.path.abspath(__file__))
-    _APP_DIR = os.path.dirname(_BASE)   # 製令查詢/ (config.py 在此)
-    sys.path.insert(0, _APP_DIR)
+    _APP_DIR = _BASE
 
 import config
 
@@ -980,6 +981,21 @@ def open_drawing():
                                     'error': f'無法開啟圖面：{msg}{pdm_hint}'}), 500
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/zume/open', methods=['POST'])
+def zume_open():
+    """以系統預設瀏覽器開啟 zume-n.com 技術資料查詢（帶品號搜尋）"""
+    data    = request.get_json() or {}
+    item_nos = data.get('item_nos', [])
+    if not item_nos:
+        return jsonify({'success': False, 'error': '請提供品號'}), 400
+    opened = []
+    for no in item_nos[:8]:  # 最多 8 個
+        url = 'https://zume-n.com/freeword_search?q=' + urllib.parse.quote(no.strip(), safe='')
+        webbrowser.open(url, new=2)  # new=2 → 新分頁
+        opened.append(no.strip())
+    return jsonify({'success': True, 'opened': opened})
 
 
 @app.route('/equipment')
