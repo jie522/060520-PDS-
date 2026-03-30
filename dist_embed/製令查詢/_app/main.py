@@ -17,6 +17,11 @@ from flask import Flask, render_template, request, jsonify
 import requests
 from requests_ntlm import HttpNtlmAuth
 from urllib.parse import quote
+try:
+    import openpyxl
+    _OPENPYXL_OK = True
+except ImportError:
+    _OPENPYXL_OK = False
 
 # ── PyInstaller 路徑處理 ────────────────────────────────────────
 # 執行為 EXE 時：_MEIPASS 為解壓目錄（含 templates）；
@@ -50,6 +55,22 @@ if not os.path.exists(PDM_DB_PATH):
     _bundled_db = os.path.join(_APP_DIR, 'pdm_search.db')
     if os.path.exists(_bundled_db):
         PDM_DB_PATH = _bundled_db
+
+# ── 技術資料清單資料庫（zume-n.com 圖號↔URL 對照表）──────────────────────
+ZUME_DB_PATH = os.path.join(_APP_DIR, 'zume_drawings.db')
+
+def _init_zume_db():
+    con = sqlite3.connect(ZUME_DB_PATH)
+    con.execute('''
+        CREATE TABLE IF NOT EXISTS drawings (
+            part_no  TEXT PRIMARY KEY,
+            part_name TEXT,
+            url      TEXT NOT NULL
+        )
+    ''')
+    con.commit(); con.close()
+
+_init_zume_db()
 
 app = Flask(__name__, template_folder=os.path.join(_BASE, 'templates'))
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -990,19 +1011,105 @@ def open_drawing():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/zume/open', methods=['POST'])
-def zume_open():
-    """以系統預設瀏覽器開啟 zume-n.com 技術資料查詢（帶品號搜尋）"""
-    data    = request.get_json() or {}
+@app.route('/api/zume/import', methods=['POST'])
+def zume_import():
+    """匯入 zume-n.com 下載的 CSV/XLSX 清單，建立圖號→URL 對照表"""
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'success': False, 'error': '未上傳檔案'}), 400
+    fname = f.filename.lower()
+    rows = []
+    try:
+        if fname.endswith('.csv'):
+            content = f.read().decode('utf-8-sig')
+            reader  = csv.reader(io.StringIO(content))
+            headers = [h.strip() for h in next(reader)]
+            idx_no  = next((i for i,h in enumerate(headers) if '圖號' in h), None)
+            idx_url = next((i for i,h in enumerate(headers) if h.upper() == 'URL'), None)
+            idx_nm  = next((i for i,h in enumerate(headers) if '品名' in h), 1)
+            if idx_no is None or idx_url is None:
+                return jsonify({'success': False, 'error': f'CSV 找不到「圖號」或「URL」欄（標頭={headers}）'}), 400
+            for row in reader:
+                if len(row) > max(idx_no, idx_url):
+                    no = row[idx_no].strip(); url = row[idx_url].strip()
+                    nm = row[idx_nm].strip() if idx_nm < len(row) else ''
+                    if no and url.startswith('http'):
+                        rows.append((no, nm, url))
+        elif fname.endswith(('.xlsx', '.xlsm')):
+            if not _OPENPYXL_OK:
+                return jsonify({'success': False, 'error': 'openpyxl 未安裝，請改用 CSV 格式'}), 400
+            wb = openpyxl.load_workbook(io.BytesIO(f.read()), read_only=True)
+            ws = wb.active
+            headers = [str(c.value or '').strip() for c in next(ws.iter_rows(min_row=1, max_row=1))]
+            idx_no  = next((i for i,h in enumerate(headers) if '圖號' in h), None)
+            idx_url = next((i for i,h in enumerate(headers) if h.upper() == 'URL'), None)
+            idx_nm  = next((i for i,h in enumerate(headers) if '品名' in h), 1)
+            if idx_no is None or idx_url is None:
+                return jsonify({'success': False, 'error': f'XLSX 找不到「圖號」或「URL」欄'}), 400
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                no = str(row[idx_no] or '').strip()
+                url = str(row[idx_url] or '').strip()
+                nm  = str(row[idx_nm]  or '').strip() if idx_nm < len(row) else ''
+                if no and url.startswith('http'):
+                    rows.append((no, nm, url))
+            wb.close()
+        else:
+            return jsonify({'success': False, 'error': '僅支援 .csv 或 .xlsx 格式'}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'解析失敗：{e}'}), 500
+
+    if not rows:
+        return jsonify({'success': False, 'error': '檔案內無有效資料'}), 400
+
+    con = sqlite3.connect(ZUME_DB_PATH)
+    con.executemany('INSERT OR REPLACE INTO drawings(part_no,part_name,url) VALUES(?,?,?)', rows)
+    con.commit()
+    total = con.execute('SELECT COUNT(*) FROM drawings').fetchone()[0]
+    con.close()
+    return jsonify({'success': True, 'imported': len(rows), 'total': total})
+
+
+@app.route('/api/zume/lookup', methods=['POST'])
+def zume_lookup():
+    """查詢品號對應的 zume-n.com URL；找不到則回傳搜尋 URL"""
+    data     = request.get_json() or {}
     item_nos = data.get('item_nos', [])
     if not item_nos:
         return jsonify({'success': False, 'error': '請提供品號'}), 400
-    opened = []
-    for no in item_nos[:8]:  # 最多 8 個
-        url = 'https://zume-n.com/freeword_search?q=' + urllib.parse.quote(no.strip(), safe='')
-        webbrowser.open(url, new=2)  # new=2 → 新分頁
-        opened.append(no.strip())
-    return jsonify({'success': True, 'opened': opened})
+    con = sqlite3.connect(ZUME_DB_PATH)
+    result = []
+    for no in item_nos[:20]:
+        no = no.strip()
+        row = con.execute('SELECT part_name,url FROM drawings WHERE part_no=?', (no,)).fetchone()
+        if row:
+            result.append({'no': no, 'name': row[0], 'url': row[1], 'found': True})
+        else:
+            # fallback：搜尋頁
+            result.append({'no': no, 'name': '', 'url': 'https://zume-n.com/freeword_search?q=' + urllib.parse.quote(no, safe=''), 'found': False})
+    con.close()
+    return jsonify({'success': True, 'items': result})
+
+
+@app.route('/api/zume/open', methods=['POST'])
+def zume_open():
+    """以系統預設瀏覽器開啟 zume-n.com（優先用匯入清單的直接 URL）"""
+    data     = request.get_json() or {}
+    item_nos = data.get('item_nos', [])
+    if not item_nos:
+        return jsonify({'success': False, 'error': '請提供品號'}), 400
+    con = sqlite3.connect(ZUME_DB_PATH)
+    opened = []; not_found = []
+    for no in item_nos[:10]:
+        no = no.strip()
+        row = con.execute('SELECT url FROM drawings WHERE part_no=?', (no,)).fetchone()
+        url = row[0] if row else ('https://zume-n.com/freeword_search?q=' + urllib.parse.quote(no, safe=''))
+        webbrowser.open(url, new=2)
+        if row:
+            opened.append(no)
+        else:
+            not_found.append(no)
+    con.close()
+    return jsonify({'success': True, 'opened': opened, 'not_found': not_found})
 
 
 @app.route('/equipment')

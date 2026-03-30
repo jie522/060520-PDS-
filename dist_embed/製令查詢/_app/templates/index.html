@@ -321,7 +321,11 @@
                 <button class="btn-erp btn-erp-amber" onclick="openInspection()">📋 自主檢查表</button>
                 <button class="btn-erp btn-erp-cyan" onclick="openDrawing()">📐 讀取圖面</button>
                 <button class="btn-erp btn-erp-green" onclick="printSelected()">🖨️ 列印日報表</button>
-                <button class="btn-erp" style="background:linear-gradient(180deg,#E8F5E9,#A5D6A7);border-color:#66BB6A;color:#1B5E20;" onclick="openZumeSearch()" title="在技術資料系統搜尋選取品號（開啟瀏覽器）">📂 技術資料查詢</button>
+                <button class="btn-erp" style="background:linear-gradient(180deg,#E8F5E9,#A5D6A7);border-color:#66BB6A;color:#1B5E20;" onclick="openZumeSearch()" title="依品號開啟 zume-n.com 技術資料（優先使用匯入清單直接連結）">📂 技術資料查詢</button>
+                <label class="btn-erp" style="background:linear-gradient(180deg,#E3F2FD,#90CAF9);border-color:#42A5F5;color:#0D47A1;cursor:pointer;" title="匯入 zume-n.com 下載的 CSV/XLSX 清單，之後查詢可直接跳至對應頁面">
+                    📥 匯入清單<input type="file" id="zumeImportFile" accept=".csv,.xlsx" style="display:none" onchange="importZumeList(this)">
+                </label>
+                <span id="zumeImportStatus" style="font-size:0.78rem;color:#555;margin-left:4px;"></span>
             </div>
 
             <!-- 狀態列 / 錯誤 / 資料表 -->
@@ -550,16 +554,54 @@
                 return r ? (r['品號'] || '').trim() : '';
             }).filter(Boolean))];
             if (!itemNos.length) { alert('無法取得品號'); return; }
-            if (itemNos.length > 5 && !confirm(`已選取 ${itemNos.length} 個品號，將開啟 ${itemNos.length} 個頁籤，確定繼續？`)) return;
+            if (itemNos.length > 8 && !confirm(`已選取 ${itemNos.length} 個品號，將開啟多個頁籤，確定繼續？`)) return;
             try {
-                const res = await fetch('/api/zume/open', {
+                // 先 lookup，顯示找到/找不到的結果
+                const res = await fetch('/api/zume/lookup', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({item_nos: itemNos})
                 });
                 const j = await res.json();
-                if (!j.success) alert('開啟失敗：' + (j.error || '未知錯誤'));
+                if (!j.success) { alert('查詢失敗：' + (j.error || '')); return; }
+                const found    = j.items.filter(x => x.found);
+                const notFound = j.items.filter(x => !x.found);
+                // 開啟瀏覽器
+                for (const item of j.items) {
+                    window.open(item.url, '_blank');
+                }
+                // 顯示結果摘要
+                let msg = `已開啟 ${j.items.length} 個頁面`;
+                if (found.length)    msg += `\n✅ 直接連結：${found.map(x=>x.no).join('、')}`;
+                if (notFound.length) msg += `\n🔍 搜尋頁（未在清單中）：${notFound.map(x=>x.no).join('、')}`;
+                if (notFound.length) msg += '\n\n提示：可點「匯入清單」匯入 zume-n.com 下載的 CSV，下次即可直接跳至對應頁面。';
+                if (notFound.length) alert(msg);
             } catch(e) { alert('連線錯誤：' + e.message); }
+        }
+
+        // ========== 匯入 zume-n.com 技術資料清單 ==========
+        async function importZumeList(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const statusEl = document.getElementById('zumeImportStatus');
+            statusEl.textContent = '匯入中…'; statusEl.style.color = '#555';
+            const fd = new FormData();
+            fd.append('file', file);
+            try {
+                const res = await fetch('/api/zume/import', { method: 'POST', body: fd });
+                const j   = await res.json();
+                if (j.success) {
+                    statusEl.textContent = `✅ 匯入 ${j.imported} 筆，共 ${j.total} 筆`;
+                    statusEl.style.color = '#2E7D32';
+                } else {
+                    statusEl.textContent = '❌ ' + (j.error || '失敗');
+                    statusEl.style.color = '#C62828';
+                }
+            } catch(e) {
+                statusEl.textContent = '❌ 連線錯誤';
+                statusEl.style.color = '#C62828';
+            }
+            input.value = ''; // reset so same file can be re-imported
         }
 
         // ========== 列印日報表 ==========
