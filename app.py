@@ -8,6 +8,8 @@ import sqlite3
 import time
 import threading
 import uuid
+import webbrowser
+import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
@@ -984,7 +986,6 @@ def open_drawing():
 @app.route('/api/zume/open', methods=['POST'])
 def zume_open():
     """以系統預設瀏覽器開啟 zume-n.com 技術資料查詢（帶品號搜尋）"""
-    import webbrowser, urllib.parse
     data    = request.get_json() or {}
     item_nos = data.get('item_nos', [])
     if not item_nos:
