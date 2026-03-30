@@ -28,6 +28,13 @@ if getattr(sys, 'frozen', False):
 else:
     _BASE = os.path.dirname(os.path.abspath(__file__))
     _APP_DIR = _BASE
+    # python311._pth 存在時，嵌入式 Python 不自動加入腳本目錄
+    # 需手動插入，讓 import config / templates 等都能正常運作
+    if _APP_DIR not in sys.path:
+        sys.path.insert(0, _APP_DIR)
+    _PARENT = os.path.dirname(_APP_DIR)
+    if os.path.exists(os.path.join(_PARENT, 'config.py')) and _PARENT not in sys.path:
+        sys.path.insert(0, _PARENT)
 
 import config
 
