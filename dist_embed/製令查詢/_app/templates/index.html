@@ -321,7 +321,7 @@
                 <button class="btn-erp btn-erp-amber" onclick="openInspection()">📋 自主檢查表</button>
                 <button class="btn-erp btn-erp-cyan" onclick="openDrawing()">📐 讀取圖面</button>
                 <button class="btn-erp btn-erp-green" onclick="printSelected()">🖨️ 列印日報表</button>
-                <button class="btn-erp" style="background:linear-gradient(180deg,#E8F5E9,#A5D6A7);border-color:#66BB6A;color:#1B5E20;" onclick="openZumeSearch()" title="依品號開啟 zume-n.com 技術資料（優先使用匯入清單直接連結）">📂 技術資料查詢</button>
+                <button class="btn-erp" style="background:linear-gradient(180deg,#E8F5E9,#A5D6A7);border-color:#66BB6A;color:#1B5E20;" onclick="openZumeSearch()" title="依品號開啟 zume-n.com 技術資料（已建立清單者直接跳至圖面頁）">📂 技術資料查詢</button>
                 <button class="btn-erp" style="background:linear-gradient(180deg,#E3F2FD,#90CAF9);border-color:#42A5F5;color:#0D47A1;" onclick="scanZumeCSV()" title="掃描 Downloads 資料夾，自動匯入最新的 zume-n_data_list_*.csv">🔄 更新清單</button>
                 <span id="zumeImportStatus" style="font-size:0.78rem;color:#555;margin-left:4px;"></span>
             </div>
@@ -552,28 +552,20 @@
                 return r ? (r['品號'] || '').trim() : '';
             }).filter(Boolean))];
             if (!itemNos.length) { alert('無法取得品號'); return; }
-            if (itemNos.length > 8 && !confirm(`已選取 ${itemNos.length} 個品號，將開啟多個頁籤，確定繼續？`)) return;
+            if (itemNos.length > 8 && !confirm(`已選取 ${itemNos.length} 個品號，將開啟多個頁面，確定繼續？`)) return;
             try {
-                // 先 lookup，顯示找到/找不到的結果
-                const res = await fetch('/api/zume/lookup', {
+                // 呼叫後端開啟瀏覽器（避免 Edge app 模式阻擋 window.open）
+                const res = await fetch('/api/zume/open', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({item_nos: itemNos})
                 });
                 const j = await res.json();
-                if (!j.success) { alert('查詢失敗：' + (j.error || '')); return; }
-                const found    = j.items.filter(x => x.found);
-                const notFound = j.items.filter(x => !x.found);
-                // 開啟瀏覽器
-                for (const item of j.items) {
-                    window.open(item.url, '_blank');
+                if (!j.success) { alert('開啟失敗：' + (j.error || '未知錯誤')); return; }
+                // 顯示未找到的提示
+                if (j.not_found && j.not_found.length > 0) {
+                    alert(`以下品號在技術資料清單中找不到，已開啟搜尋頁：\n${j.not_found.join('、')}\n\n提示：從 zume-n.com 下載 CSV 後點「🔄 更新清單」即可直接跳至圖面頁面。`);
                 }
-                // 顯示結果摘要
-                let msg = `已開啟 ${j.items.length} 個頁面`;
-                if (found.length)    msg += `\n✅ 直接連結：${found.map(x=>x.no).join('、')}`;
-                if (notFound.length) msg += `\n🔍 搜尋頁（未在清單中）：${notFound.map(x=>x.no).join('、')}`;
-                if (notFound.length) msg += '\n\n提示：可點「匯入清單」匯入 zume-n.com 下載的 CSV，下次即可直接跳至對應頁面。';
-                if (notFound.length) alert(msg);
             } catch(e) { alert('連線錯誤：' + e.message); }
         }
 

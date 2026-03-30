@@ -150,6 +150,23 @@ def set_no_cache(response):
             pass
     return response
 
+# ── 全域錯誤處理（確保所有錯誤都回傳 JSON，而非 HTML）────────
+@app.errorhandler(400)
+def bad_request(e):
+    return jsonify({'success': False, 'error': f'請求錯誤：{str(e)}'}), 400
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({'success': False, 'error': f'路由不存在：{str(e)}'}), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({'success': False, 'error': f'伺服器錯誤：{str(e)}'}), 500
+
+@app.errorhandler(Exception)
+def unhandled_exception(e):
+    return jsonify({'success': False, 'error': f'未預期的錯誤：{str(e)}'}), 500
+
 # ── TTL 快取（避免每次搜尋都重新呼叫 SSRS）──────────────────
 CACHE_TTL = 120  # 快取有效期 120 秒
 
@@ -1073,11 +1090,14 @@ def open_drawing():
 @app.route('/api/zume/status')
 def zume_status():
     """回傳技術資料清單的目前狀態（件數、最後匯入檔案）"""
-    con = sqlite3.connect(ZUME_DB_PATH)
-    total = con.execute('SELECT COUNT(*) FROM drawings').fetchone()[0]
-    last  = con.execute('SELECT filename, imported_at FROM import_log ORDER BY imported_at DESC LIMIT 1').fetchone()
-    con.close()
-    return jsonify({'total': total, 'last_file': last[0] if last else None, 'last_at': last[1] if last else None})
+    try:
+        con = sqlite3.connect(ZUME_DB_PATH)
+        total = con.execute('SELECT COUNT(*) FROM drawings').fetchone()[0]
+        last  = con.execute('SELECT filename, imported_at FROM import_log ORDER BY imported_at DESC LIMIT 1').fetchone()
+        con.close()
+        return jsonify({'total': total, 'last_file': last[0] if last else None, 'last_at': last[1] if last else None})
+    except Exception as e:
+        return jsonify({'total': 0, 'last_file': None, 'last_at': None, 'error': str(e)})
 
 
 @app.route('/api/zume/scan', methods=['POST'])
@@ -1166,44 +1186,50 @@ def zume_import():
 @app.route('/api/zume/lookup', methods=['POST'])
 def zume_lookup():
     """查詢品號對應的 zume-n.com URL；找不到則回傳搜尋 URL"""
-    data     = request.get_json() or {}
-    item_nos = data.get('item_nos', [])
-    if not item_nos:
-        return jsonify({'success': False, 'error': '請提供品號'}), 400
-    con = sqlite3.connect(ZUME_DB_PATH)
-    result = []
-    for no in item_nos[:20]:
-        no = no.strip()
-        row = con.execute('SELECT part_name,url FROM drawings WHERE part_no=?', (no,)).fetchone()
-        if row:
-            result.append({'no': no, 'name': row[0], 'url': row[1], 'found': True})
-        else:
-            # fallback：搜尋頁
-            result.append({'no': no, 'name': '', 'url': 'https://zume-n.com/freeword_search?q=' + urllib.parse.quote(no, safe=''), 'found': False})
-    con.close()
-    return jsonify({'success': True, 'items': result})
+    try:
+        data     = request.get_json() or {}
+        item_nos = data.get('item_nos', [])
+        if not item_nos:
+            return jsonify({'success': False, 'error': '請提供品號'}), 400
+        con = sqlite3.connect(ZUME_DB_PATH)
+        result = []
+        for no in item_nos[:20]:
+            no = no.strip()
+            row = con.execute('SELECT part_name,url FROM drawings WHERE part_no=?', (no,)).fetchone()
+            if row:
+                result.append({'no': no, 'name': row[0], 'url': row[1], 'found': True})
+            else:
+                fallback_url = 'https://zume-n.com/freeword_search?query=' + urllib.parse.quote(no, safe='') + '&searchType=drawing'
+                result.append({'no': no, 'name': '', 'url': fallback_url, 'found': False})
+        con.close()
+        return jsonify({'success': True, 'items': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'查詢失敗：{str(e)}'}), 500
 
 
 @app.route('/api/zume/open', methods=['POST'])
 def zume_open():
-    """以系統預設瀏覽器開啟 zume-n.com（優先用匯入清單的直接 URL）"""
-    data     = request.get_json() or {}
-    item_nos = data.get('item_nos', [])
-    if not item_nos:
-        return jsonify({'success': False, 'error': '請提供品號'}), 400
-    con = sqlite3.connect(ZUME_DB_PATH)
-    opened = []; not_found = []
-    for no in item_nos[:10]:
-        no = no.strip()
-        row = con.execute('SELECT url FROM drawings WHERE part_no=?', (no,)).fetchone()
-        url = row[0] if row else ('https://zume-n.com/freeword_search?q=' + urllib.parse.quote(no, safe=''))
-        webbrowser.open(url, new=2)
-        if row:
-            opened.append(no)
-        else:
-            not_found.append(no)
-    con.close()
-    return jsonify({'success': True, 'opened': opened, 'not_found': not_found})
+    """以系統預設瀏覽器開啟 zume-n.com（優先用清單的直接 URL）"""
+    try:
+        data     = request.get_json() or {}
+        item_nos = data.get('item_nos', [])
+        if not item_nos:
+            return jsonify({'success': False, 'error': '請提供品號'}), 400
+        con = sqlite3.connect(ZUME_DB_PATH)
+        opened = []; not_found = []
+        for no in item_nos[:10]:
+            no = no.strip()
+            row = con.execute('SELECT url FROM drawings WHERE part_no=?', (no,)).fetchone()
+            url = row[0] if row else ('https://zume-n.com/freeword_search?query=' + urllib.parse.quote(no, safe='') + '&searchType=drawing')
+            webbrowser.open(url, new=2)
+            if row:
+                opened.append(no)
+            else:
+                not_found.append(no)
+        con.close()
+        return jsonify({'success': True, 'opened': opened, 'not_found': not_found})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'開啟失敗：{str(e)}'}), 500
 
 
 @app.route('/equipment')
