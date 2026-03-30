@@ -54,10 +54,7 @@ def set_no_cache(response):
         try:
             html = response.get_data(as_text=True)
             if '</head>' in html and APP_VERSION not in html:
-                inject = f'<script>document.title="製令查詢 {APP_VERSION}";'
-                inject += 'document.addEventListener("DOMContentLoaded",function(){'
-                inject += f'var v=document.getElementById("app-ver");if(v)v.textContent="版本:{APP_VERSION}";'
-                inject += '});</script>\n</head>'
+                inject = f'<script>document.title="製令查詢 {APP_VERSION}";</script>\n</head>'
                 html = html.replace('</head>', inject)
                 response.set_data(html)
         except Exception:
@@ -368,7 +365,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260329005'
+APP_VERSION = 'V20260330001'
 
 @app.route('/ver')
 def ver_check():
@@ -982,6 +979,22 @@ def open_drawing():
                                     'error': f'無法開啟圖面：{msg}{pdm_hint}'}), 500
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/zume/open', methods=['POST'])
+def zume_open():
+    """以系統預設瀏覽器開啟 zume-n.com 技術資料查詢（帶品號搜尋）"""
+    import webbrowser, urllib.parse
+    data    = request.get_json() or {}
+    item_nos = data.get('item_nos', [])
+    if not item_nos:
+        return jsonify({'success': False, 'error': '請提供品號'}), 400
+    opened = []
+    for no in item_nos[:8]:  # 最多 8 個
+        url = 'https://zume-n.com/freeword_search?q=' + urllib.parse.quote(no.strip(), safe='')
+        webbrowser.open(url, new=2)  # new=2 → 新分頁
+        opened.append(no.strip())
+    return jsonify({'success': True, 'opened': opened})
 
 
 @app.route('/equipment')

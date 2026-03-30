@@ -292,7 +292,7 @@ async function doQuery(){
   }
 }
 
-/* ── IQR robust average (operates on seconds) ── */
+/* ── IQR robust average — 用於待機時間 (operates on seconds) ── */
 function robustAvg(vals){
   if(!vals.length) return null;
   const s=[...vals].sort((a,b)=>a-b);
@@ -300,6 +300,19 @@ function robustAvg(vals){
   const iqr=q3-q1, lo=q1-1.5*iqr, hi=q3+1.5*iqr;
   const ok=s.filter(v=>v>=lo&&v<=hi);
   return ok.length ? Math.round(ok.reduce((a,b)=>a+b,0)/ok.length) : null;
+}
+/* ── 眾數平均 — 用於運轉時間：先分 60 秒 bin 找眾數，再取眾數 bin ±1 的均值 ── */
+function modeAvg(vals){
+  if(!vals.length) return null;
+  if(vals.length===1) return Math.round(vals[0]);
+  const BIN=60;
+  const bins={};
+  vals.forEach(v=>{ const k=Math.floor(v/BIN); (bins[k]=bins[k]||[]).push(v); });
+  let maxCnt=0, modeKey=0;
+  Object.entries(bins).forEach(([k,arr])=>{ if(arr.length>maxCnt){maxCnt=arr.length;modeKey=+k;} });
+  const nearby=[];
+  [-1,0,1].forEach(d=>{ if(bins[modeKey+d]) nearby.push(...bins[modeKey+d]); });
+  return Math.round(nearby.reduce((a,b)=>a+b,0)/nearby.length);
 }
 /* Format seconds → "Xh Ym Zs" / "Xm Ys" / "Xs" */
 function fmtSec(s){
@@ -377,7 +390,7 @@ function renderChart(data){
     });
     const totalRunS=runDurs.reduce((a,b)=>a+b,0);
     const util=Math.round(totalRunS/(total_minutes*60)*100);
-    const avgR=robustAvg(runDurs), avgI=robustAvg(idleDurs);
+    const avgR=modeAvg(runDurs), avgI=robustAvg(idleDurs);
     allRun.push(...runDurs); allIdle.push(...idleDurs);
 
     /* utilisation colour */
@@ -407,14 +420,14 @@ function renderChart(data){
 
   /* ── Footer ── */
   const yF=AXIS_H+machines.length*ROW_H;
-  const gR=robustAvg(allRun), gI=robustAvg(allIdle);
+  const gR=modeAvg(allRun), gI=robustAvg(allIdle);
   s+=`<rect x="0" y="${yF}" width="${svgW}" height="${FOOTER}" fill="#21262d"/>`;
   s+=`<line x1="0" y1="${yF}" x2="${svgW}" y2="${yF}" stroke="#58a6ff" stroke-width="1.2"/>`;
   s+=`<rect x="0" y="${yF}" width="${LBL_W}" height="${FOOTER}" fill="#21262d"/>`;
   s+=`<text x="${LBL_W-8}" y="${yF+FOOTER/2+4}" text-anchor="end" font-size="11" font-weight="700" fill="#58a6ff">全體平均</text>`;
   s+=`<text x="${xStat+STAT_W/2}" y="${yF+16}" text-anchor="middle" font-size="13" font-weight="800" fill="#4CAF50">${fmtSec(gR)}</text>`;
   s+=`<text x="${xStat+STAT_W/2}" y="${yF+31}" text-anchor="middle" font-size="13" font-weight="800" fill="#FFC107">${fmtSec(gI)}</text>`;
-  s+=`<text x="${LBL_W+8}" y="${yF+FOOTER-6}" font-size="9" fill="#484f58">* 待機均值已排除 IQR×1.5 異常值</text>`;
+  s+=`<text x="${LBL_W+8}" y="${yF+FOOTER-6}" font-size="9" fill="#484f58">* 運轉均值＝眾數bin±1均值；待機均值已排除 IQR×1.5 異常值</text>`;
 
   document.getElementById('chartInfo').textContent=
     `${date}  ${String(start_hour).padStart(2,'0')}:00 ～ ${String(end_hour).padStart(2,'0')}:00　${machines.length} 台`;

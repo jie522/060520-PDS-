@@ -981,6 +981,22 @@ def open_drawing():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/zume/open', methods=['POST'])
+def zume_open():
+    """以系統預設瀏覽器開啟 zume-n.com 技術資料查詢（帶品號搜尋）"""
+    import webbrowser, urllib.parse
+    data    = request.get_json() or {}
+    item_nos = data.get('item_nos', [])
+    if not item_nos:
+        return jsonify({'success': False, 'error': '請提供品號'}), 400
+    opened = []
+    for no in item_nos[:8]:  # 最多 8 個
+        url = 'https://zume-n.com/freeword_search?q=' + urllib.parse.quote(no.strip(), safe='')
+        webbrowser.open(url, new=2)  # new=2 → 新分頁
+        opened.append(no.strip())
+    return jsonify({'success': True, 'opened': opened})
+
+
 @app.route('/equipment')
 def equipment_page():
     return render_template('equipment.html', app_version=APP_VERSION)

@@ -321,6 +321,7 @@
                 <button class="btn-erp btn-erp-amber" onclick="openInspection()">📋 自主檢查表</button>
                 <button class="btn-erp btn-erp-cyan" onclick="openDrawing()">📐 讀取圖面</button>
                 <button class="btn-erp btn-erp-green" onclick="printSelected()">🖨️ 列印日報表</button>
+                <button class="btn-erp" style="background:linear-gradient(180deg,#E8F5E9,#A5D6A7);border-color:#66BB6A;color:#1B5E20;" onclick="openZumeSearch()" title="在技術資料系統搜尋選取品號（開啟瀏覽器）">📂 技術資料查詢</button>
             </div>
 
             <!-- 狀態列 / 錯誤 / 資料表 -->
@@ -538,6 +539,28 @@
         function selectAll() { document.querySelectorAll('.row-check').forEach(cb => cb.checked = true); document.getElementById('checkAll').checked = true; }
         function deselectAll() { document.querySelectorAll('.row-check').forEach(cb => cb.checked = false); document.getElementById('checkAll').checked = false; }
         function toggleAll(master) { document.querySelectorAll('.row-check').forEach(cb => cb.checked = master.checked); }
+
+        // ========== 技術資料查詢（開啟 zume-n.com）==========
+        async function openZumeSearch() {
+            const checks = document.querySelectorAll('.row-check:checked');
+            if (!checks.length) { alert('請先勾選要查詢的製令'); return; }
+            const records = window._searchResults;
+            const itemNos = [...new Set([...checks].map(cb => {
+                const r = records[parseInt(cb.dataset.index)];
+                return r ? (r['品號'] || '').trim() : '';
+            }).filter(Boolean))];
+            if (!itemNos.length) { alert('無法取得品號'); return; }
+            if (itemNos.length > 5 && !confirm(`已選取 ${itemNos.length} 個品號，將開啟 ${itemNos.length} 個頁籤，確定繼續？`)) return;
+            try {
+                const res = await fetch('/api/zume/open', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({item_nos: itemNos})
+                });
+                const j = await res.json();
+                if (!j.success) alert('開啟失敗：' + (j.error || '未知錯誤'));
+            } catch(e) { alert('連線錯誤：' + e.message); }
+        }
 
         // ========== 列印日報表 ==========
         function printSelected() {
