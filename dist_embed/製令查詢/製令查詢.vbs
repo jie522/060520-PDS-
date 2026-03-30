@@ -6,6 +6,12 @@ Dim pyexe : pyexe = base & "\_python\pythonw.exe"
 Dim script: script = base & "\_app\main.py"
 Dim url   : url   = "http://127.0.0.1:5088"
 
+' 終止佔用 5088 port 的舊進程（避免版本衝突）
+shell.Run "cmd /c for /f ""tokens=5"" %a in ('netstat -aon ^| findstr :5088 ^| findstr LISTENING') do taskkill /F /PID %a", 0, True
+
+' 等一下讓 port 釋放
+WScript.Sleep 800
+
 ' 啟動 Flask（背景，不顯示視窗）
 shell.Run Chr(34) & pyexe & Chr(34) & " " & Chr(34) & script & Chr(34), 0, False
 
