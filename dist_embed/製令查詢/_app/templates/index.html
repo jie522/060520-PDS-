@@ -554,17 +554,22 @@
             if (!itemNos.length) { alert('無法取得品號'); return; }
             if (itemNos.length > 8 && !confirm(`已選取 ${itemNos.length} 個品號，將開啟多個頁面，確定繼續？`)) return;
             try {
-                // 呼叫後端開啟瀏覽器（避免 Edge app 模式阻擋 window.open）
-                const res = await fetch('/api/zume/open', {
+                // 向後端查詢對應 URL（優先直接連結，找不到則用搜尋頁）
+                const res = await fetch('/api/zume/lookup', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({item_nos: itemNos})
                 });
                 const j = await res.json();
-                if (!j.success) { alert('開啟失敗：' + (j.error || '未知錯誤')); return; }
+                if (!j.success) { alert('查詢失敗：' + (j.error || '未知錯誤')); return; }
+                // 用前端 window.open 開啟（使用目前瀏覽器的登入 session）
+                for (const item of j.items) {
+                    window.open(item.url, '_blank');
+                }
                 // 顯示未找到的提示
-                if (j.not_found && j.not_found.length > 0) {
-                    alert(`以下品號在技術資料清單中找不到，已開啟搜尋頁：\n${j.not_found.join('、')}\n\n提示：從 zume-n.com 下載 CSV 後點「🔄 更新清單」即可直接跳至圖面頁面。`);
+                const notFound = j.items.filter(x => !x.found);
+                if (notFound.length > 0) {
+                    alert(`以下品號在技術資料清單中找不到，已開啟搜尋頁：\n${notFound.map(x=>x.no).join('、')}\n\n提示：從 zume-n.com 下載最新 CSV 後點「🔄 更新清單」即可直接跳至圖面頁面。`);
                 }
             } catch(e) { alert('連線錯誤：' + e.message); }
         }
