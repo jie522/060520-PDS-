@@ -63,14 +63,73 @@ def _init_zume_db():
     con = sqlite3.connect(ZUME_DB_PATH)
     con.execute('''
         CREATE TABLE IF NOT EXISTS drawings (
-            part_no  TEXT PRIMARY KEY,
+            part_no   TEXT PRIMARY KEY,
             part_name TEXT,
-            url      TEXT NOT NULL
+            url       TEXT NOT NULL
+        )
+    ''')
+    con.execute('''
+        CREATE TABLE IF NOT EXISTS import_log (
+            filename  TEXT PRIMARY KEY,
+            imported_at TEXT,
+            count     INTEGER
         )
     ''')
     con.commit(); con.close()
 
+def _parse_zume_csv(filepath):
+    """解析 zume-n_data_list_*.csv，回傳 [(part_no, part_name, url), ...]"""
+    rows = []
+    try:
+        with open(filepath, encoding='utf-8-sig', newline='') as f:
+            reader = csv.reader(f)
+            headers = [h.strip() for h in next(reader)]
+            idx_no  = next((i for i,h in enumerate(headers) if '圖號' in h), None)
+            idx_url = next((i for i,h in enumerate(headers) if h.upper() == 'URL'), None)
+            idx_nm  = next((i for i,h in enumerate(headers) if '品名' in h), 1)
+            if idx_no is None or idx_url is None:
+                return []
+            for row in reader:
+                if len(row) > max(idx_no, idx_url):
+                    no  = row[idx_no].strip()
+                    url = row[idx_url].strip()
+                    nm  = row[idx_nm].strip() if idx_nm < len(row) else ''
+                    if no and url.startswith('http'):
+                        rows.append((no, nm, url))
+    except Exception:
+        pass
+    return rows
+
+def _auto_import_zume_csv():
+    """啟動時自動掃描 Downloads 資料夾，匯入最新的 zume-n_data_list_*.csv"""
+    import glob as _glob, getpass as _gp
+    try:
+        user = _gp.getuser()
+    except Exception:
+        user = os.environ.get('USERNAME', 'user')
+    downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
+    pattern = os.path.join(downloads, 'zume-n_data_list_*.csv')
+    files = sorted(_glob.glob(pattern), key=os.path.getmtime, reverse=True)
+    if not files:
+        return
+    latest = files[0]
+    fname  = os.path.basename(latest)
+    con = sqlite3.connect(ZUME_DB_PATH)
+    already = con.execute('SELECT count FROM import_log WHERE filename=?', (fname,)).fetchone()
+    con.close()
+    if already:
+        return  # 已匯入過，略過
+    rows = _parse_zume_csv(latest)
+    if not rows:
+        return
+    con = sqlite3.connect(ZUME_DB_PATH)
+    con.executemany('INSERT OR REPLACE INTO drawings(part_no,part_name,url) VALUES(?,?,?)', rows)
+    con.execute('INSERT OR REPLACE INTO import_log(filename,imported_at,count) VALUES(?,datetime("now"),?)',
+                (fname, len(rows)))
+    con.commit(); con.close()
+
 _init_zume_db()
+_auto_import_zume_csv()   # 啟動時自動掃描匯入
 
 app = Flask(__name__, template_folder=os.path.join(_BASE, 'templates'))
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -1011,16 +1070,50 @@ def open_drawing():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/zume/status')
+def zume_status():
+    """回傳技術資料清單的目前狀態（件數、最後匯入檔案）"""
+    con = sqlite3.connect(ZUME_DB_PATH)
+    total = con.execute('SELECT COUNT(*) FROM drawings').fetchone()[0]
+    last  = con.execute('SELECT filename, imported_at FROM import_log ORDER BY imported_at DESC LIMIT 1').fetchone()
+    con.close()
+    return jsonify({'total': total, 'last_file': last[0] if last else None, 'last_at': last[1] if last else None})
+
+
+@app.route('/api/zume/scan', methods=['POST'])
+def zume_scan():
+    """重新掃描 Downloads 資料夾並匯入最新 CSV（強制重掃）"""
+    import glob as _glob
+    downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
+    pattern   = os.path.join(downloads, 'zume-n_data_list_*.csv')
+    files     = sorted(_glob.glob(pattern), key=os.path.getmtime, reverse=True)
+    if not files:
+        return jsonify({'success': False, 'error': f'Downloads 資料夾找不到 zume-n_data_list_*.csv\n路徑：{downloads}'}), 404
+    latest = files[0]
+    fname  = os.path.basename(latest)
+    rows   = _parse_zume_csv(latest)
+    if not rows:
+        return jsonify({'success': False, 'error': f'檔案解析失敗或無資料：{fname}'}), 400
+    con = sqlite3.connect(ZUME_DB_PATH)
+    con.executemany('INSERT OR REPLACE INTO drawings(part_no,part_name,url) VALUES(?,?,?)', rows)
+    con.execute('INSERT OR REPLACE INTO import_log(filename,imported_at,count) VALUES(?,datetime("now"),?)',
+                (fname, len(rows)))
+    con.commit()
+    total = con.execute('SELECT COUNT(*) FROM drawings').fetchone()[0]
+    con.close()
+    return jsonify({'success': True, 'imported': len(rows), 'total': total, 'file': fname})
+
+
 @app.route('/api/zume/import', methods=['POST'])
 def zume_import():
-    """匯入 zume-n.com 下載的 CSV/XLSX 清單，建立圖號→URL 對照表"""
+    """手動上傳 CSV/XLSX 匯入（保留作為備用方式）"""
     f = request.files.get('file')
     if not f:
         return jsonify({'success': False, 'error': '未上傳檔案'}), 400
-    fname = f.filename.lower()
+    fname_lower = f.filename.lower()
     rows = []
     try:
-        if fname.endswith('.csv'):
+        if fname_lower.endswith('.csv'):
             content = f.read().decode('utf-8-sig')
             reader  = csv.reader(io.StringIO(content))
             headers = [h.strip() for h in next(reader)]
@@ -1028,16 +1121,16 @@ def zume_import():
             idx_url = next((i for i,h in enumerate(headers) if h.upper() == 'URL'), None)
             idx_nm  = next((i for i,h in enumerate(headers) if '品名' in h), 1)
             if idx_no is None or idx_url is None:
-                return jsonify({'success': False, 'error': f'CSV 找不到「圖號」或「URL」欄（標頭={headers}）'}), 400
+                return jsonify({'success': False, 'error': f'找不到「圖號」或「URL」欄'}), 400
             for row in reader:
                 if len(row) > max(idx_no, idx_url):
-                    no = row[idx_no].strip(); url = row[idx_url].strip()
-                    nm = row[idx_nm].strip() if idx_nm < len(row) else ''
+                    no  = row[idx_no].strip(); url = row[idx_url].strip()
+                    nm  = row[idx_nm].strip() if idx_nm < len(row) else ''
                     if no and url.startswith('http'):
                         rows.append((no, nm, url))
-        elif fname.endswith(('.xlsx', '.xlsm')):
+        elif fname_lower.endswith(('.xlsx', '.xlsm')):
             if not _OPENPYXL_OK:
-                return jsonify({'success': False, 'error': 'openpyxl 未安裝，請改用 CSV 格式'}), 400
+                return jsonify({'success': False, 'error': '請改用 CSV 格式'}), 400
             wb = openpyxl.load_workbook(io.BytesIO(f.read()), read_only=True)
             ws = wb.active
             headers = [str(c.value or '').strip() for c in next(ws.iter_rows(min_row=1, max_row=1))]
@@ -1045,24 +1138,25 @@ def zume_import():
             idx_url = next((i for i,h in enumerate(headers) if h.upper() == 'URL'), None)
             idx_nm  = next((i for i,h in enumerate(headers) if '品名' in h), 1)
             if idx_no is None or idx_url is None:
-                return jsonify({'success': False, 'error': f'XLSX 找不到「圖號」或「URL」欄'}), 400
+                return jsonify({'success': False, 'error': '找不到「圖號」或「URL」欄'}), 400
             for row in ws.iter_rows(min_row=2, values_only=True):
-                no = str(row[idx_no] or '').strip()
+                no  = str(row[idx_no] or '').strip()
                 url = str(row[idx_url] or '').strip()
                 nm  = str(row[idx_nm]  or '').strip() if idx_nm < len(row) else ''
                 if no and url.startswith('http'):
                     rows.append((no, nm, url))
             wb.close()
         else:
-            return jsonify({'success': False, 'error': '僅支援 .csv 或 .xlsx 格式'}), 400
+            return jsonify({'success': False, 'error': '僅支援 .csv 或 .xlsx'}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': f'解析失敗：{e}'}), 500
-
     if not rows:
-        return jsonify({'success': False, 'error': '檔案內無有效資料'}), 400
-
+        return jsonify({'success': False, 'error': '檔案無有效資料'}), 400
+    fname = f.filename
     con = sqlite3.connect(ZUME_DB_PATH)
     con.executemany('INSERT OR REPLACE INTO drawings(part_no,part_name,url) VALUES(?,?,?)', rows)
+    con.execute('INSERT OR REPLACE INTO import_log(filename,imported_at,count) VALUES(?,datetime("now"),?)',
+                (fname, len(rows)))
     con.commit()
     total = con.execute('SELECT COUNT(*) FROM drawings').fetchone()[0]
     con.close()

@@ -322,9 +322,7 @@
                 <button class="btn-erp btn-erp-cyan" onclick="openDrawing()">📐 讀取圖面</button>
                 <button class="btn-erp btn-erp-green" onclick="printSelected()">🖨️ 列印日報表</button>
                 <button class="btn-erp" style="background:linear-gradient(180deg,#E8F5E9,#A5D6A7);border-color:#66BB6A;color:#1B5E20;" onclick="openZumeSearch()" title="依品號開啟 zume-n.com 技術資料（優先使用匯入清單直接連結）">📂 技術資料查詢</button>
-                <label class="btn-erp" style="background:linear-gradient(180deg,#E3F2FD,#90CAF9);border-color:#42A5F5;color:#0D47A1;cursor:pointer;" title="匯入 zume-n.com 下載的 CSV/XLSX 清單，之後查詢可直接跳至對應頁面">
-                    📥 匯入清單<input type="file" id="zumeImportFile" accept=".csv,.xlsx" style="display:none" onchange="importZumeList(this)">
-                </label>
+                <button class="btn-erp" style="background:linear-gradient(180deg,#E3F2FD,#90CAF9);border-color:#42A5F5;color:#0D47A1;" onclick="scanZumeCSV()" title="掃描 Downloads 資料夾，自動匯入最新的 zume-n_data_list_*.csv">🔄 更新清單</button>
                 <span id="zumeImportStatus" style="font-size:0.78rem;color:#555;margin-left:4px;"></span>
             </div>
 
@@ -579,29 +577,40 @@
             } catch(e) { alert('連線錯誤：' + e.message); }
         }
 
-        // ========== 匯入 zume-n.com 技術資料清單 ==========
-        async function importZumeList(input) {
-            const file = input.files[0];
-            if (!file) return;
-            const statusEl = document.getElementById('zumeImportStatus');
-            statusEl.textContent = '匯入中…'; statusEl.style.color = '#555';
-            const fd = new FormData();
-            fd.append('file', file);
+        // ========== 技術資料清單狀態（頁面載入時顯示）==========
+        async function loadZumeStatus() {
             try {
-                const res = await fetch('/api/zume/import', { method: 'POST', body: fd });
+                const j = await (await fetch('/api/zume/status')).json();
+                const el = document.getElementById('zumeImportStatus');
+                if (j.total > 0) {
+                    el.textContent = `清單：${j.total} 筆`;
+                    el.style.color = '#2E7D32';
+                } else {
+                    el.textContent = '清單：尚未建立，請從 zume-n.com 下載 CSV 後點「更新清單」';
+                    el.style.color = '#F57F17';
+                }
+            } catch(e) {}
+        }
+        loadZumeStatus();
+
+        // ========== 掃描 Downloads 資料夾並匯入最新 CSV ==========
+        async function scanZumeCSV() {
+            const statusEl = document.getElementById('zumeImportStatus');
+            statusEl.textContent = '掃描中…'; statusEl.style.color = '#555';
+            try {
+                const res = await fetch('/api/zume/scan', { method: 'POST' });
                 const j   = await res.json();
                 if (j.success) {
-                    statusEl.textContent = `✅ 匯入 ${j.imported} 筆，共 ${j.total} 筆`;
+                    statusEl.textContent = `✅ ${j.file}：匯入 ${j.imported} 筆，共 ${j.total} 筆`;
                     statusEl.style.color = '#2E7D32';
                 } else {
-                    statusEl.textContent = '❌ ' + (j.error || '失敗');
-                    statusEl.style.color = '#C62828';
+                    statusEl.textContent = '⚠️ ' + (j.error || '失敗');
+                    statusEl.style.color = '#E65100';
                 }
             } catch(e) {
                 statusEl.textContent = '❌ 連線錯誤';
                 statusEl.style.color = '#C62828';
             }
-            input.value = ''; // reset so same file can be re-imported
         }
 
         // ========== 列印日報表 ==========
