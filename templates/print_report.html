@@ -240,6 +240,17 @@
         <div class="barcode-section">
             <svg class="barcode-{{ loop.index }}"></svg>
         </div>
+
+        <!-- 空白記錄行 -->
+        <div style="margin-top: 10px;">
+            <table style="width: 100%; border-collapse: collapse;">
+                {% for row in range(8) %}
+                <tr style="height: 28px;">
+                    <td style="border: 1px solid #000; padding: 2px;"></td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
     </div>
     {% endfor %}
 
