@@ -18,7 +18,7 @@
 
         .report-page {
             width: 190mm;
-            min-height: 220mm;
+            min-height: 260mm;
             margin: 0 auto;
             padding: 5mm;
             border: 2px solid #000;
@@ -89,13 +89,12 @@
             font-weight: bold;
         }
 
-        /* 條碼區 */
-        .barcode-section {
-            margin: 6px 0 10px 0;
-        }
-        .barcode-section svg {
-            max-width: 300px;
-            height: 80px;
+        /* 條碼（嵌入資訊表格內） */
+        .barcode-inline {
+            display: block;
+            max-width: 280px;
+            height: 70px;
+            margin-top: 3px;
         }
         .barcode-text {
             font-size: 8pt;
@@ -117,10 +116,10 @@
             background-color: #e8e8e8;
             font-size: 13pt;
             font-weight: bold;
-            height: 44px;
+            height: 36px;
         }
         .data-table td {
-            height: 28px;
+            height: 24px;
             font-size: 11pt;
         }
         .data-table .col-date { width: 20%; }
@@ -210,7 +209,7 @@
             </div>
         </div>
 
-        <!-- 資訊區 -->
+        <!-- 資訊區（條碼嵌入品名欄下方） -->
         <div class="info-section">
             <table class="info-table">
                 <tr>
@@ -219,26 +218,22 @@
                     <td class="col-right"><span class="info-field-label">機台代號：</span><span class="info-value">{{ item.machine }}</span></td>
                 </tr>
                 <tr>
-                    <td class="col-left"><span class="info-label">品名：</span><span class="info-value">{{ item.product_name }}</span></td>
+                    <td class="col-left" rowspan="3" style="vertical-align: top;">
+                        <span class="info-label">品名：</span><span class="info-value">{{ item.product_name }}</span>
+                        <svg class="barcode-{{ loop.index }} barcode-inline"></svg>
+                    </td>
                     <td class="col-mid"><span class="info-field-label">製程名稱：</span><span class="info-value">{{ item.process_name }}</span></td>
                     <td class="col-right"><span class="info-field-label">穴　數：</span></td>
                 </tr>
                 <tr>
-                    <td class="col-left"></td>
                     <td class="col-mid"></td>
                     <td class="col-right"><span class="info-field-label">報工設備：</span></td>
                 </tr>
                 <tr>
-                    <td class="col-left"></td>
                     <td class="col-mid"></td>
                     <td class="col-right"><span class="info-field-label">每桶數量：</span></td>
                 </tr>
             </table>
-        </div>
-
-        <!-- 條碼區 -->
-        <div class="barcode-section">
-            <svg class="barcode-{{ loop.index }}"></svg>
         </div>
 
         <!-- 記錄表格 -->
@@ -252,7 +247,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for row in range(14) %}
+                {% for row in range(20) %}
                 <tr>
                     <td class="col-date">&nbsp;</td>
                     <td class="col-time">&nbsp;</td>
@@ -274,7 +269,7 @@
                 JsBarcode(`.barcode-${index + 1}`, barcodeValue, {
                     format: "CODE128",
                     width: 1.5,
-                    height: 80,
+                    height: 70,
                     displayValue: true,
                     fontSize: 10,
                     margin: 0,
