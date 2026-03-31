@@ -241,8 +241,16 @@
             <svg class="barcode-{{ loop.index }}"></svg>
         </div>
 
-        <!-- 4欄空白記錄表（無標題，供手寫） -->
+        <!-- 記錄表格 -->
         <table class="data-table" style="margin-top: 8px;">
+            <thead>
+                <tr>
+                    <th class="col-date">日期</th>
+                    <th class="col-time">時間</th>
+                    <th class="col-worker">生產人員</th>
+                    <th class="col-qty">生產數量</th>
+                </tr>
+            </thead>
             <tbody>
                 {% for row in range(14) %}
                 <tr>
