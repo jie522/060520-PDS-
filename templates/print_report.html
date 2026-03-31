@@ -120,13 +120,13 @@
             height: 44px;
         }
         .data-table td {
-            height: 38px;
+            height: 28px;
             font-size: 11pt;
         }
-        .data-table .col-date { width: 18%; }
-        .data-table .col-time { width: 32%; }
-        .data-table .col-worker { width: 22%; }
-        .data-table .col-qty { width: 18%; }
+        .data-table .col-date { width: 20%; }
+        .data-table .col-time { width: 35%; }
+        .data-table .col-worker { width: 25%; }
+        .data-table .col-qty { width: 20%; }
 
         /* 列印控制 */
         .no-print {
@@ -241,16 +241,19 @@
             <svg class="barcode-{{ loop.index }}"></svg>
         </div>
 
-        <!-- 空白記錄行 -->
-        <div style="margin-top: 10px;">
-            <table style="width: 100%; border-collapse: collapse;">
-                {% for row in range(8) %}
-                <tr style="height: 28px;">
-                    <td style="border: 1px solid #000; padding: 2px;"></td>
+        <!-- 4欄空白記錄表（無標題，供手寫） -->
+        <table class="data-table" style="margin-top: 8px;">
+            <tbody>
+                {% for row in range(14) %}
+                <tr>
+                    <td class="col-date">&nbsp;</td>
+                    <td class="col-time">&nbsp;</td>
+                    <td class="col-worker">&nbsp;</td>
+                    <td class="col-qty">&nbsp;</td>
                 </tr>
                 {% endfor %}
-            </table>
-        </div>
+            </tbody>
+        </table>
     </div>
     {% endfor %}
 
