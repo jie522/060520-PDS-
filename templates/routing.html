@@ -6,21 +6,36 @@
   <title>詠基-加工部查詢系統PDIS</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='12' fill='%231565C0'/%3E<path d='M12 4v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 12.8A5.87 5.87 0 0 1 6 10c0-3.31 2.69-6 6-6zm6.76 1.74L17.3 7.2A5.87 5.87 0 0 1 18 10c0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z' fill='white'/%3E</svg>">
   <style>
+    /* ══════════════════════════════════════════════
+       UI-UX-PRO — 產品途程查詢 Design System
+    ══════════════════════════════════════════════ */
     :root {
-      --blue:       #1565C0;
-      --blue-d:     #0D47A1;
-      --blue-mid:   #1976D2;
-      --blue-pale:  #E3F2FD;
-      --bg:         #ECF0F5;
-      --surface:    #FFFFFF;
-      --border:     #BDC3C7;
-      --text:       #212121;
-      --muted:      #546E7A;
-      --row-even:   #F5F9FF;
-      --row-hover:  #DDEEFF;
-      --success:    #2E7D32;
+      --blue:        #1565C0;
+      --blue-d:      #0D47A1;
+      --blue-mid:    #1976D2;
+      --blue-light:  #42A5F5;
+      --blue-pale:   #E3F2FD;
+      --blue-xpale:  #F0F8FF;
+      --bg:          #F0F2F5;
+      --surface:     #FFFFFF;
+      --surface-2:   #FAFBFC;
+      --border:      #DDE3EA;
+      --border-d:    #BEC7D0;
+      --text:        #1A2332;
+      --text-2:      #3D5166;
+      --muted:       #7A8FA3;
+      --muted-light: #A8BAC8;
+      --row-even:    #F7FAFF;
+      --row-hover:   #EBF4FF;
+      --success:     #2E7D32;
+      --success-bg:  #E8F5E9;
+      --shadow-sm:   0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-md:   0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06);
+      --shadow-lg:   0 10px 30px rgba(0,0,0,.14), 0 4px 8px rgba(0,0,0,.08);
+      --radius:      8px;
+      --radius-sm:   5px;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: var(--bg);
       font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif;
@@ -30,14 +45,17 @@
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
+      line-height: 1.5;
     }
 
-    /* ── Header ── */
+    /* ══ Top Navigation Header ══ */
     .header {
       background: linear-gradient(180deg,#1976D2,#0D47A1);
       color: #fff;
       flex-shrink: 0;
-      box-shadow: 0 2px 6px rgba(0,0,0,.3);
+      box-shadow: 0 2px 8px rgba(13,71,161,.4);
+      position: relative;
+      z-index: 100;
     }
     .header-inner { display:flex; align-items:flex-end; padding:.4rem 1rem 0; }
     .header-title { font-size:1.1rem; font-weight:700; padding-bottom:.45rem; white-space:nowrap; margin-right:.5rem; }
@@ -49,268 +67,394 @@
     }
     .header-tab.active,.header-tab:hover { background:#fff; color:var(--blue-d); }
 
-    /* ── 子分頁 bar ── */
+    /* ══ Sub-tab Bar ══ */
     .sub-tabs-bar {
-      background: #fff;
-      border-bottom: 2px solid var(--blue);
-      padding: 0 1rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.25rem;
       display: flex;
       gap: 0;
       flex-shrink: 0;
+      box-shadow: var(--shadow-sm);
     }
     .sub-tab {
-      padding: .45rem 1.2rem;
-      font-size: .84rem;
+      padding: .6rem 1.4rem;
+      font-size: .83rem;
       font-weight: 600;
       color: var(--muted);
       cursor: pointer;
       border-bottom: 3px solid transparent;
-      margin-bottom: -2px;
-      transition: all .15s;
+      margin-bottom: -1px;
+      transition: all .18s ease;
       user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
     }
-    .sub-tab:hover { color: var(--blue); }
+    .sub-tab:hover { color: var(--blue-mid); }
     .sub-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
 
-    /* ── 子分頁 content ── */
+    /* ══ Sub-content layout ══ */
     .sub-content { display: none; flex: 1; overflow: hidden; }
     .sub-content.active { display: flex; }
 
-    /* ── Page layout ── */
+    /* ══ Page Body ══ */
     .page-body {
       display: flex;
-      gap: 0.5rem;
-      padding: 0.5rem;
+      gap: 0.75rem;
+      padding: 0.75rem;
       flex: 1;
       overflow: hidden;
     }
 
-    /* ── Left panel ── */
+    /* ══ Panels ══ */
     .panel-left {
-      width: 320px;
+      width: 300px;
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.65rem;
     }
-
-    /* ── Right panel ── */
     .panel-right {
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.65rem;
       min-width: 0;
     }
 
-    /* ── Card ── */
+    /* ══ Card ══ */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 4px;
+      border-radius: var(--radius);
       overflow: hidden;
+      box-shadow: var(--shadow-sm);
     }
     .card-header {
-      background: linear-gradient(180deg,#1976D2,#1565C0);
+      background: linear-gradient(135deg, var(--blue-mid) 0%, var(--blue-d) 100%);
       color: white;
-      padding: 0.35rem 0.75rem;
+      padding: 0.5rem 0.85rem;
       font-weight: 700;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.45rem;
+      letter-spacing: 0.01em;
     }
-    .card-body { padding: 0.5rem 0.75rem; }
+    .card-header .badge {
+      background: rgba(255,255,255,0.22);
+      border-radius: 20px;
+      padding: 0.05rem 0.55rem;
+      font-size: 0.73rem;
+      font-weight: 600;
+      margin-left: auto;
+    }
+    .card-body { padding: 0.6rem 0.75rem; }
 
-    /* ── Search form ── */
+    /* ══ Search Controls ══ */
     .search-row { display: flex; gap: 0.4rem; }
-    .search-row input {
+    .search-input {
       flex: 1;
-      padding: 0.35rem 0.6rem;
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      font-size: 0.85rem;
+      padding: 0.42rem 0.7rem;
+      border: 1.5px solid var(--border-d);
+      border-radius: var(--radius-sm);
+      font-size: 0.84rem;
       font-family: inherit;
+      color: var(--text);
+      background: var(--surface);
+      transition: border-color .15s, box-shadow .15s;
     }
-    .search-row input:focus {
+    .search-input:focus {
       outline: none;
       border-color: var(--blue-mid);
-      box-shadow: 0 0 0 2px rgba(25,118,210,.15);
+      box-shadow: 0 0 0 3px rgba(25,118,210,.12);
     }
+    .search-input::placeholder { color: var(--muted-light); }
+
+    /* ══ Buttons ══ */
     .btn {
-      padding: 0.35rem 0.75rem;
+      padding: 0.42rem 0.85rem;
       border: none;
-      border-radius: 3px;
+      border-radius: var(--radius-sm);
       font-size: 0.82rem;
       font-family: inherit;
       cursor: pointer;
       font-weight: 600;
       white-space: nowrap;
+      transition: all .15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
     }
-    .btn-primary { background: var(--blue); color: white; }
-    .btn-primary:hover { background: var(--blue-d); }
-    .btn-success { background: #2E7D32; color: white; }
-    .btn-success:hover { background: #1B5E20; }
-    .btn-success:disabled { background: #9e9e9e; cursor: default; }
-    .btn-sm { padding: 0.25rem 0.55rem; font-size: 0.78rem; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--blue-mid) 0%, var(--blue) 100%);
+      color: white;
+      box-shadow: 0 2px 5px rgba(21,101,192,.3);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, var(--blue-light) 0%, var(--blue-mid) 100%);
+      box-shadow: 0 3px 8px rgba(21,101,192,.4);
+      transform: translateY(-1px);
+    }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-success {
+      background: linear-gradient(135deg, #43A047 0%, #2E7D32 100%);
+      color: white;
+      box-shadow: 0 2px 5px rgba(46,125,50,.3);
+    }
+    .btn-success:hover { background: linear-gradient(135deg, #66BB6A 0%, #388E3C 100%); transform: translateY(-1px); }
+    .btn-success:disabled { background: #B0BEC5; box-shadow: none; cursor: default; transform: none; }
+    .btn-sm { padding: 0.28rem 0.65rem; font-size: 0.77rem; }
 
-    /* ── Result list ── */
+    /* ══ Line Filter ══ */
+    .filter-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .filter-label {
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .filter-select {
+      font-size: 0.81rem;
+      padding: 0.25rem 0.55rem;
+      border: 1.5px solid var(--border-d);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .15s;
+    }
+    .filter-select:focus { outline: none; border-color: var(--blue-mid); }
+
+    /* ══ Prefix Filter (BOM) ══ */
+    .prefix-filter { display:flex; align-items:center; gap:0.4rem; margin-top:0.5rem; flex-wrap:wrap; }
+    .prefix-btn { display:inline-flex; align-items:center; cursor:pointer; font-size:0.78rem; }
+    .prefix-btn input[type=radio] { display:none; }
+    .prefix-btn span {
+      padding:0.18rem 0.6rem; border:1.5px solid var(--border-d); border-radius:14px;
+      background: var(--surface-2); color: var(--text-2);
+      transition: all .15s; white-space:nowrap; font-weight: 600;
+    }
+    .prefix-btn input[type=radio]:checked + span {
+      background: var(--blue); color: white; border-color: var(--blue);
+      box-shadow: 0 2px 5px rgba(21,101,192,.25);
+    }
+    .prefix-btn:hover span { background: var(--blue-pale); border-color: var(--blue-mid); color: var(--blue); }
+
+    /* ══ Result List ══ */
     .result-list {
       flex: 1;
       overflow-y: auto;
-      border: 1px solid var(--border);
-      border-radius: 3px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-d) transparent;
     }
+    .result-list::-webkit-scrollbar { width: 5px; }
+    .result-list::-webkit-scrollbar-thumb { background: var(--border-d); border-radius: 3px; }
     .result-item {
-      padding: 0.45rem 0.65rem;
-      border-bottom: 1px solid #eee;
+      padding: 0.5rem 0.8rem;
+      border-bottom: 1px solid #F0F2F5;
       cursor: pointer;
-      transition: background .1s;
+      transition: background .12s, border-left .12s;
+      border-left: 3px solid transparent;
     }
     .result-item:last-child { border-bottom: none; }
-    .result-item:hover { background: var(--row-hover); }
-    .result-item.selected { background: var(--blue-pale); border-left: 3px solid var(--blue); }
-    .result-item .item-no { font-weight: 700; color: var(--blue-d); font-size: 0.83rem; }
-    .result-item .item-name { color: var(--text); font-size: 0.82rem; }
-    .result-item .item-spec { color: var(--muted); font-size: 0.78rem; }
+    .result-item:hover {
+      background: var(--row-hover);
+      border-left-color: var(--blue-light);
+    }
+    .result-item.selected {
+      background: var(--blue-xpale);
+      border-left: 3px solid var(--blue);
+    }
+    .result-item .item-no {
+      font-weight: 700;
+      color: var(--blue-d);
+      font-size: 0.82rem;
+      font-family: 'Consolas', 'Courier New', monospace;
+      letter-spacing: 0.02em;
+    }
+    .result-item .item-name {
+      color: var(--text-2);
+      font-size: 0.8rem;
+      margin-top: 0.1rem;
+    }
 
-    /* ── Detail info bar ── */
-    .detail-header-info {
+    /* ══ Detail Info Bar ══ */
+    .detail-info-bar {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.75rem;
-      padding: 0.4rem 0.75rem;
-      background: #f8f9fa;
+      align-items: center;
+      gap: 0.5rem 1.2rem;
+      padding: 0.5rem 0.85rem;
+      background: var(--surface-2);
       border-bottom: 1px solid var(--border);
-      font-size: 0.82rem;
     }
-    .detail-header-info span { color: var(--muted); }
-    .detail-header-info strong { color: var(--text); }
+    .info-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.8rem;
+    }
+    .info-chip .lbl {
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .info-chip .val {
+      color: var(--text);
+      font-weight: 700;
+    }
+    .ver-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+      background: var(--blue-pale);
+      color: var(--blue);
+      border: 1px solid rgba(21,101,192,.2);
+      border-radius: 14px;
+      padding: 0.1rem 0.55rem;
+      font-size: 0.74rem;
+      font-weight: 700;
+    }
 
-    /* ── Table ── */
-    .table-wrap { flex: 1; overflow: auto; }
-    table.bom-table {
+    /* ══ Toolbar ══ */
+    .detail-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.45rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+      flex-wrap: wrap;
+    }
+    .check-count { margin-left: auto; font-size: 0.79rem; color: var(--muted); }
+    .check-count strong { color: var(--success); font-size: 0.88rem; }
+
+    /* ══ Table ══ */
+    .table-wrap { flex: 1; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--border-d) transparent; }
+    .table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+    .table-wrap::-webkit-scrollbar-thumb { background: var(--border-d); border-radius: 3px; }
+
+    table.pro-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
     }
-    table.bom-table thead th {
-      background: var(--blue);
-      color: white;
-      padding: 0.4rem 0.5rem;
+    table.pro-table thead th {
+      background: var(--blue-d);
+      color: rgba(255,255,255,.92);
+      padding: 0.45rem 0.65rem;
       text-align: left;
       white-space: nowrap;
       position: sticky;
       top: 0;
-      z-index: 1;
+      z-index: 2;
+      font-weight: 600;
+      font-size: 0.77rem;
+      letter-spacing: 0.02em;
+      border-right: 1px solid rgba(255,255,255,.08);
     }
-    table.bom-table tbody td {
-      padding: 0.35rem 0.5rem;
-      border-bottom: 1px solid #e8ecf0;
+    table.pro-table thead th:last-child { border-right: none; }
+    table.pro-table thead th.center { text-align: center; }
+    table.pro-table tbody td {
+      padding: 0.38rem 0.65rem;
+      border-bottom: 1px solid #EDF1F5;
       vertical-align: middle;
+      color: var(--text-2);
     }
-    table.bom-table tbody tr:nth-child(even) td { background: var(--row-even); }
-    table.bom-table tbody tr:hover td { background: var(--row-hover) !important; }
-    table.bom-table td.no-col { font-family: Consolas, monospace; font-weight: 600; color: var(--blue-d); }
-    table.bom-table td.qty-col { font-weight: 700; text-align: right; color: #1B5E20; }
-    table.bom-table td.desc-col { max-width: 280px; word-break: break-all; font-size: 0.78rem; }
+    table.pro-table tbody tr:nth-child(even) td { background: var(--row-even); }
+    table.pro-table tbody tr:hover td {
+      background: var(--row-hover) !important;
+      color: var(--text);
+    }
+    table.pro-table td.td-code {
+      font-family: 'Consolas','Courier New',monospace;
+      font-weight: 700;
+      color: var(--blue-d);
+      font-size: 0.79rem;
+    }
+    table.pro-table td.td-num {
+      font-weight: 700;
+      text-align: right;
+      color: var(--success);
+    }
+    table.pro-table td.td-center { text-align: center; }
+    table.pro-table td.td-seq {
+      text-align: center;
+      font-weight: 800;
+      color: var(--blue-d);
+      font-size: 0.88rem;
+    }
+    table.pro-table td.td-muted { color: var(--muted); font-size: 0.77rem; }
+    table.pro-table td.td-desc { max-width: 260px; word-break: break-all; font-size: 0.77rem; }
+    table.pro-table th.check-col, table.pro-table td.check-col { width: 34px; text-align: center; }
+    table.pro-table tbody tr.checked td { background: var(--success-bg) !important; }
 
-    /* ── 性質顏色 ── */
-    .nature-inner { color: #1565C0; font-weight: 600; }
-    .nature-outer { color: #E65100; font-weight: 600; }
-    .nature-sub   { color: #6A1B9A; font-weight: 600; }
-
-    /* ── Toolbar ── */
-    .detail-toolbar {
-      display: flex;
+    /* ══ Nature Badges ══ */
+    .nature-tag {
+      display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.4rem 0.75rem;
-      border-bottom: 1px solid var(--border);
-      background: #f8f9fa;
-      flex-wrap: wrap;
+      padding: 0.12rem 0.55rem;
+      border-radius: 12px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      white-space: nowrap;
     }
-    .check-count { margin-left: auto; font-size: 0.8rem; color: var(--muted); }
-    .check-count strong { color: var(--success); }
+    .nature-inner { background: #E3F2FD; color: #0D47A1; }
+    .nature-outer { background: #FFF3E0; color: #E65100; }
+    .nature-sub   { background: #F3E5F5; color: #6A1B9A; }
 
-    /* ── Messages ── */
+    /* ══ Empty / Error / Loading States ══ */
     .msg-empty {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 3rem 1rem;
-      color: var(--muted);
-      gap: 0.5rem;
+      padding: 3.5rem 1rem;
+      color: var(--muted-light);
+      gap: 0.65rem;
+      text-align: center;
     }
+    .msg-empty svg { opacity: .35; }
+    .msg-empty span { font-size: 0.83rem; }
     .msg-error {
-      padding: 1rem;
+      margin: 0.75rem;
+      padding: 0.75rem 1rem;
       color: #c62828;
-      background: #fff3f3;
-      border-left: 4px solid #c62828;
-      font-size: 0.82rem;
+      background: #fff5f5;
+      border: 1px solid #ffcdd2;
+      border-left: 4px solid #ef5350;
+      border-radius: var(--radius-sm);
+      font-size: 0.81rem;
     }
-    .msg-info {
-      padding: 0.5rem 0.75rem;
-      font-size: 0.82rem;
-      color: var(--muted);
-    }
+    .msg-info { padding: 0.4rem 0; font-size: 0.79rem; color: var(--muted); min-height: 1.4rem; }
+
+    /* ══ Spinner ══ */
     .spinner {
       display: inline-block;
-      width: 20px; height: 20px;
-      border: 2px solid rgba(25,118,210,.3);
-      border-top-color: var(--blue);
+      width: 22px; height: 22px;
+      border: 2.5px solid rgba(25,118,210,.2);
+      border-top-color: var(--blue-mid);
       border-radius: 50%;
-      animation: spin .7s linear infinite;
-      vertical-align: middle;
+      animation: spin .65s linear infinite;
+      flex-shrink: 0;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Badge ── */
-    .badge {
-      display: inline-block;
-      background: rgba(255,255,255,0.25);
-      border-radius: 10px;
-      padding: 0 0.5rem;
-      font-size: 0.75rem;
-      font-weight: normal;
-      margin-left: 0.4rem;
-    }
-
-    /* ── 途程版次標籤 ── */
-    .ver-badge {
-      display: inline-block;
-      background: #e3f2fd;
-      color: #1565c0;
-      border-radius: 10px;
-      padding: 0 0.45rem;
-      font-size: 0.75rem;
-      font-weight: 600;
-      margin-left: 0.3rem;
-    }
-
-    /* ── BOM prefix filter ── */
-    .prefix-filter { display:flex; align-items:center; gap:0.4rem; margin-top:0.45rem; flex-wrap:wrap; }
-    .prefix-label { font-size:0.77rem; color:var(--muted); white-space:nowrap; }
-    .prefix-btn { display:inline-flex; align-items:center; gap:0.25rem; cursor:pointer; font-size:0.8rem; }
-    .prefix-btn input[type=radio] { display:none; }
-    .prefix-btn span {
-      padding:0.2rem 0.55rem; border:1px solid var(--border); border-radius:12px;
-      background:white; color:var(--text); transition:all .15s; white-space:nowrap;
-    }
-    .prefix-btn input[type=radio]:checked + span { background:var(--blue); color:white; border-color:var(--blue); }
-    .prefix-btn:hover span { background:var(--blue-pale); }
-
-    /* ── BOM 選取checkbox ── */
-    table.bom-table thead th.check-col { width: 32px; text-align: center; }
-    table.bom-table td.check-col { text-align: center; }
-    table.bom-table tbody tr.checked td { background: #e8f5e9 !important; }
-
-    /* ── Modal ── */
+    /* ══ Modal ══ */
     .modal-overlay {
       display: none;
       position: fixed; inset: 0;
-      background: rgba(0,0,0,0.45);
+      background: rgba(10,20,40,0.5);
+      backdrop-filter: blur(2px);
       z-index: 1000;
       align-items: center;
       justify-content: center;
@@ -318,46 +462,49 @@
     }
     .modal-box {
       background: var(--surface);
-      border-radius: 8px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-      width: min(900px, 95vw);
-      max-height: 85vh;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      width: min(960px, 95vw);
+      max-height: 88vh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      animation: modalIn .2s ease;
     }
+    @keyframes modalIn { from { opacity:0; transform:scale(.97) translateY(6px); } to { opacity:1; transform:none; } }
     .modal-header {
-      background: var(--blue);
+      background: linear-gradient(135deg, var(--blue-mid) 0%, var(--blue-d) 100%);
       color: white;
-      padding: 0.65rem 1rem;
-      font-weight: 600;
-      font-size: 0.9rem;
+      padding: 0.7rem 1.1rem;
+      font-weight: 700;
+      font-size: 0.88rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-shrink: 0;
     }
     .modal-close {
-      background: none; border: none; color: white; font-size: 1rem;
-      cursor: pointer; padding: 0.1rem 0.4rem; border-radius: 4px;
+      background: rgba(255,255,255,.15); border: none; color: white;
+      font-size: 0.88rem; cursor: pointer; padding: 0.2rem 0.5rem;
+      border-radius: 4px; transition: background .15s;
     }
-    .modal-close:hover { background: rgba(255,255,255,0.2); }
+    .modal-close:hover { background: rgba(255,255,255,.28); }
     .modal-info {
-      padding: 0.6rem 1rem;
-      background: var(--blue-pale);
+      padding: 0.55rem 1.1rem;
+      background: var(--blue-xpale);
       display: flex;
       flex-wrap: wrap;
-      gap: 0.5rem 1.5rem;
+      gap: 0.4rem 1.5rem;
       border-bottom: 1px solid var(--border);
-      font-size: 0.82rem;
+      font-size: 0.81rem;
       flex-shrink: 0;
     }
-    .modal-body { overflow: auto; flex: 1; padding: 0; }
+    .modal-body { overflow: auto; flex: 1; }
   </style>
 </head>
 <body>
 
-<!-- ══════════ Header ══════════ -->
+<!-- ══════════ Top Navigation ══════════ -->
 <div class="header">
   <div class="header-inner">
     <div class="header-title">
@@ -377,31 +524,39 @@
   </div>
 </div>
 
-<!-- ══════════ 子分頁 Bar ══════════ -->
+<!-- ══════════ Sub-tab Bar ══════════ -->
 <div class="sub-tabs-bar">
-  <div class="sub-tab active" data-tab="routing" onclick="switchSubTab('routing')">🔄 途程查詢</div>
-  <div class="sub-tab"        data-tab="bom"     onclick="switchSubTab('bom')">📦 BOM查詢</div>
+  <div class="sub-tab active" data-tab="routing" onclick="switchSubTab('routing')">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+    途程查詢
+  </div>
+  <div class="sub-tab" data-tab="bom" onclick="switchSubTab('bom')">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+    BOM查詢
+  </div>
 </div>
 
-<!-- ══════════ 途程查詢 子分頁 ══════════ -->
+<!-- ══════════ 途程查詢 ══════════ -->
 <div id="tab-routing" class="sub-content active">
   <div class="page-body">
 
-    <!-- 左側：搜尋 + 品號列表 -->
+    <!-- 左側 -->
     <div class="panel-left">
       <div class="card">
         <div class="card-header">
-          🔍 品號 / 品名 搜尋
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          搜尋條件
         </div>
         <div class="card-body">
           <div class="search-row">
-            <input type="text" id="r-search-input" placeholder="輸入品號或品名…" autocomplete="off"
+            <input type="text" id="r-search-input" class="search-input"
+                   placeholder="品號或品名（空格=AND）" autocomplete="off"
                    onkeydown="if(event.key==='Enter') rSearch()">
             <button class="btn btn-primary" onclick="rSearch()">搜尋</button>
           </div>
-          <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.45rem;flex-wrap:wrap">
-            <span style="font-size:0.77rem;color:var(--muted);white-space:nowrap">線別篩選：</span>
-            <select id="r-line-filter" style="font-size:0.82rem;padding:0.2rem 0.4rem;border:1px solid var(--border);border-radius:3px;background:white;font-family:inherit" onchange="rApplyLineFilter()">
+          <div class="filter-row">
+            <span class="filter-label">線別篩選</span>
+            <select id="r-line-filter" class="filter-select" onchange="rApplyLineFilter()">
               <option value="000-1" selected>000-1 加工課</option>
               <option value="000-2">000-2 成品部</option>
               <option value="000-3">000-3 製三課</option>
@@ -414,12 +569,13 @@
 
       <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
         <div class="card-header">
-          📋 搜尋結果
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          搜尋結果
           <span id="r-result-count" class="badge"></span>
         </div>
         <div class="result-list" id="r-result-list">
           <div class="msg-empty">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
             <span>請輸入品號或品名搜尋</span>
@@ -428,72 +584,72 @@
       </div>
     </div>
 
-    <!-- 右側：途程明細 -->
+    <!-- 右側 -->
     <div class="panel-right">
       <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
         <div class="card-header">
-          🔄 產品途程明細
-          <span id="r-item-title" style="font-weight:400;margin-left:.5rem;opacity:.85"></span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          產品途程明細
+          <span id="r-item-title" style="font-weight:500;margin-left:.4rem;opacity:.8;font-size:0.77rem"></span>
         </div>
 
-        <!-- 品號資訊列 -->
-        <div class="detail-header-info" id="r-detail-info" style="display:none">
-          <div><span>品號：</span><strong id="r-info-no"></strong></div>
-          <div><span>品名：</span><strong id="r-info-name"></strong></div>
-          <div><span>規格：</span><strong id="r-info-spec"></strong></div>
-          <div><span>單位：</span><strong id="r-info-unit"></strong></div>
-          <div><span>途程版次：</span><strong id="r-info-ver" class="ver-badge"></strong></div>
+        <div class="detail-info-bar" id="r-detail-info" style="display:none">
+          <div class="info-chip"><span class="lbl">品號</span><span class="val td-code" id="r-info-no"></span></div>
+          <div class="info-chip"><span class="lbl">品名</span><span class="val" id="r-info-name"></span></div>
+          <div class="info-chip"><span class="lbl">單位</span><span class="val" id="r-info-unit"></span></div>
+          <div class="info-chip"><span class="lbl">版次</span><span class="ver-chip" id="r-info-ver"></span></div>
         </div>
 
-        <!-- 途程步驟表 -->
         <div class="table-wrap" id="r-table-wrap">
           <div class="msg-empty" id="r-empty-msg">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
               <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
             </svg>
             <span>請從左側選取品號以顯示途程</span>
           </div>
-          <table class="bom-table" id="r-table" style="display:none">
+          <table class="pro-table" id="r-table" style="display:none">
             <thead>
               <tr>
-                <th style="width:60px;text-align:center">加工順序</th>
-                <th style="width:80px">製程代號</th>
-                <th style="width:90px">機台代號</th>
-                <th style="width:100px">資源群組代號</th>
+                <th style="width:54px" class="center">順序</th>
+                <th style="width:82px">製程代號</th>
+                <th style="width:92px">機台代號</th>
+                <th style="width:105px">資源群組</th>
                 <th style="width:120px">製程名稱</th>
-                <th style="width:80px">性質</th>
-                <th style="width:90px">線別/廠商代號</th>
-                <th style="width:120px">線別/廠商名稱</th>
+                <th style="width:82px">性質</th>
+                <th style="width:88px">線別/廠商</th>
+                <th style="width:120px">廠商名稱</th>
                 <th>製程敘述</th>
-                <th style="width:70px;text-align:right">工時批量</th>
+                <th style="width:68px;text-align:right">工時批量</th>
               </tr>
             </thead>
             <tbody id="r-tbody"></tbody>
           </table>
         </div>
-
       </div>
     </div>
 
   </div>
 </div>
 
-<!-- ══════════ BOM查詢 子分頁 ══════════ -->
+<!-- ══════════ BOM查詢 ══════════ -->
 <div id="tab-bom" class="sub-content">
   <div class="page-body">
 
-    <!-- 左側：搜尋 + 品號列表 -->
+    <!-- 左側 -->
     <div class="panel-left">
       <div class="card">
-        <div class="card-header">🔍 品號 / 品名 搜尋</div>
+        <div class="card-header">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          搜尋條件
+        </div>
         <div class="card-body">
           <div class="search-row">
-            <input type="text" id="b-search-input" placeholder="輸入品號或品名…" autocomplete="off"
+            <input type="text" id="b-search-input" class="search-input"
+                   placeholder="輸入品號或品名…" autocomplete="off"
                    onkeydown="if(event.key==='Enter') bSearch()">
             <button class="btn btn-primary" onclick="bSearch()">搜尋</button>
           </div>
           <div class="prefix-filter">
-            <span class="prefix-label">品號篩選：</span>
             <label class="prefix-btn"><input type="radio" name="bprefix" value="" checked><span>全部</span></label>
             <label class="prefix-btn"><input type="radio" name="bprefix" value="5"><span>5開頭</span></label>
             <label class="prefix-btn"><input type="radio" name="bprefix" value="6"><span>6開頭</span></label>
@@ -505,12 +661,13 @@
 
       <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
         <div class="card-header">
-          📋 搜尋結果
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          搜尋結果
           <span id="b-result-count" class="badge"></span>
         </div>
         <div class="result-list" id="b-result-list">
           <div class="msg-empty">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
             <span>請輸入品號或品名搜尋</span>
@@ -519,45 +676,46 @@
       </div>
     </div>
 
-    <!-- 右側：BOM明細 -->
+    <!-- 右側 -->
     <div class="panel-right">
       <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
         <div class="card-header">
-          📦 材料BOM明細
-          <span id="b-item-title" style="font-weight:400;margin-left:.5rem;opacity:.85"></span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          材料 BOM 明細
+          <span id="b-item-title" style="font-weight:500;margin-left:.4rem;opacity:.8;font-size:0.77rem"></span>
         </div>
 
-        <!-- 工具列 -->
         <div class="detail-toolbar" id="b-toolbar" style="display:none">
-          <button class="btn btn-success btn-sm" id="b-btn-routing" onclick="bShowRouting()" disabled>🔄 查看途程</button>
+          <button class="btn btn-success btn-sm" id="b-btn-routing" onclick="bShowRouting()" disabled>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            查看途程
+          </button>
           <span class="check-count">已選 <strong id="b-check-count">0</strong> 件</span>
         </div>
 
-        <!-- 品號資訊列 -->
-        <div class="detail-header-info" id="b-detail-info" style="display:none">
-          <div><span>品號：</span><strong id="b-info-no"></strong></div>
-          <div><span>品名：</span><strong id="b-info-name"></strong></div>
-          <div><span>規格：</span><strong id="b-info-spec"></strong></div>
-          <div><span>單位：</span><strong id="b-info-unit"></strong></div>
+        <div class="detail-info-bar" id="b-detail-info" style="display:none">
+          <div class="info-chip"><span class="lbl">品號</span><span class="val td-code" id="b-info-no"></span></div>
+          <div class="info-chip"><span class="lbl">品名</span><span class="val" id="b-info-name"></span></div>
+          <div class="info-chip"><span class="lbl">單位</span><span class="val" id="b-info-unit"></span></div>
         </div>
 
         <div class="table-wrap" id="b-table-wrap">
           <div class="msg-empty" id="b-empty-msg">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
               <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
             </svg>
-            <span>請從左側選取品號以顯示BOM</span>
+            <span>請從左側選取品號以顯示 BOM</span>
           </div>
-          <table class="bom-table" id="b-table" style="display:none">
+          <table class="pro-table" id="b-table" style="display:none">
             <thead>
               <tr>
                 <th class="check-col"><input type="checkbox" id="b-chk-all" onchange="bToggleAll(this)"></th>
-                <th style="width:55px;text-align:center">序號</th>
-                <th style="width:160px">子件品號</th>
+                <th style="width:50px" class="center">序號</th>
+                <th style="width:150px">子件品號</th>
                 <th>品名</th>
                 <th>規格</th>
-                <th style="width:50px;text-align:center">單位</th>
-                <th style="width:70px;text-align:right">用量</th>
+                <th style="width:48px" class="center">單位</th>
+                <th style="width:68px;text-align:right">用量</th>
                 <th style="width:70px">屬性</th>
               </tr>
             </thead>
@@ -571,11 +729,14 @@
   </div>
 </div>
 
-<!-- ══════════ 途程Modal（從BOM跳轉） ══════════ -->
+<!-- ══════════ 途程 Modal（從 BOM 跳轉） ══════════ -->
 <div class="modal-overlay" id="routing-modal" onclick="if(event.target===this)closeRoutingModal()">
   <div class="modal-box">
     <div class="modal-header">
-      🔄 產品途程
+      <span style="display:flex;align-items:center;gap:.5rem">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        產品途程
+      </span>
       <button class="modal-close" onclick="closeRoutingModal()">✕</button>
     </div>
     <div class="modal-info" id="rm-info"></div>
@@ -589,7 +750,7 @@
 
 <script>
 // ═══════════════════════════════════════════════════
-// 子分頁切換
+// Sub-tab switching
 // ═══════════════════════════════════════════════════
 function switchSubTab(tab) {
   document.querySelectorAll('.sub-tab').forEach(el => el.classList.remove('active'));
@@ -599,27 +760,23 @@ function switchSubTab(tab) {
   history.replaceState(null, '', `/routing?tab=${tab}`);
 }
 
-// 頁面載入時根據 URL 參數切換子分頁
 (function() {
-  const params = new URLSearchParams(window.location.search);
-  const tab = params.get('tab');
+  const tab = new URLSearchParams(window.location.search).get('tab');
   if (tab === 'bom') switchSubTab('bom');
 })();
 
 // ═══════════════════════════════════════════════════
-// 途程查詢 邏輯
+// 途程查詢
 // ═══════════════════════════════════════════════════
 let rCurrentItem = null;
-let _rItems   = [];   // 儲存搜尋結果
-let _rRouting = [];   // 儲存目前品號的完整途程步驟（未篩選）
+let _rItems   = [];
+let _rRouting = [];
 
-// 切換線別篩選時重新搜尋左側（右側途程顯示全部不受影響）
 function rApplyLineFilter() {
   const q = document.getElementById('r-search-input').value.trim();
   if (q) rSearch();
 }
 
-// 渲染途程步驟表（顯示全部步驟，不篩線別）
 function rRenderRouting(rows) {
   if (!rows.length) {
     document.getElementById('r-empty-msg').innerHTML = '<span>此品號尚無途程資料</span>';
@@ -631,16 +788,16 @@ function rRenderRouting(rows) {
     const natCls = r.nature.includes('廠內') ? 'nature-inner'
                  : r.nature.includes('訂外') ? 'nature-outer' : 'nature-sub';
     return `<tr>
-      <td style="text-align:center;font-weight:700">${esc(r.seq)}</td>
-      <td class="no-col">${esc(r.proc_code)}</td>
-      <td class="no-col">${esc(r.machine_code)}</td>
+      <td class="td-seq">${esc(r.seq)}</td>
+      <td class="td-code">${esc(r.proc_code)}</td>
+      <td class="td-code">${esc(r.machine_code)}</td>
       <td>${esc(r.res_group)}</td>
       <td>${esc(r.proc_name)}</td>
-      <td class="${natCls}">${esc(r.nature)}</td>
+      <td><span class="nature-tag ${natCls}">${esc(r.nature)}</span></td>
       <td>${esc(r.vendor_no)}</td>
       <td>${esc(r.vendor_name)}</td>
-      <td class="desc-col">${esc(r.description)}</td>
-      <td class="qty-col">${esc(r.man_hrs)}</td>
+      <td class="td-desc">${esc(r.description)}</td>
+      <td class="td-num">${esc(r.man_hrs)}</td>
     </tr>`;
   }).join('');
   document.getElementById('r-empty-msg').style.display = 'none';
@@ -659,12 +816,12 @@ async function rSearch() {
   document.getElementById('r-search-info').textContent = '';
 
   try {
-    const res = await fetch(`/api/routing/search?q=${encodeURIComponent(q)}&line=${encodeURIComponent(line)}`);
+    const res  = await fetch(`/api/routing/search?q=${encodeURIComponent(q)}&line=${encodeURIComponent(line)}`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
 
     if (!data.data.length) {
-      list.innerHTML = '<div class="msg-empty"><span>找不到有途程的品號</span></div>';
+      list.innerHTML = '<div class="msg-empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><span>找不到有途程的品號</span></div>';
       cnt.textContent = '0';
       _rItems = [];
       return;
@@ -675,7 +832,6 @@ async function rSearch() {
       <div class="result-item" onclick="rSelectItem(${idx})" data-no="${esc(it.item_no)}">
         <div class="item-no">${esc(it.item_no)}</div>
         <div class="item-name">${esc(it.item_name)}</div>
-        ${it.spec ? `<div class="item-spec">${esc(it.spec)}</div>` : ''}
       </div>`).join('');
   } catch(e) {
     list.innerHTML = `<div class="msg-error">搜尋失敗：${esc(e.message)}</div>`;
@@ -687,12 +843,10 @@ async function rSelectItem(idx) {
   if (!item) return;
   rCurrentItem = item;
 
-  // 高亮選取
   document.querySelectorAll('#r-result-list .result-item').forEach(el => {
     el.classList.toggle('selected', el.dataset.no === item.item_no);
   });
 
-  // 顯示 loading
   document.getElementById('r-item-title').textContent = item.item_no;
   document.getElementById('r-detail-info').style.display = 'none';
   document.getElementById('r-table').style.display = 'none';
@@ -705,27 +859,21 @@ async function rSelectItem(idx) {
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
 
-    // 填入品號資訊
     const h = data.header || {};
     document.getElementById('r-info-no').textContent   = h.item_no   || '';
     document.getElementById('r-info-name').textContent = h.item_name || '';
-    document.getElementById('r-info-spec').textContent = h.spec       || '';
     document.getElementById('r-info-unit').textContent = h.unit       || '';
     document.getElementById('r-info-ver').textContent  = h.version    || '-';
     document.getElementById('r-detail-info').style.display = '';
 
     if (!data.has_routing || !data.routing.length) {
-      document.getElementById('r-empty-msg').innerHTML =
-        '<span>此品號尚無途程資料</span>';
+      document.getElementById('r-empty-msg').innerHTML = '<span>此品號尚無途程資料</span>';
       document.getElementById('r-empty-msg').style.display = 'flex';
       document.getElementById('r-table').style.display = 'none';
       return;
     }
-
-    // 儲存完整途程，再依線別渲染
     _rRouting = data.routing;
     rRenderRouting(_rRouting);
-
   } catch(e) {
     document.getElementById('r-empty-msg').innerHTML =
       `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
@@ -733,11 +881,11 @@ async function rSelectItem(idx) {
 }
 
 // ═══════════════════════════════════════════════════
-// BOM查詢 邏輯
+// BOM 查詢
 // ═══════════════════════════════════════════════════
 let bCurrentItem = null;
+let _bItems  = [];
 let bChecked = new Set();
-let _bItems = [];   // 儲存BOM搜尋結果，onclick 用索引存取
 
 async function bSearch() {
   const q      = document.getElementById('b-search-input').value.trim();
@@ -756,7 +904,7 @@ async function bSearch() {
     if (!data.success) throw new Error(data.error);
 
     if (!data.data.length) {
-      list.innerHTML = '<div class="msg-empty"><span>找不到BOM資料</span></div>';
+      list.innerHTML = '<div class="msg-empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><span>找不到 BOM 資料</span></div>';
       cnt.textContent = '0';
       _bItems = [];
       return;
@@ -767,7 +915,6 @@ async function bSearch() {
       <div class="result-item" onclick="bSelectItem(${idx})" data-no="${esc(it.item_no)}">
         <div class="item-no">${esc(it.item_no)}</div>
         <div class="item-name">${esc(it.item_name)}</div>
-        ${it.spec ? `<div class="item-spec">${esc(it.spec)}</div>` : ''}
       </div>`).join('');
   } catch(e) {
     list.innerHTML = `<div class="msg-error">搜尋失敗：${esc(e.message)}</div>`;
@@ -790,7 +937,7 @@ async function bSelectItem(idx) {
   document.getElementById('b-toolbar').style.display = 'none';
   document.getElementById('b-table').style.display = 'none';
   document.getElementById('b-empty-msg').innerHTML =
-    '<span class="spinner"></span><span>載入BOM中…</span>';
+    '<span class="spinner"></span><span>載入 BOM 中…</span>';
   document.getElementById('b-empty-msg').style.display = 'flex';
 
   try {
@@ -801,14 +948,13 @@ async function bSelectItem(idx) {
     const h = data.header || {};
     document.getElementById('b-info-no').textContent   = h.item_no   || '';
     document.getElementById('b-info-name').textContent = h.item_name || '';
-    document.getElementById('b-info-spec').textContent = h.spec       || '';
     document.getElementById('b-info-unit').textContent = h.unit       || '';
     document.getElementById('b-detail-info').style.display = '';
     document.getElementById('b-toolbar').style.display = '';
     document.getElementById('b-btn-routing').disabled = false;
 
     if (!data.detail.length) {
-      document.getElementById('b-empty-msg').innerHTML = '<span>此品號無BOM明細</span>';
+      document.getElementById('b-empty-msg').innerHTML = '<span>此品號無 BOM 明細</span>';
       document.getElementById('b-empty-msg').style.display = 'flex';
       document.getElementById('b-table').style.display = 'none';
       return;
@@ -819,12 +965,12 @@ async function bSelectItem(idx) {
         <td class="check-col">
           <input type="checkbox" onchange="bToggleRow(this,'${esc(r.child_no)}')">
         </td>
-        <td style="text-align:center">${esc(r.seq)}</td>
-        <td class="no-col">${esc(r.child_no)}</td>
+        <td class="td-center">${esc(r.seq)}</td>
+        <td class="td-code">${esc(r.child_no)}</td>
         <td>${esc(r.child_name)}</td>
-        <td style="font-size:0.78rem;color:var(--muted)">${esc(r.spec)}</td>
-        <td style="text-align:center">${esc(r.unit)}</td>
-        <td class="qty-col">${esc(r.qty)}</td>
+        <td class="td-muted">${esc(r.spec)}</td>
+        <td class="td-center">${esc(r.unit)}</td>
+        <td class="td-num">${esc(r.qty)}</td>
         <td>${esc(r.attr)}</td>
       </tr>`).join('');
     document.getElementById('b-chk-all').checked = false;
@@ -839,8 +985,7 @@ async function bSelectItem(idx) {
 
 function bToggleRow(cb, itemNo) {
   if (cb.checked) bChecked.add(itemNo); else bChecked.delete(itemNo);
-  const row = cb.closest('tr');
-  if (row) row.classList.toggle('checked', cb.checked);
+  cb.closest('tr').classList.toggle('checked', cb.checked);
   updateBCheckCount();
 }
 function bToggleAll(cb) {
@@ -856,7 +1001,9 @@ function updateBCheckCount() {
   document.getElementById('b-check-count').textContent = bChecked.size;
 }
 
-// 從BOM查看途程 Modal
+// ═══════════════════════════════════════════════════
+// 從 BOM 查看途程 Modal
+// ═══════════════════════════════════════════════════
 async function bShowRouting() {
   if (!bCurrentItem) return;
   const modal = document.getElementById('routing-modal');
@@ -872,9 +1019,9 @@ async function bShowRouting() {
 
     const h = data.header || {};
     document.getElementById('rm-info').innerHTML = `
-      <div><span style="color:var(--muted)">品號：</span><strong>${esc(h.item_no||'')}</strong></div>
-      <div><span style="color:var(--muted)">品名：</span><strong>${esc(h.item_name||'')}</strong></div>
-      <div><span style="color:var(--muted)">途程版次：</span><strong>${esc(h.version||'-')}</strong></div>
+      <div class="info-chip"><span class="lbl">品號</span><strong style="font-family:Consolas">${esc(h.item_no||'')}</strong></div>
+      <div class="info-chip"><span class="lbl">品名</span><strong>${esc(h.item_name||'')}</strong></div>
+      <div class="info-chip"><span class="lbl">途程版次</span><span class="ver-chip">${esc(h.version||'-')}</span></div>
     `;
 
     if (!data.has_routing) {
@@ -884,33 +1031,33 @@ async function bShowRouting() {
     }
 
     document.getElementById('rm-content').innerHTML = `
-      <table class="bom-table" style="font-size:0.8rem">
+      <table class="pro-table" style="font-size:0.79rem">
         <thead><tr>
-          <th style="width:60px;text-align:center">順序</th>
+          <th style="width:54px" class="center">順序</th>
           <th style="width:80px">製程代號</th>
           <th style="width:90px">機台代號</th>
-          <th style="width:100px">資源群組代號</th>
+          <th style="width:100px">資源群組</th>
           <th style="width:120px">製程名稱</th>
-          <th style="width:80px">性質</th>
-          <th style="width:90px">廠商代號</th>
+          <th style="width:82px">性質</th>
+          <th style="width:88px">廠商代號</th>
           <th style="width:120px">廠商名稱</th>
           <th>製程敘述</th>
-          <th style="width:70px;text-align:right">工時批量</th>
+          <th style="width:68px;text-align:right">工時批量</th>
         </tr></thead>
         <tbody>${data.routing.map(r => {
           const natCls = r.nature.includes('廠內') ? 'nature-inner'
                        : r.nature.includes('訂外') ? 'nature-outer' : 'nature-sub';
           return `<tr>
-            <td style="text-align:center;font-weight:700">${esc(r.seq)}</td>
-            <td class="no-col">${esc(r.proc_code)}</td>
-            <td class="no-col">${esc(r.machine_code)}</td>
+            <td class="td-seq">${esc(r.seq)}</td>
+            <td class="td-code">${esc(r.proc_code)}</td>
+            <td class="td-code">${esc(r.machine_code)}</td>
             <td>${esc(r.res_group)}</td>
             <td>${esc(r.proc_name)}</td>
-            <td class="${natCls}">${esc(r.nature)}</td>
+            <td><span class="nature-tag ${natCls}">${esc(r.nature)}</span></td>
             <td>${esc(r.vendor_no)}</td>
             <td>${esc(r.vendor_name)}</td>
-            <td class="desc-col">${esc(r.description)}</td>
-            <td class="qty-col">${esc(r.man_hrs)}</td>
+            <td class="td-desc">${esc(r.description)}</td>
+            <td class="td-num">${esc(r.man_hrs)}</td>
           </tr>`;
         }).join('')}</tbody>
       </table>`;
@@ -924,7 +1071,7 @@ function closeRoutingModal() {
 }
 
 // ═══════════════════════════════════════════════════
-// 工具函數
+// Utilities
 // ═══════════════════════════════════════════════════
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
