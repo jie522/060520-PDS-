@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>詠基-加工部查詢系統PDIS</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='12' fill='%231565C0'/%3E<path d='M12 4v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 12.8A5.87 5.87 0 0 1 6 10c0-3.31 2.69-6 6-6zm6.76 1.74L17.3 7.2A5.87 5.87 0 0 1 18 10c0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z' fill='white'/%3E</svg>">
+  <style>
+    :root {
+      --blue:       #1565C0;
+      --blue-d:     #0D47A1;
+      --blue-mid:   #1976D2;
+      --blue-pale:  #E3F2FD;
+      --bg:         #ECF0F5;
+      --surface:    #FFFFFF;
+      --border:     #BDC3C7;
+      --text:       #212121;
+      --muted:      #546E7A;
+      --row-even:   #F5F9FF;
+      --row-hover:  #DDEEFF;
+      --success:    #2E7D32;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif;
+      font-size: 0.85rem;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(180deg,#1976D2,#0D47A1);
+      color: #fff;
+      flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(0,0,0,.3);
+    }
+    .header-inner { display:flex; align-items:flex-end; padding:.4rem 1rem 0; }
+    .header-title { font-size:1.1rem; font-weight:700; padding-bottom:.45rem; white-space:nowrap; margin-right:.5rem; }
+    .header-tabs { display:flex; align-items:flex-end; gap:2px; }
+    .header-tab {
+      display: inline-block; padding:.3rem 1rem; font-size:.82rem; font-weight:600;
+      color:rgba(255,255,255,.85); text-decoration:none; border-radius:6px 6px 0 0;
+      background:rgba(255,255,255,.15); cursor:pointer; transition:background .15s;
+    }
+    .header-tab.active,.header-tab:hover { background:#fff; color:var(--blue-d); }
+
+    /* ── 子分頁 bar ── */
+    .sub-tabs-bar {
+      background: #fff;
+      border-bottom: 2px solid var(--blue);
+      padding: 0 1rem;
+      display: flex;
+      gap: 0;
+      flex-shrink: 0;
+    }
+    .sub-tab {
+      padding: .45rem 1.2rem;
+      font-size: .84rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: all .15s;
+      user-select: none;
+    }
+    .sub-tab:hover { color: var(--blue); }
+    .sub-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+    /* ── 子分頁 content ── */
+    .sub-content { display: none; flex: 1; overflow: hidden; }
+    .sub-content.active { display: flex; }
+
+    /* ── Page layout ── */
+    .page-body {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Left panel ── */
+    .panel-left {
+      width: 320px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    /* ── Right panel ── */
+    .panel-right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      min-width: 0;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .card-header {
+      background: linear-gradient(180deg,#1976D2,#1565C0);
+      color: white;
+      padding: 0.35rem 0.75rem;
+      font-weight: 700;
+      font-size: 0.82rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card-body { padding: 0.5rem 0.75rem; }
+
+    /* ── Search form ── */
+    .search-row { display: flex; gap: 0.4rem; }
+    .search-row input {
+      flex: 1;
+      padding: 0.35rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-size: 0.85rem;
+      font-family: inherit;
+    }
+    .search-row input:focus {
+      outline: none;
+      border-color: var(--blue-mid);
+      box-shadow: 0 0 0 2px rgba(25,118,210,.15);
+    }
+    .btn {
+      padding: 0.35rem 0.75rem;
+      border: none;
+      border-radius: 3px;
+      font-size: 0.82rem;
+      font-family: inherit;
+      cursor: pointer;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .btn-primary { background: var(--blue); color: white; }
+    .btn-primary:hover { background: var(--blue-d); }
+    .btn-success { background: #2E7D32; color: white; }
+    .btn-success:hover { background: #1B5E20; }
+    .btn-success:disabled { background: #9e9e9e; cursor: default; }
+    .btn-sm { padding: 0.25rem 0.55rem; font-size: 0.78rem; }
+
+    /* ── Result list ── */
+    .result-list {
+      flex: 1;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+    }
+    .result-item {
+      padding: 0.45rem 0.65rem;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+      transition: background .1s;
+    }
+    .result-item:last-child { border-bottom: none; }
+    .result-item:hover { background: var(--row-hover); }
+    .result-item.selected { background: var(--blue-pale); border-left: 3px solid var(--blue); }
+    .result-item .item-no { font-weight: 700; color: var(--blue-d); font-size: 0.83rem; }
+    .result-item .item-name { color: var(--text); font-size: 0.82rem; }
+    .result-item .item-spec { color: var(--muted); font-size: 0.78rem; }
+
+    /* ── Detail info bar ── */
+    .detail-header-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      padding: 0.4rem 0.75rem;
+      background: #f8f9fa;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+    .detail-header-info span { color: var(--muted); }
+    .detail-header-info strong { color: var(--text); }
+
+    /* ── Table ── */
+    .table-wrap { flex: 1; overflow: auto; }
+    table.bom-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    table.bom-table thead th {
+      background: var(--blue);
+      color: white;
+      padding: 0.4rem 0.5rem;
+      text-align: left;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    table.bom-table tbody td {
+      padding: 0.35rem 0.5rem;
+      border-bottom: 1px solid #e8ecf0;
+      vertical-align: middle;
+    }
+    table.bom-table tbody tr:nth-child(even) td { background: var(--row-even); }
+    table.bom-table tbody tr:hover td { background: var(--row-hover) !important; }
+    table.bom-table td.no-col { font-family: Consolas, monospace; font-weight: 600; color: var(--blue-d); }
+    table.bom-table td.qty-col { font-weight: 700; text-align: right; color: #1B5E20; }
+    table.bom-table td.desc-col { max-width: 280px; word-break: break-all; font-size: 0.78rem; }
+
+    /* ── 性質顏色 ── */
+    .nature-inner { color: #1565C0; font-weight: 600; }
+    .nature-outer { color: #E65100; font-weight: 600; }
+    .nature-sub   { color: #6A1B9A; font-weight: 600; }
+
+    /* ── Toolbar ── */
+    .detail-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      background: #f8f9fa;
+      flex-wrap: wrap;
+    }
+    .check-count { margin-left: auto; font-size: 0.8rem; color: var(--muted); }
+    .check-count strong { color: var(--success); }
+
+    /* ── Messages ── */
+    .msg-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      gap: 0.5rem;
+    }
+    .msg-error {
+      padding: 1rem;
+      color: #c62828;
+      background: #fff3f3;
+      border-left: 4px solid #c62828;
+      font-size: 0.82rem;
+    }
+    .msg-info {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    .spinner {
+      display: inline-block;
+      width: 20px; height: 20px;
+      border: 2px solid rgba(25,118,210,.3);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.25);
+      border-radius: 10px;
+      padding: 0 0.5rem;
+      font-size: 0.75rem;
+      font-weight: normal;
+      margin-left: 0.4rem;
+    }
+
+    /* ── 途程版次標籤 ── */
+    .ver-badge {
+      display: inline-block;
+      background: #e3f2fd;
+      color: #1565c0;
+      border-radius: 10px;
+      padding: 0 0.45rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 0.3rem;
+    }
+
+    /* ── BOM prefix filter ── */
+    .prefix-filter { display:flex; align-items:center; gap:0.4rem; margin-top:0.45rem; flex-wrap:wrap; }
+    .prefix-label { font-size:0.77rem; color:var(--muted); white-space:nowrap; }
+    .prefix-btn { display:inline-flex; align-items:center; gap:0.25rem; cursor:pointer; font-size:0.8rem; }
+    .prefix-btn input[type=radio] { display:none; }
+    .prefix-btn span {
+      padding:0.2rem 0.55rem; border:1px solid var(--border); border-radius:12px;
+      background:white; color:var(--text); transition:all .15s; white-space:nowrap;
+    }
+    .prefix-btn input[type=radio]:checked + span { background:var(--blue); color:white; border-color:var(--blue); }
+    .prefix-btn:hover span { background:var(--blue-pale); }
+
+    /* ── BOM 選取checkbox ── */
+    table.bom-table thead th.check-col { width: 32px; text-align: center; }
+    table.bom-table td.check-col { text-align: center; }
+    table.bom-table tbody tr.checked td { background: #e8f5e9 !important; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .modal-box {
+      background: var(--surface);
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      width: min(900px, 95vw);
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-header {
+      background: var(--blue);
+      color: white;
+      padding: 0.65rem 1rem;
+      font-weight: 600;
+      font-size: 0.9rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .modal-close {
+      background: none; border: none; color: white; font-size: 1rem;
+      cursor: pointer; padding: 0.1rem 0.4rem; border-radius: 4px;
+    }
+    .modal-close:hover { background: rgba(255,255,255,0.2); }
+    .modal-info {
+      padding: 0.6rem 1rem;
+      background: var(--blue-pale);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+      flex-shrink: 0;
+    }
+    .modal-body { overflow: auto; flex: 1; padding: 0; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════ Header ══════════ -->
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:5px">
+        <circle cx="12" cy="12" r="12" fill="rgba(255,255,255,0.25)"/>
+        <path d="M12 4v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 12.8A5.87 5.87 0 0 1 6 10c0-3.31 2.69-6 6-6zm6.76 1.74L17.3 7.2A5.87 5.87 0 0 1 18 10c0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z" fill="white"/>
+      </svg>
+      詠基-加工部查詢系統PDIS
+    </div>
+    <div class="header-tabs">
+      <a href="/"           class="header-tab">製令查詢</a>
+      <a href="/production" class="header-tab">生產中製令</a>
+      <a href="/equipment"  class="header-tab">設備稼動</a>
+      <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
+      <span                 class="header-tab active">產品途程查詢</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 子分頁 Bar ══════════ -->
+<div class="sub-tabs-bar">
+  <div class="sub-tab active" data-tab="routing" onclick="switchSubTab('routing')">🔄 途程查詢</div>
+  <div class="sub-tab"        data-tab="bom"     onclick="switchSubTab('bom')">📦 BOM查詢</div>
+</div>
+
+<!-- ══════════ 途程查詢 子分頁 ══════════ -->
+<div id="tab-routing" class="sub-content active">
+  <div class="page-body">
+
+    <!-- 左側：搜尋 + 品號列表 -->
+    <div class="panel-left">
+      <div class="card">
+        <div class="card-header">
+          🔍 品號 / 品名 搜尋
+        </div>
+        <div class="card-body">
+          <div class="search-row">
+            <input type="text" id="r-search-input" placeholder="輸入品號或品名…" autocomplete="off"
+                   onkeydown="if(event.key==='Enter') rSearch()">
+            <button class="btn btn-primary" onclick="rSearch()">搜尋</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.45rem;flex-wrap:wrap">
+            <span style="font-size:0.77rem;color:var(--muted);white-space:nowrap">線別篩選：</span>
+            <select id="r-line-filter" style="font-size:0.82rem;padding:0.2rem 0.4rem;border:1px solid var(--border);border-radius:3px;background:white;font-family:inherit" onchange="rApplyLineFilter()">
+              <option value="000-1" selected>000-1（廠內）</option>
+              <option value="000-2">000-2（外包）</option>
+              <option value="000-3">000-3（訂外）</option>
+              <option value="">全部</option>
+            </select>
+          </div>
+          <div id="r-search-info" class="msg-info"></div>
+        </div>
+      </div>
+
+      <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+        <div class="card-header">
+          📋 搜尋結果
+          <span id="r-result-count" class="badge"></span>
+        </div>
+        <div class="result-list" id="r-result-list">
+          <div class="msg-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <span>請輸入品號或品名搜尋</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右側：途程明細 -->
+    <div class="panel-right">
+      <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+        <div class="card-header">
+          🔄 產品途程明細
+          <span id="r-item-title" style="font-weight:400;margin-left:.5rem;opacity:.85"></span>
+        </div>
+
+        <!-- 品號資訊列 -->
+        <div class="detail-header-info" id="r-detail-info" style="display:none">
+          <div><span>品號：</span><strong id="r-info-no"></strong></div>
+          <div><span>品名：</span><strong id="r-info-name"></strong></div>
+          <div><span>規格：</span><strong id="r-info-spec"></strong></div>
+          <div><span>單位：</span><strong id="r-info-unit"></strong></div>
+          <div><span>途程版次：</span><strong id="r-info-ver" class="ver-badge"></strong></div>
+        </div>
+
+        <!-- 途程步驟表 -->
+        <div class="table-wrap" id="r-table-wrap">
+          <div class="msg-empty" id="r-empty-msg">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+            </svg>
+            <span>請從左側選取品號以顯示途程</span>
+          </div>
+          <table class="bom-table" id="r-table" style="display:none">
+            <thead>
+              <tr>
+                <th style="width:60px;text-align:center">加工順序</th>
+                <th style="width:80px">製程代號</th>
+                <th style="width:90px">機台代號</th>
+                <th style="width:100px">資源群組代號</th>
+                <th style="width:120px">製程名稱</th>
+                <th style="width:80px">性質</th>
+                <th style="width:90px">線別/廠商代號</th>
+                <th style="width:120px">線別/廠商名稱</th>
+                <th>製程敘述</th>
+                <th style="width:70px;text-align:right">工時批量</th>
+              </tr>
+            </thead>
+            <tbody id="r-tbody"></tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ BOM查詢 子分頁 ══════════ -->
+<div id="tab-bom" class="sub-content">
+  <div class="page-body">
+
+    <!-- 左側：搜尋 + 品號列表 -->
+    <div class="panel-left">
+      <div class="card">
+        <div class="card-header">🔍 品號 / 品名 搜尋</div>
+        <div class="card-body">
+          <div class="search-row">
+            <input type="text" id="b-search-input" placeholder="輸入品號或品名…" autocomplete="off"
+                   onkeydown="if(event.key==='Enter') bSearch()">
+            <button class="btn btn-primary" onclick="bSearch()">搜尋</button>
+          </div>
+          <div class="prefix-filter">
+            <span class="prefix-label">品號篩選：</span>
+            <label class="prefix-btn"><input type="radio" name="bprefix" value="" checked><span>全部</span></label>
+            <label class="prefix-btn"><input type="radio" name="bprefix" value="5"><span>5開頭</span></label>
+            <label class="prefix-btn"><input type="radio" name="bprefix" value="6"><span>6開頭</span></label>
+            <label class="prefix-btn"><input type="radio" name="bprefix" value="56"><span>5+6</span></label>
+          </div>
+          <div id="b-search-info" class="msg-info"></div>
+        </div>
+      </div>
+
+      <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+        <div class="card-header">
+          📋 搜尋結果
+          <span id="b-result-count" class="badge"></span>
+        </div>
+        <div class="result-list" id="b-result-list">
+          <div class="msg-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <span>請輸入品號或品名搜尋</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右側：BOM明細 -->
+    <div class="panel-right">
+      <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+        <div class="card-header">
+          📦 材料BOM明細
+          <span id="b-item-title" style="font-weight:400;margin-left:.5rem;opacity:.85"></span>
+        </div>
+
+        <!-- 工具列 -->
+        <div class="detail-toolbar" id="b-toolbar" style="display:none">
+          <button class="btn btn-success btn-sm" id="b-btn-routing" onclick="bShowRouting()" disabled>🔄 查看途程</button>
+          <span class="check-count">已選 <strong id="b-check-count">0</strong> 件</span>
+        </div>
+
+        <!-- 品號資訊列 -->
+        <div class="detail-header-info" id="b-detail-info" style="display:none">
+          <div><span>品號：</span><strong id="b-info-no"></strong></div>
+          <div><span>品名：</span><strong id="b-info-name"></strong></div>
+          <div><span>規格：</span><strong id="b-info-spec"></strong></div>
+          <div><span>單位：</span><strong id="b-info-unit"></strong></div>
+        </div>
+
+        <div class="table-wrap" id="b-table-wrap">
+          <div class="msg-empty" id="b-empty-msg">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+            </svg>
+            <span>請從左側選取品號以顯示BOM</span>
+          </div>
+          <table class="bom-table" id="b-table" style="display:none">
+            <thead>
+              <tr>
+                <th class="check-col"><input type="checkbox" id="b-chk-all" onchange="bToggleAll(this)"></th>
+                <th style="width:55px;text-align:center">序號</th>
+                <th style="width:160px">子件品號</th>
+                <th>品名</th>
+                <th>規格</th>
+                <th style="width:50px;text-align:center">單位</th>
+                <th style="width:70px;text-align:right">用量</th>
+                <th style="width:70px">屬性</th>
+              </tr>
+            </thead>
+            <tbody id="b-tbody"></tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ 途程Modal（從BOM跳轉） ══════════ -->
+<div class="modal-overlay" id="routing-modal" onclick="if(event.target===this)closeRoutingModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      🔄 產品途程
+      <button class="modal-close" onclick="closeRoutingModal()">✕</button>
+    </div>
+    <div class="modal-info" id="rm-info"></div>
+    <div class="modal-body">
+      <div id="rm-content">
+        <div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// 子分頁切換
+// ═══════════════════════════════════════════════════
+function switchSubTab(tab) {
+  document.querySelectorAll('.sub-tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.sub-content').forEach(el => el.classList.remove('active'));
+  document.querySelector(`.sub-tab[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  history.replaceState(null, '', `/routing?tab=${tab}`);
+}
+
+// 頁面載入時根據 URL 參數切換子分頁
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get('tab');
+  if (tab === 'bom') switchSubTab('bom');
+})();
+
+// ═══════════════════════════════════════════════════
+// 途程查詢 邏輯
+// ═══════════════════════════════════════════════════
+let rCurrentItem = null;
+let _rItems   = [];   // 儲存搜尋結果
+let _rRouting = [];   // 儲存目前品號的完整途程步驟（未篩選）
+
+// 切換線別篩選時重新搜尋左側（右側途程顯示全部不受影響）
+function rApplyLineFilter() {
+  const q = document.getElementById('r-search-input').value.trim();
+  if (q) rSearch();
+}
+
+// 渲染途程步驟表（顯示全部步驟，不篩線別）
+function rRenderRouting(rows) {
+  if (!rows.length) {
+    document.getElementById('r-empty-msg').innerHTML = '<span>此品號尚無途程資料</span>';
+    document.getElementById('r-empty-msg').style.display = 'flex';
+    document.getElementById('r-table').style.display = 'none';
+    return;
+  }
+  document.getElementById('r-tbody').innerHTML = rows.map(r => {
+    const natCls = r.nature.includes('廠內') ? 'nature-inner'
+                 : r.nature.includes('訂外') ? 'nature-outer' : 'nature-sub';
+    return `<tr>
+      <td style="text-align:center;font-weight:700">${esc(r.seq)}</td>
+      <td class="no-col">${esc(r.proc_code)}</td>
+      <td class="no-col">${esc(r.machine_code)}</td>
+      <td>${esc(r.res_group)}</td>
+      <td>${esc(r.proc_name)}</td>
+      <td class="${natCls}">${esc(r.nature)}</td>
+      <td>${esc(r.vendor_no)}</td>
+      <td>${esc(r.vendor_name)}</td>
+      <td class="desc-col">${esc(r.description)}</td>
+      <td class="qty-col">${esc(r.man_hrs)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('r-empty-msg').style.display = 'none';
+  document.getElementById('r-table').style.display = '';
+}
+
+async function rSearch() {
+  const q    = document.getElementById('r-search-input').value.trim();
+  const line = document.getElementById('r-line-filter').value;
+  if (!q) { document.getElementById('r-search-info').textContent = '請輸入品號或品名'; return; }
+
+  const list = document.getElementById('r-result-list');
+  const cnt  = document.getElementById('r-result-count');
+  list.innerHTML = '<div class="msg-empty"><span class="spinner"></span><span>搜尋中…</span></div>';
+  cnt.textContent = '';
+  document.getElementById('r-search-info').textContent = '';
+
+  try {
+    const res = await fetch(`/api/routing/search?q=${encodeURIComponent(q)}&line=${encodeURIComponent(line)}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    if (!data.data.length) {
+      list.innerHTML = '<div class="msg-empty"><span>找不到有途程的品號</span></div>';
+      cnt.textContent = '0';
+      _rItems = [];
+      return;
+    }
+    _rItems = data.data;
+    cnt.textContent = data.count;
+    list.innerHTML = _rItems.map((it, idx) => `
+      <div class="result-item" onclick="rSelectItem(${idx})" data-no="${esc(it.item_no)}">
+        <div class="item-no">${esc(it.item_no)}</div>
+        <div class="item-name">${esc(it.item_name)}</div>
+        ${it.spec ? `<div class="item-spec">${esc(it.spec)}</div>` : ''}
+      </div>`).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="msg-error">搜尋失敗：${esc(e.message)}</div>`;
+  }
+}
+
+async function rSelectItem(idx) {
+  const item = _rItems[idx];
+  if (!item) return;
+  rCurrentItem = item;
+
+  // 高亮選取
+  document.querySelectorAll('#r-result-list .result-item').forEach(el => {
+    el.classList.toggle('selected', el.dataset.no === item.item_no);
+  });
+
+  // 顯示 loading
+  document.getElementById('r-item-title').textContent = item.item_no;
+  document.getElementById('r-detail-info').style.display = 'none';
+  document.getElementById('r-table').style.display = 'none';
+  document.getElementById('r-empty-msg').innerHTML =
+    '<span class="spinner"></span><span>載入途程中…</span>';
+  document.getElementById('r-empty-msg').style.display = 'flex';
+
+  try {
+    const res  = await fetch(`/api/bom/routing?item_no=${encodeURIComponent(item.item_no)}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    // 填入品號資訊
+    const h = data.header || {};
+    document.getElementById('r-info-no').textContent   = h.item_no   || '';
+    document.getElementById('r-info-name').textContent = h.item_name || '';
+    document.getElementById('r-info-spec').textContent = h.spec       || '';
+    document.getElementById('r-info-unit').textContent = h.unit       || '';
+    document.getElementById('r-info-ver').textContent  = h.version    || '-';
+    document.getElementById('r-detail-info').style.display = '';
+
+    if (!data.has_routing || !data.routing.length) {
+      document.getElementById('r-empty-msg').innerHTML =
+        '<span>此品號尚無途程資料</span>';
+      document.getElementById('r-empty-msg').style.display = 'flex';
+      document.getElementById('r-table').style.display = 'none';
+      return;
+    }
+
+    // 儲存完整途程，再依線別渲染
+    _rRouting = data.routing;
+    rRenderRouting(_rRouting);
+
+  } catch(e) {
+    document.getElementById('r-empty-msg').innerHTML =
+      `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// BOM查詢 邏輯
+// ═══════════════════════════════════════════════════
+let bCurrentItem = null;
+let bChecked = new Set();
+let _bItems = [];   // 儲存BOM搜尋結果，onclick 用索引存取
+
+async function bSearch() {
+  const q      = document.getElementById('b-search-input').value.trim();
+  const prefix = document.querySelector('input[name=bprefix]:checked').value;
+  if (!q) { document.getElementById('b-search-info').textContent = '請輸入品號或品名'; return; }
+
+  const list = document.getElementById('b-result-list');
+  const cnt  = document.getElementById('b-result-count');
+  list.innerHTML = '<div class="msg-empty"><span class="spinner"></span><span>搜尋中…</span></div>';
+  cnt.textContent = '';
+  document.getElementById('b-search-info').textContent = '';
+
+  try {
+    const res  = await fetch(`/api/bom/search?q=${encodeURIComponent(q)}&prefix=${encodeURIComponent(prefix)}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    if (!data.data.length) {
+      list.innerHTML = '<div class="msg-empty"><span>找不到BOM資料</span></div>';
+      cnt.textContent = '0';
+      _bItems = [];
+      return;
+    }
+    _bItems = data.data;
+    cnt.textContent = data.count;
+    list.innerHTML = _bItems.map((it, idx) => `
+      <div class="result-item" onclick="bSelectItem(${idx})" data-no="${esc(it.item_no)}">
+        <div class="item-no">${esc(it.item_no)}</div>
+        <div class="item-name">${esc(it.item_name)}</div>
+        ${it.spec ? `<div class="item-spec">${esc(it.spec)}</div>` : ''}
+      </div>`).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="msg-error">搜尋失敗：${esc(e.message)}</div>`;
+  }
+}
+
+async function bSelectItem(idx) {
+  const item = _bItems[idx];
+  if (!item) return;
+  bCurrentItem = item;
+  bChecked.clear();
+  updateBCheckCount();
+
+  document.querySelectorAll('#b-result-list .result-item').forEach(el => {
+    el.classList.toggle('selected', el.dataset.no === item.item_no);
+  });
+
+  document.getElementById('b-item-title').textContent = item.item_no;
+  document.getElementById('b-detail-info').style.display = 'none';
+  document.getElementById('b-toolbar').style.display = 'none';
+  document.getElementById('b-table').style.display = 'none';
+  document.getElementById('b-empty-msg').innerHTML =
+    '<span class="spinner"></span><span>載入BOM中…</span>';
+  document.getElementById('b-empty-msg').style.display = 'flex';
+
+  try {
+    const res  = await fetch(`/api/bom/detail?item_no=${encodeURIComponent(item.item_no)}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    const h = data.header || {};
+    document.getElementById('b-info-no').textContent   = h.item_no   || '';
+    document.getElementById('b-info-name').textContent = h.item_name || '';
+    document.getElementById('b-info-spec').textContent = h.spec       || '';
+    document.getElementById('b-info-unit').textContent = h.unit       || '';
+    document.getElementById('b-detail-info').style.display = '';
+    document.getElementById('b-toolbar').style.display = '';
+    document.getElementById('b-btn-routing').disabled = false;
+
+    if (!data.detail.length) {
+      document.getElementById('b-empty-msg').innerHTML = '<span>此品號無BOM明細</span>';
+      document.getElementById('b-empty-msg').style.display = 'flex';
+      document.getElementById('b-table').style.display = 'none';
+      return;
+    }
+
+    document.getElementById('b-tbody').innerHTML = data.detail.map(r => `
+      <tr data-no="${esc(r.child_no)}">
+        <td class="check-col">
+          <input type="checkbox" onchange="bToggleRow(this,'${esc(r.child_no)}')">
+        </td>
+        <td style="text-align:center">${esc(r.seq)}</td>
+        <td class="no-col">${esc(r.child_no)}</td>
+        <td>${esc(r.child_name)}</td>
+        <td style="font-size:0.78rem;color:var(--muted)">${esc(r.spec)}</td>
+        <td style="text-align:center">${esc(r.unit)}</td>
+        <td class="qty-col">${esc(r.qty)}</td>
+        <td>${esc(r.attr)}</td>
+      </tr>`).join('');
+    document.getElementById('b-chk-all').checked = false;
+    document.getElementById('b-empty-msg').style.display = 'none';
+    document.getElementById('b-table').style.display = '';
+
+  } catch(e) {
+    document.getElementById('b-empty-msg').innerHTML =
+      `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+
+function bToggleRow(cb, itemNo) {
+  if (cb.checked) bChecked.add(itemNo); else bChecked.delete(itemNo);
+  const row = cb.closest('tr');
+  if (row) row.classList.toggle('checked', cb.checked);
+  updateBCheckCount();
+}
+function bToggleAll(cb) {
+  document.querySelectorAll('#b-tbody input[type=checkbox]').forEach(c => {
+    c.checked = cb.checked;
+    const no = c.closest('tr').dataset.no;
+    if (cb.checked) bChecked.add(no); else bChecked.delete(no);
+    c.closest('tr').classList.toggle('checked', cb.checked);
+  });
+  updateBCheckCount();
+}
+function updateBCheckCount() {
+  document.getElementById('b-check-count').textContent = bChecked.size;
+}
+
+// 從BOM查看途程 Modal
+async function bShowRouting() {
+  if (!bCurrentItem) return;
+  const modal = document.getElementById('routing-modal');
+  modal.style.display = 'flex';
+  document.getElementById('rm-info').innerHTML = '';
+  document.getElementById('rm-content').innerHTML =
+    '<div class="msg-empty"><span class="spinner"></span><span>載入途程中…</span></div>';
+
+  try {
+    const res  = await fetch(`/api/bom/routing?item_no=${encodeURIComponent(bCurrentItem.item_no)}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    const h = data.header || {};
+    document.getElementById('rm-info').innerHTML = `
+      <div><span style="color:var(--muted)">品號：</span><strong>${esc(h.item_no||'')}</strong></div>
+      <div><span style="color:var(--muted)">品名：</span><strong>${esc(h.item_name||'')}</strong></div>
+      <div><span style="color:var(--muted)">途程版次：</span><strong>${esc(h.version||'-')}</strong></div>
+    `;
+
+    if (!data.has_routing) {
+      document.getElementById('rm-content').innerHTML =
+        '<div class="msg-empty"><span>此品號尚無途程資料</span></div>';
+      return;
+    }
+
+    document.getElementById('rm-content').innerHTML = `
+      <table class="bom-table" style="font-size:0.8rem">
+        <thead><tr>
+          <th style="width:60px;text-align:center">順序</th>
+          <th style="width:80px">製程代號</th>
+          <th style="width:90px">機台代號</th>
+          <th style="width:100px">資源群組代號</th>
+          <th style="width:120px">製程名稱</th>
+          <th style="width:80px">性質</th>
+          <th style="width:90px">廠商代號</th>
+          <th style="width:120px">廠商名稱</th>
+          <th>製程敘述</th>
+          <th style="width:70px;text-align:right">工時批量</th>
+        </tr></thead>
+        <tbody>${data.routing.map(r => {
+          const natCls = r.nature.includes('廠內') ? 'nature-inner'
+                       : r.nature.includes('訂外') ? 'nature-outer' : 'nature-sub';
+          return `<tr>
+            <td style="text-align:center;font-weight:700">${esc(r.seq)}</td>
+            <td class="no-col">${esc(r.proc_code)}</td>
+            <td class="no-col">${esc(r.machine_code)}</td>
+            <td>${esc(r.res_group)}</td>
+            <td>${esc(r.proc_name)}</td>
+            <td class="${natCls}">${esc(r.nature)}</td>
+            <td>${esc(r.vendor_no)}</td>
+            <td>${esc(r.vendor_name)}</td>
+            <td class="desc-col">${esc(r.description)}</td>
+            <td class="qty-col">${esc(r.man_hrs)}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+  } catch(e) {
+    document.getElementById('rm-content').innerHTML =
+      `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+function closeRoutingModal() {
+  document.getElementById('routing-modal').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════
+// 工具函數
+// ═══════════════════════════════════════════════════
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

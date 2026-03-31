@@ -13,7 +13,7 @@ import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect
 import requests
 from requests_ntlm import HttpNtlmAuth
 from urllib.parse import quote
@@ -1107,9 +1107,80 @@ def get_erp_conn():
     return pyodbc.connect(cs, timeout=8)
 
 
+@app.route('/routing')
+def routing_page():
+    return render_template('routing.html', app_version=APP_VERSION)
+
+
 @app.route('/bom')
 def bom_page():
-    return render_template('bom.html', app_version=APP_VERSION)
+    # 舊連結相容：直接導向產品途程查詢頁（BOM子分頁）
+    return redirect('/routing?tab=bom')
+
+
+@app.route('/api/routing/search')
+def routing_search():
+    """搜尋有途程的品號（INVMB + BOMME，多關鍵字空格分隔，品號/品名同時模糊搜尋）
+       line 參數：指定線別篩選（MF006），空字串代表全部"""
+    q    = request.args.get('q', '').strip()
+    line = request.args.get('line', '').strip()   # '000-1','000-2','000-3' 或 ''=全部
+    if not q:
+        return jsonify({'success': False, 'error': '請輸入品號或品名'}), 400
+    try:
+        conn = get_erp_conn()
+        cur  = conn.cursor()
+        # 多關鍵字：以空格分割，每個關鍵字都要符合（AND 邏輯）
+        keywords = [kw for kw in q.split() if kw]
+        where_parts = []
+        params = []
+        for kw in keywords:
+            like = f'%{kw}%'
+            where_parts.append("(RTRIM(b.MB001) LIKE ? OR b.MB002 LIKE ?)")
+            params.extend([like, like])
+        keyword_clause = ' AND '.join(where_parts) if where_parts else '1=1'
+
+        # 線別篩選：只顯示「最新版次」途程中包含該線別至少一步的品號
+        if line:
+            line_clause = """AND EXISTS (
+                SELECT 1 FROM BOMMF f2
+                WHERE RTRIM(f2.MF001) = RTRIM(b.MB001)
+                  AND f2.MF002 = (
+                      SELECT MAX(e2.ME002) FROM BOMME e2
+                      WHERE RTRIM(e2.ME001) = RTRIM(b.MB001)
+                  )
+                  AND RTRIM(f2.MF006) = ?
+            )"""
+            params.append(line)
+        else:
+            line_clause = ''
+
+        cur.execute(f"""
+            SELECT TOP 200
+                RTRIM(b.MB001)            AS item_no,
+                RTRIM(ISNULL(b.MB002,'')) AS item_name,
+                RTRIM(ISNULL(b.MB003,'')) AS spec,
+                ISNULL(b.MB004,'')        AS unit,
+                ISNULL(b.MB025,'')        AS attr_code
+            FROM INVMB b
+            WHERE EXISTS (
+                SELECT 1 FROM BOMME e WHERE RTRIM(e.ME001) = RTRIM(b.MB001)
+            )
+            AND {keyword_clause}
+            {line_clause}
+            ORDER BY b.MB001
+        """, params)
+        rows = cur.fetchall()
+        conn.close()
+        results = [{
+            'item_no':   r[0],
+            'item_name': r[1],
+            'spec':      r[2],
+            'unit':      r[3],
+            'attr':      _ATTR_MAP.get(str(r[4]).strip(), str(r[4]).strip()),
+        } for r in rows]
+        return jsonify({'success': True, 'data': results, 'count': len(results)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/bom/search')
@@ -1267,7 +1338,7 @@ def bom_routing():
         if header:
             header['version'] = latest_ver
 
-        # 途程明細（BOMMF JOIN CMSMW 取製程名稱）
+        # 途程明細（BOMMF JOIN CMSMW 取製程名稱/機台代號/資源群組代號）
         routing = []
         if latest_ver:
             _NATURE = {'1': '1:廠內', '2': '2:訂外', '3': '3:外包'}
@@ -1280,7 +1351,9 @@ def bom_routing():
                     RTRIM(ISNULL(f.MF006,'')),
                     RTRIM(ISNULL(f.MF007,'')),
                     RTRIM(ISNULL(f.MF008,'')),
-                    CAST(ISNULL(f.MF012,0) AS VARCHAR(20))
+                    CAST(ISNULL(f.MF012,0) AS VARCHAR(20)),
+                    RTRIM(ISNULL(f.MF040,'')),
+                    RTRIM(ISNULL(f.MF034,''))
                 FROM BOMMF f
                 LEFT JOIN CMSMW w ON RTRIM(w.MW001) = RTRIM(f.MF004)
                 WHERE RTRIM(f.MF001) = ? AND f.MF002 = ?
@@ -1290,14 +1363,16 @@ def bom_routing():
             for r in rows:
                 nature_code = str(r[3] or '').strip()
                 routing.append({
-                    'seq':        str(r[0] or '').strip(),
-                    'proc_code':  str(r[1] or '').strip(),
-                    'proc_name':  str(r[2] or '').strip(),
-                    'nature':     _NATURE.get(nature_code, nature_code),
-                    'vendor_no':  str(r[4] or '').strip(),
-                    'vendor_name':str(r[5] or '').strip(),
-                    'description':str(r[6] or '').strip(),
-                    'man_hrs':    str(r[7] or '').strip(),
+                    'seq':          str(r[0] or '').strip(),
+                    'proc_code':    str(r[1] or '').strip(),
+                    'proc_name':    str(r[2] or '').strip(),
+                    'nature':       _NATURE.get(nature_code, nature_code),
+                    'vendor_no':    str(r[4] or '').strip(),
+                    'vendor_name':  str(r[5] or '').strip(),
+                    'description':  str(r[6] or '').strip(),
+                    'man_hrs':      str(r[7] or '').strip(),
+                    'machine_code': str(r[8] or '').strip(),
+                    'res_group':    str(r[9] or '').strip(),
                 })
 
         conn.close()

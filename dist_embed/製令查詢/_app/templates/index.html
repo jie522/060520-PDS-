@@ -284,7 +284,7 @@
                 <a href="/production" class="header-tab">生產中製令</a>
                 <a href="/equipment" class="header-tab">設備稼動</a>
                 <a href="/drawing" class="header-tab">PDM圖面查詢</a>
-                <a href="/bom" class="header-tab">BOM查詢</a>
+                <a href="/routing" class="header-tab">產品途程查詢</a>
             </div>
         </div>
     </div>
@@ -321,9 +321,7 @@
                 <button class="btn-erp btn-erp-amber" onclick="openInspection()">📋 自主檢查表</button>
                 <button class="btn-erp btn-erp-cyan" onclick="openDrawing()">📐 讀取圖面</button>
                 <button class="btn-erp btn-erp-green" onclick="printSelected()">🖨️ 列印日報表</button>
-                <button class="btn-erp" style="background:linear-gradient(180deg,#E8F5E9,#A5D6A7);border-color:#66BB6A;color:#1B5E20;" onclick="openZumeSearch()" title="依品號開啟 zume-n.com 技術資料（已建立清單者直接跳至圖面頁）">📂 技術資料查詢</button>
-                <button class="btn-erp" style="background:linear-gradient(180deg,#E3F2FD,#90CAF9);border-color:#42A5F5;color:#0D47A1;" onclick="scanZumeCSV()" title="掃描 Downloads 資料夾，自動匯入最新的 zume-n_data_list_*.csv">🔄 更新清單</button>
-                <span id="zumeImportStatus" style="font-size:0.78rem;color:#555;margin-left:4px;"></span>
+                <button class="btn-erp" style="background:linear-gradient(180deg,#E8F5E9,#A5D6A7);border-color:#66BB6A;color:#1B5E20;" onclick="openZumeSearch()" title="在技術資料系統搜尋選取品號（開啟瀏覽器）">📂 技術資料查詢</button>
             </div>
 
             <!-- 狀態列 / 錯誤 / 資料表 -->
@@ -552,62 +550,16 @@
                 return r ? (r['品號'] || '').trim() : '';
             }).filter(Boolean))];
             if (!itemNos.length) { alert('無法取得品號'); return; }
-            if (itemNos.length > 8 && !confirm(`已選取 ${itemNos.length} 個品號，將開啟多個頁面，確定繼續？`)) return;
+            if (itemNos.length > 5 && !confirm(`已選取 ${itemNos.length} 個品號，將開啟 ${itemNos.length} 個頁籤，確定繼續？`)) return;
             try {
-                // 向後端查詢對應 URL（優先直接連結，找不到則用搜尋頁）
-                const res = await fetch('/api/zume/lookup', {
+                const res = await fetch('/api/zume/open', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({item_nos: itemNos})
                 });
                 const j = await res.json();
-                if (!j.success) { alert('查詢失敗：' + (j.error || '未知錯誤')); return; }
-                // 用前端 window.open 開啟（使用目前瀏覽器的登入 session）
-                for (const item of j.items) {
-                    window.open(item.url, '_blank');
-                }
-                // 顯示未找到的提示
-                const notFound = j.items.filter(x => !x.found);
-                if (notFound.length > 0) {
-                    alert(`以下品號在技術資料清單中找不到，已開啟搜尋頁：\n${notFound.map(x=>x.no).join('、')}\n\n提示：從 zume-n.com 下載最新 CSV 後點「🔄 更新清單」即可直接跳至圖面頁面。`);
-                }
+                if (!j.success) alert('開啟失敗：' + (j.error || '未知錯誤'));
             } catch(e) { alert('連線錯誤：' + e.message); }
-        }
-
-        // ========== 技術資料清單狀態（頁面載入時顯示）==========
-        async function loadZumeStatus() {
-            try {
-                const j = await (await fetch('/api/zume/status')).json();
-                const el = document.getElementById('zumeImportStatus');
-                if (j.total > 0) {
-                    el.textContent = `清單：${j.total} 筆`;
-                    el.style.color = '#2E7D32';
-                } else {
-                    el.textContent = '清單：尚未建立，請從 zume-n.com 下載 CSV 後點「更新清單」';
-                    el.style.color = '#F57F17';
-                }
-            } catch(e) {}
-        }
-        loadZumeStatus();
-
-        // ========== 掃描 Downloads 資料夾並匯入最新 CSV ==========
-        async function scanZumeCSV() {
-            const statusEl = document.getElementById('zumeImportStatus');
-            statusEl.textContent = '掃描中…'; statusEl.style.color = '#555';
-            try {
-                const res = await fetch('/api/zume/scan', { method: 'POST' });
-                const j   = await res.json();
-                if (j.success) {
-                    statusEl.textContent = `✅ ${j.file}：匯入 ${j.imported} 筆，共 ${j.total} 筆`;
-                    statusEl.style.color = '#2E7D32';
-                } else {
-                    statusEl.textContent = '⚠️ ' + (j.error || '失敗');
-                    statusEl.style.color = '#E65100';
-                }
-            } catch(e) {
-                statusEl.textContent = '❌ 連線錯誤';
-                statusEl.style.color = '#C62828';
-            }
         }
 
         // ========== 列印日報表 ==========
