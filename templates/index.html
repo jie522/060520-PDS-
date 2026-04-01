@@ -220,55 +220,113 @@
 
         /* ── Modals ── */
         .modal-dialog { max-width: 92vw; }
-        .modal-content { border-radius: 4px; border: 2px solid var(--erp-blue-dark); }
-        .modal-header {
-            padding: 0.5rem 1rem;
-            border-bottom: 1px solid var(--erp-border);
+        .modal-content {
+            border-radius: 10px;
+            border: none;
+            box-shadow: 0 20px 60px rgba(0,0,0,.22), 0 6px 20px rgba(0,0,0,.12);
+            overflow: hidden;
         }
-        .modal-header-teal  { background: linear-gradient(180deg, #42A5F5, #1565C0); color: white; }
-        .modal-header-amber { background: linear-gradient(180deg, #FFD54F, #E65100); color: white; }
-        .modal-header-blue  { background: linear-gradient(180deg, #64B5F6, #0D47A1); color: white; }
-        .modal-title { font-size: 0.92rem; font-weight: 700; }
-        .modal-body { padding: 0.75rem 1rem; }
-        .modal-footer { padding: 0.4rem 1rem; border-top: 1px solid var(--erp-border); background: #F5F5F5; }
+        .modal-header {
+            padding: 0.65rem 1.1rem;
+            border-bottom: none;
+        }
+        .modal-header-teal  { background: linear-gradient(135deg, #1976D2 0%, #0D47A1 100%); color: white; }
+        .modal-header-amber { background: linear-gradient(135deg, #F57C00 0%, #E65100 100%); color: white; }
+        .modal-header-blue  { background: linear-gradient(135deg, #1976D2 0%, #0D47A1 100%); color: white; }
+        .modal-title { font-size: 0.9rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem; }
+        .modal-body  { padding: 1rem 1.1rem 0.5rem; background: #F4F6F9; }
+        .modal-footer {
+            padding: 0.55rem 1.1rem;
+            border-top: 1px solid #DDE3EA;
+            background: #F8FAFC;
+        }
         #detail-loading { display: none; }
 
-        /* ── Detail sections ── */
-        .detail-section { margin-bottom: 1.2rem; border: 1px solid var(--erp-border); overflow: hidden; }
-        .detail-section h6 {
-            padding: 0.38rem 0.8rem;
-            margin-bottom: 0;
-            font-size: 0.8rem;
+        /* ── Detail sections (UI-UX-PRO) ── */
+        .detail-section {
+            margin-bottom: 0.85rem;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+        }
+        .detail-section-header {
+            padding: 0.45rem 0.9rem;
+            font-size: 0.79rem;
             font-weight: 700;
             display: flex;
             align-items: center;
-            gap: 0.35rem;
+            gap: 0.4rem;
+            letter-spacing: 0.01em;
+        }
+        .detail-section-header .sect-dot {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
         }
         /* 用料資訊 — 綠色 */
-        .detail-section-material h6 { background: #1B5E20; color: white; }
-        .detail-section-material .table thead th { background: #388E3C; color: white; border-color: #2E7D32; }
-        .detail-section-material .table td { border-color: #C8E6C9; }
-        .detail-section-material .table tbody tr:nth-child(even) td { background: #F1F8F1; }
-        .detail-section-material .table tbody tr:hover td { background: #C8E6C9 !important; }
-        /* 製程資訊 — 橘棕色 */
-        .detail-section-process h6 { background: #BF360C; color: white; }
-        .detail-section-process .table thead th { background: #E64A19; color: white; border-color: #BF360C; }
-        .detail-section-process .table td { border-color: #FFCCBC; }
-        .detail-section-process .table tbody tr:nth-child(even) td { background: #FBE9E7; }
-        .detail-section-process .table tbody tr:hover td { background: #FFCCBC !important; }
-        /* 移轉單資訊 — 深藍紫 */
-        .detail-section-transfer h6 { background: #311B92; color: white; }
-        .detail-section-transfer .table thead th { background: #512DA8; color: white; border-color: #311B92; }
-        .detail-section-transfer .table td { border-color: #D1C4E9; }
-        .detail-section-transfer .table tbody tr:nth-child(even) td { background: #F3EEF9; }
-        .detail-section-transfer .table tbody tr:hover td { background: #D1C4E9 !important; }
+        .detail-section-material .detail-section-header { background: linear-gradient(135deg,#2E7D32,#1B5E20); color: white; }
+        .detail-section-material .detail-section-header .sect-dot { background: rgba(255,255,255,.6); }
+        /* 製程資訊 — 橙色 */
+        .detail-section-process .detail-section-header { background: linear-gradient(135deg,#E64A19,#BF360C); color: white; }
+        .detail-section-process .detail-section-header .sect-dot { background: rgba(255,255,255,.6); }
+        /* 移轉單資訊 — 藍紫 */
+        .detail-section-transfer .detail-section-header { background: linear-gradient(135deg,#512DA8,#311B92); color: white; }
+        .detail-section-transfer .detail-section-header .sect-dot { background: rgba(255,255,255,.6); }
+
+        /* ── Detail pro-table ── */
+        .detail-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.79rem;
+            background: white;
+        }
+        .detail-table thead th {
+            padding: 0.38rem 0.65rem;
+            text-align: left;
+            white-space: nowrap;
+            font-weight: 600;
+            font-size: 0.75rem;
+            letter-spacing: 0.02em;
+            border-bottom: 1px solid rgba(255,255,255,.15);
+        }
+        .detail-section-material .detail-table thead th { background: #388E3C; color: white; }
+        .detail-section-process  .detail-table thead th { background: #E64A19; color: white; }
+        .detail-section-transfer .detail-table thead th { background: #512DA8; color: white; }
+        .detail-table tbody td {
+            padding: 0.35rem 0.65rem;
+            border-bottom: 1px solid #EDF1F5;
+            vertical-align: middle;
+            color: #3D5166;
+        }
+        .detail-table tbody tr:nth-child(even) td { background: #FAFBFF; }
+        .detail-table tbody tr:hover td { background: #EBF4FF !important; color: #1A2332; }
+        .detail-table td.td-code {
+            font-family: 'Consolas','Courier New',monospace;
+            font-weight: 600;
+            color: #0D47A1;
+            font-size: 0.77rem;
+        }
+        .detail-table td.td-num { text-align: right; font-weight: 700; }
+        .detail-table td.td-center { text-align: center; }
+        .detail-table td.td-warn { color: #DC2626; font-weight: 700; }
 
         /* ── Status badges ── */
-        .badge-done   { background:#2E7D32; color:white; padding:0px 6px; border-radius:2px; font-size:0.72rem; font-weight:700; border:1px solid #1B5E20; }
-        .badge-undone { background:#C62828; color:white; padding:0px 6px; border-radius:2px; font-size:0.72rem; font-weight:700; border:1px solid #B71C1C; }
-        .badge-exempt { background:#546E7A; color:white; padding:0px 6px; border-radius:2px; font-size:0.72rem; border:1px solid #37474F; }
-        .badge-wait   { background:#E65100; color:white; padding:0px 6px; border-radius:2px; font-size:0.72rem; font-weight:700; border:1px solid #BF360C; }
-        .badge-pass   { background:#1565C0; color:white; padding:0px 6px; border-radius:2px; font-size:0.72rem; border:1px solid #0D47A1; }
+        .badge-done   { display:inline-flex;align-items:center;background:#E8F5E9;color:#1B5E20;padding:0.1rem 0.55rem;border-radius:12px;font-size:0.72rem;font-weight:700;border:1px solid #A5D6A7; }
+        .badge-undone { display:inline-flex;align-items:center;background:#FFEBEE;color:#B71C1C;padding:0.1rem 0.55rem;border-radius:12px;font-size:0.72rem;font-weight:700;border:1px solid #EF9A9A; }
+        .badge-exempt { display:inline-flex;align-items:center;background:#ECEFF1;color:#37474F;padding:0.1rem 0.55rem;border-radius:12px;font-size:0.72rem;border:1px solid #B0BEC5; }
+        .badge-wait   { display:inline-flex;align-items:center;background:#FFF3E0;color:#E65100;padding:0.1rem 0.55rem;border-radius:12px;font-size:0.72rem;font-weight:700;border:1px solid #FFCC80; }
+        .badge-pass   { display:inline-flex;align-items:center;background:#E3F2FD;color:#0D47A1;padding:0.1rem 0.55rem;border-radius:12px;font-size:0.72rem;border:1px solid #90CAF9; }
+
+        /* ── Proc code chip ── */
+        .proc-chip {
+            display: inline-block;
+            background: #E3F2FD;
+            color: #0D47A1;
+            border: 1px solid #90CAF9;
+            border-radius: 5px;
+            padding: 0.05rem 0.45rem;
+            font-family: 'Consolas','Courier New',monospace;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
 
         /* ── Spinner ── */
         .spinner-border { color: var(--erp-blue) !important; }
@@ -406,7 +464,10 @@
         <div class="modal-dialog modal-dialog-scrollable" style="max-width:88vw;">
             <div class="modal-content">
                 <div class="modal-header modal-header-teal">
-                    <h5 class="modal-title" id="detailTitle">製令詳細資訊</h5>
+                    <h5 class="modal-title" id="detailTitle">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" style="flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        製令詳細資訊
+                    </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -715,7 +776,7 @@
             const detailLoading = document.getElementById('detail-loading');
             const detailContent = document.getElementById('detail-content');
 
-            detailTitle.textContent = '製令詳細資訊 - ' + orderId;
+            detailTitle.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" style="flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> 製令詳細資訊 &nbsp;<span style="font-weight:400;opacity:.85;font-size:.82rem">— ' + esc(orderId) + '</span>';
             detailContent.innerHTML = '';
             detailLoading.style.display = 'block';
             modal.show();
@@ -734,55 +795,63 @@
                 let html = '';
 
                 if (d.materials && d.materials.length > 0) {
-                    html += '<div class="detail-section detail-section-material"><h6>🟢 用料資訊</h6>';
-                    html += '<table class="table table-bordered table-sm mb-0"><thead><tr>';
-                    html += '<th>材料品號</th><th>材料品名</th><th>現有庫存</th><th>需領用數量</th><th>已領用數量</th><th>預計領用日期</th>';
+                    html += '<div class="detail-section detail-section-material">' +
+                        '<div class="detail-section-header">' +
+                        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>' +
+                        '用料資訊</div>';
+                    html += '<table class="detail-table"><thead><tr>';
+                    html += '<th>材料品號</th><th>材料品名</th><th style="text-align:right">現有庫存</th><th style="text-align:right">需領用數量</th><th style="text-align:right">已領用數量</th><th>預計領用日期</th>';
                     html += '</tr></thead><tbody>';
                     d.materials.forEach(m => {
                         const stock = parseFloat((m['現有庫存']||'').replace(/,/g,''));
                         const need  = parseFloat((m['需領用數量']||'').replace(/,/g,''));
-                        const stockStyle = (!isNaN(stock) && !isNaN(need) && stock < need)
-                            ? ' style="color:#DC2626;font-weight:700;"' : '';
+                        const stockCls = (!isNaN(stock) && !isNaN(need) && stock < need) ? ' td-warn' : '';
                         html += '<tr>' +
-                            '<td style="font-family:\'Fira Code\',monospace;font-size:0.78rem;">' + esc(m['材料品號']) + '</td>' +
+                            '<td class="td-code">' + esc(m['材料品號']) + '</td>' +
                             '<td>' + esc(m['材料品名']) + '</td>' +
-                            '<td class="text-end"' + stockStyle + '>' + esc(m['現有庫存']) + '</td>' +
-                            '<td class="text-end">' + esc(m['需領用數量']) + '</td>' +
-                            '<td class="text-end">' + esc(m['已領用數量']) + '</td>' +
-                            '<td style="font-family:\'Fira Code\',monospace;font-size:0.78rem;">' + esc(m['預計領用日期']) + '</td>' +
+                            '<td class="td-num' + stockCls + '">' + esc(m['現有庫存']) + '</td>' +
+                            '<td class="td-num">' + esc(m['需領用數量']) + '</td>' +
+                            '<td class="td-num">' + esc(m['已領用數量']) + '</td>' +
+                            '<td class="td-code">' + esc(m['預計領用日期']) + '</td>' +
                             '</tr>';
                     });
                     html += '</tbody></table></div>';
                 }
 
                 if (d.processes && d.processes.length > 0) {
-                    html += '<div class="detail-section detail-section-process"><h6>🟠 製程資訊</h6>';
-                    html += '<table class="table table-bordered table-sm mb-0"><thead><tr>';
-                    html += '<th>完工否</th><th>製令</th><th>製程代號</th><th>製程名稱</th><th>製程敘述</th><th>加工廠商</th><th>投入數量</th><th>完成數量</th>';
+                    html += '<div class="detail-section detail-section-process">' +
+                        '<div class="detail-section-header">' +
+                        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>' +
+                        '製程資訊</div>';
+                    html += '<table class="detail-table"><thead><tr>';
+                    html += '<th style="width:64px;text-align:center">完工否</th><th style="width:200px">製令</th><th style="width:80px;text-align:center">製程代號</th><th style="width:90px">製程名稱</th><th>製程敘述</th><th style="width:80px">加工廠商</th><th style="width:68px;text-align:right">投入數量</th><th style="width:68px;text-align:right">完成數量</th>';
                     html += '</tr></thead><tbody>';
                     d.processes.forEach(p => {
                         const done = (p['完工否'] || '').trim();
                         const doneBadge = done === '是'
-                            ? '<span class="badge-done">是</span>'
-                            : (done ? '<span class="badge-undone">' + esc(done) + '</span>' : '');
+                            ? '<span class="badge-done">已完工</span>'
+                            : (done ? '<span class="badge-undone">未</span>' : '');
                         html += '<tr>' +
-                            '<td class="text-center">' + doneBadge + '</td>' +
-                            '<td style="font-family:\'Fira Code\',monospace;font-size:0.76rem;">' + esc(p['Textbox14']) + '</td>' +
-                            '<td><span class="proc-code">' + esc(p['製程代號']) + '</span></td>' +
+                            '<td class="td-center">' + doneBadge + '</td>' +
+                            '<td class="td-code">' + esc(p['Textbox14']) + '</td>' +
+                            '<td class="td-center"><span class="proc-chip">' + esc(p['製程代號']) + '</span></td>' +
                             '<td>' + esc(p['製程名稱']) + '</td>' +
-                            '<td class="wrap-cell" style="max-width:320px;">' + esc(p['製程敘述']) + '</td>' +
+                            '<td style="max-width:280px;word-break:break-all;font-size:0.76rem">' + esc(p['製程敘述']) + '</td>' +
                             '<td>' + esc(p['加工廠商']) + '</td>' +
-                            '<td class="text-end">' + esc(p['投入數量']) + '</td>' +
-                            '<td class="text-end">' + esc(p['完成及調撥數量']) + '</td>' +
+                            '<td class="td-num">' + esc(p['投入數量']) + '</td>' +
+                            '<td class="td-num">' + esc(p['完成及調撥數量']) + '</td>' +
                             '</tr>';
                     });
                     html += '</tbody></table></div>';
                 }
 
                 if (d.transfers && d.transfers.length > 0) {
-                    html += '<div class="detail-section detail-section-transfer"><h6>🟣 移轉單資訊</h6>';
-                    html += '<table class="table table-bordered table-sm mb-0"><thead><tr>';
-                    html += '<th>製令單</th><th>移轉單</th><th>移出日期</th><th>移轉數量</th><th>驗收數量</th><th>驗退數量</th><th>檢驗狀態</th>';
+                    html += '<div class="detail-section detail-section-transfer">' +
+                        '<div class="detail-section-header">' +
+                        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
+                        '移轉單資訊</div>';
+                    html += '<table class="detail-table"><thead><tr>';
+                    html += '<th>製令單</th><th>移轉單</th><th>移出日期</th><th style="text-align:right">移轉數量</th><th style="text-align:right">驗收數量</th><th style="text-align:right">驗退數量</th><th style="width:72px;text-align:center">檢驗狀態</th>';
                     html += '</tr></thead><tbody>';
                     d.transfers.forEach(t => {
                         const st = (t['檢驗狀態'] || '').trim();
@@ -791,19 +860,19 @@
                             : st === '合格' || st === '通過' ? '<span class="badge-pass">' + esc(st) + '</span>'
                             : esc(st);
                         html += '<tr>' +
-                            '<td style="font-family:\'Fira Code\',monospace;font-size:0.76rem;">' + esc(t['製令單1']) + '</td>' +
-                            '<td style="font-family:\'Fira Code\',monospace;font-size:0.76rem;">' + esc(t['移轉單']) + '</td>' +
-                            '<td style="font-family:\'Fira Code\',monospace;font-size:0.76rem;">' + esc(t['移出日期']) + '</td>' +
-                            '<td class="text-end">' + esc(t['移轉數量']) + '</td>' +
-                            '<td class="text-end">' + esc(t['驗收數量']) + '</td>' +
-                            '<td class="text-end">' + esc(t['驗退數量']) + '</td>' +
-                            '<td class="text-center">' + stBadge + '</td>' +
+                            '<td class="td-code">' + esc(t['製令單1']) + '</td>' +
+                            '<td class="td-code">' + esc(t['移轉單']) + '</td>' +
+                            '<td class="td-code">' + esc(t['移出日期']) + '</td>' +
+                            '<td class="td-num">' + esc(t['移轉數量']) + '</td>' +
+                            '<td class="td-num">' + esc(t['驗收數量']) + '</td>' +
+                            '<td class="td-num">' + esc(t['驗退數量']) + '</td>' +
+                            '<td class="td-center">' + stBadge + '</td>' +
                             '</tr>';
                     });
                     html += '</tbody></table></div>';
                 }
 
-                if (!html) html = '<div class="text-center text-muted py-3">無詳細資料</div>';
+                if (!html) html = '<div class="text-center text-muted py-3" style="font-size:.85rem">無詳細資料</div>';
                 detailContent.innerHTML = html;
             } catch (e) {
                 detailLoading.style.display = 'none';
