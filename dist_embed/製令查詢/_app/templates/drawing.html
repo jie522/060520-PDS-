@@ -119,6 +119,36 @@
             border-color: #1B5E20;
         }
 
+        /* ── 更新索引進度列 ── */
+        .reindex-bar {
+            display: none;
+            padding: 0.4rem 0.75rem;
+            background: #F0F4F8;
+            border-bottom: 1px solid var(--erp-border);
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            font-size: 0.82rem;
+        }
+        .reindex-bar.show { display: flex; }
+        .reindex-progress {
+            flex: 1;
+            min-width: 160px;
+            height: 8px;
+            border-radius: 4px;
+            background: #CFD8DC;
+            overflow: hidden;
+        }
+        .reindex-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #42A5F5, #1565C0);
+            border-radius: 4px;
+            transition: width .3s;
+        }
+        .reindex-msg { color: var(--erp-muted); font-size: 0.79rem; flex: 2; min-width: 120px; }
+        .reindex-done { color: #2E7D32; font-weight: 700; }
+        .reindex-err  { color: #B71C1C; font-weight: 700; }
+
         /* ── Result toolbar ── */
         .erp-panel-toolbar {
             background: #F0F4F8;
@@ -167,7 +197,7 @@
         .table tbody tr:nth-child(even) td { background: var(--erp-row-even); }
 
         /* ── Data cells ── */
-        .pin-hao { font-family: Consolas, 'Courier New', monospace; font-size: 0.8rem; color: var(--erp-blue-dark); font-weight: 700; }
+        .pin-hao { font-family: 'Microsoft JhengHei', Arial, sans-serif; font-size: 0.82rem; color: var(--erp-text); font-weight: 400; }
         .date-val { font-family: Consolas, monospace; font-size: 0.78rem; color: #37474F; }
 
         /* ── Status / Loading ── */
@@ -209,6 +239,15 @@
                 <input type="text" id="searchInput" class="form-control" style="width:360px;"
                        placeholder="輸入品號或品名，空格=AND，-前綴=排除  例: FTB150A 夾管座" autofocus>
                 <button id="searchBtn" class="btn-erp btn-erp-primary">🔍 查詢</button>
+                <span style="flex:1"></span>
+                <button id="reindexBtn" class="btn-erp" title="掃描 PDM Vault 並更新圖面索引資料庫">🔄 更新圖檔索引</button>
+            </div>
+
+            <!-- 索引更新進度列 -->
+            <div class="reindex-bar" id="reindexBar">
+                <span id="reindexPhase" style="font-weight:700;color:var(--erp-blue-dark);white-space:nowrap;">更新中...</span>
+                <div class="reindex-progress"><div class="reindex-progress-fill" id="reindexFill" style="width:0%"></div></div>
+                <span id="reindexMsg" class="reindex-msg"></span>
             </div>
 
             <!-- 結果工具列 -->
@@ -386,6 +425,86 @@
 
         searchBtn.addEventListener('click', doSearch);
         searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+        /* ── 更新圖檔索引 ── */
+        const reindexBtn  = document.getElementById('reindexBtn');
+        const reindexBar  = document.getElementById('reindexBar');
+        const reindexPhase= document.getElementById('reindexPhase');
+        const reindexFill = document.getElementById('reindexFill');
+        const reindexMsg  = document.getElementById('reindexMsg');
+        let _reindexTimer = null;
+
+        reindexBtn.addEventListener('click', async () => {
+            if (reindexBtn.disabled) return;
+            reindexBtn.disabled = true;
+            reindexBar.classList.add('show');
+            reindexPhase.textContent = '啟動中...';
+            reindexPhase.className = '';
+            reindexFill.style.width = '0%';
+            reindexMsg.textContent = '';
+
+            try {
+                const resp = await fetch('/api/drawing/reindex', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ update_only: true })
+                });
+                const json = await resp.json();
+                if (!json.success) {
+                    showReindexError(json.error || '啟動失敗');
+                    return;
+                }
+                _reindexTimer = setInterval(pollReindexStatus, 2000);
+            } catch (e) {
+                showReindexError(e.message);
+            }
+        });
+
+        async function pollReindexStatus() {
+            try {
+                const resp = await fetch('/api/drawing/reindex/status');
+                const s = await resp.json();
+
+                if (s.phase === 'scanning') {
+                    reindexPhase.textContent = '掃描中';
+                    reindexFill.style.width = '20%';
+                    reindexMsg.textContent = s.scanned > 0 ? `已掃描 ${s.scanned.toLocaleString()} 個檔案` : s.message;
+
+                } else if (s.phase === 'indexing') {
+                    reindexPhase.textContent = '寫入索引';
+                    const pct = s.total > 0 ? Math.round(20 + (s.indexed / s.total) * 78) : 50;
+                    reindexFill.style.width = pct + '%';
+                    reindexMsg.textContent = s.total > 0
+                        ? `${s.indexed.toLocaleString()} / ${s.total.toLocaleString()} 筆`
+                        : s.message;
+
+                } else if (s.phase === 'done') {
+                    clearInterval(_reindexTimer); _reindexTimer = null;
+                    reindexFill.style.width = '100%';
+                    reindexPhase.textContent = '完成';
+                    reindexPhase.className = 'reindex-done';
+                    reindexMsg.textContent = s.message || `共 ${s.last_count.toLocaleString()} 筆圖面`;
+                    reindexBtn.disabled = false;
+                    setTimeout(() => { reindexBar.classList.remove('show'); }, 8000);
+
+                } else if (s.phase === 'error') {
+                    clearInterval(_reindexTimer); _reindexTimer = null;
+                    showReindexError(s.error || '未知錯誤');
+                }
+            } catch (e) {
+                // 網路短暫中斷，繼續輪詢
+            }
+        }
+
+        function showReindexError(msg) {
+            if (_reindexTimer) { clearInterval(_reindexTimer); _reindexTimer = null; }
+            reindexPhase.textContent = '失敗';
+            reindexPhase.className = 'reindex-err';
+            reindexMsg.textContent = msg;
+            reindexFill.style.width = '100%';
+            reindexFill.style.background = '#E53935';
+            reindexBtn.disabled = false;
+        }
     </script>
 </body>
 </html>

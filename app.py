@@ -471,7 +471,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260330002'
+APP_VERSION = 'V20260520001'
 
 @app.route('/ver')
 def ver_check():
@@ -1085,6 +1085,129 @@ def open_drawing():
                                     'error': f'無法開啟圖面：{msg}{pdm_hint}'}), 500
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ── PDM 索引重建 ───────────────────────────────────────────────────────────────
+
+import threading as _threading
+import subprocess as _subprocess
+import re as _re
+
+_reindex_state = {
+    'running':    False,
+    'phase':      'idle',   # idle | scanning | indexing | done | error
+    'scanned':    0,
+    'total':      0,
+    'indexed':    0,
+    'message':    '',
+    'error':      '',
+    'last_run':   None,
+    'last_count': 0,
+}
+_reindex_lock = _threading.Lock()
+
+
+def _run_reindex(update_only: bool):
+    """背景執行索引重建，解析 stdout 更新進度狀態"""
+    global _reindex_state
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'build_pdm_index.py')
+    cmd = [sys.executable, script] + (['--update'] if update_only else [])
+
+    with _reindex_lock:
+        _reindex_state.update(running=True, phase='scanning', scanned=0,
+                              total=0, indexed=0, message='啟動中...', error='')
+
+    try:
+        proc = _subprocess.Popen(
+            cmd, stdout=_subprocess.PIPE, stderr=_subprocess.STDOUT,
+            text=True, encoding='utf-8', errors='replace'
+        )
+        for line in proc.stdout:
+            line = line.rstrip()
+            if not line:
+                continue
+            with _reindex_lock:
+                _reindex_state['message'] = line
+
+            # 解析掃描進度：「掃描中... 1,200 個檔案」
+            m = _re.search(r'掃描中.*?(\d[\d,]*)\s*個', line)
+            if m:
+                with _reindex_lock:
+                    _reindex_state['phase']   = 'scanning'
+                    _reindex_state['scanned'] = int(m.group(1).replace(',', ''))
+                continue
+
+            # 解析找到總數：「找到 X 個 .SLDDRW」
+            m = _re.search(r'找到\s*(\d[\d,]*)\s*個', line)
+            if m:
+                with _reindex_lock:
+                    _reindex_state['total'] = int(m.group(1).replace(',', ''))
+                continue
+
+            # 解析寫入進度：「 33%  1000/3000  新增:X」
+            m = _re.search(r'(\d+)%.*?(\d[\d,]*)/(\d[\d,]*)', line)
+            if m:
+                with _reindex_lock:
+                    _reindex_state['phase']   = 'indexing'
+                    _reindex_state['indexed'] = int(m.group(2).replace(',', ''))
+                    _reindex_state['total']   = int(m.group(3).replace(',', ''))
+                continue
+
+            # 完成行：「完成！新增:X  更新:X  ...」
+            m = _re.search(r'完成.*新增:(\d[\d,]*)', line)
+            if m:
+                with _reindex_lock:
+                    _reindex_state['indexed'] = int(m.group(1).replace(',', ''))
+
+        proc.wait()
+
+        if proc.returncode == 0:
+            # 取得資料庫最新筆數
+            try:
+                conn_tmp = get_pdm_db()
+                if conn_tmp:
+                    cnt = conn_tmp.execute('SELECT COUNT(*) FROM drawing_index').fetchone()[0]
+                    conn_tmp.close()
+                else:
+                    cnt = _reindex_state['indexed']
+            except Exception:
+                cnt = _reindex_state['indexed']
+
+            with _reindex_lock:
+                _reindex_state.update(
+                    running=False, phase='done', last_count=cnt,
+                    last_run=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    message=f'更新完成，共 {cnt:,} 筆圖面資料'
+                )
+        else:
+            with _reindex_lock:
+                _reindex_state.update(running=False, phase='error',
+                                      error='重建失敗，請查看伺服器日誌')
+    except Exception as exc:
+        with _reindex_lock:
+            _reindex_state.update(running=False, phase='error', error=str(exc))
+
+
+@app.route('/api/drawing/reindex', methods=['POST'])
+def drawing_reindex():
+    """啟動 PDM 圖面索引重建（背景執行）"""
+    with _reindex_lock:
+        if _reindex_state['running']:
+            return jsonify({'success': False, 'error': '索引重建已在執行中，請稍候'}), 409
+
+    data        = request.get_json() or {}
+    update_only = data.get('update_only', True)   # 預設增量更新
+
+    t = _threading.Thread(target=_run_reindex, args=(update_only,), daemon=True)
+    t.start()
+    return jsonify({'success': True, 'message': '索引重建已啟動'})
+
+
+@app.route('/api/drawing/reindex/status', methods=['GET'])
+def drawing_reindex_status():
+    """回傳索引重建進度狀態"""
+    with _reindex_lock:
+        return jsonify(dict(_reindex_state))
 
 
 @app.route('/api/zume/status')

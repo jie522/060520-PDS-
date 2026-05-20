@@ -471,7 +471,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260330002'
+APP_VERSION = 'V20260520001'
 
 @app.route('/ver')
 def ver_check():
@@ -1085,6 +1085,96 @@ def open_drawing():
                                     'error': f'無法開啟圖面：{msg}{pdm_hint}'}), 500
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+import subprocess as _subprocess
+import datetime
+
+_reindex_state = {
+    'running': False, 'phase': 'idle',
+    'scanned': 0, 'total': 0, 'indexed': 0,
+    'message': '', 'error': '', 'last_run': None, 'last_count': 0,
+}
+_reindex_lock = threading.Lock()
+
+def _run_reindex(update_only: bool):
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'build_pdm_index.py')
+    cmd = [sys.executable, script] + (['--update'] if update_only else [])
+    with _reindex_lock:
+        _reindex_state.update(running=True, phase='scanning', scanned=0,
+                              total=0, indexed=0, message='啟動中...', error='')
+    try:
+        proc = _subprocess.Popen(cmd, stdout=_subprocess.PIPE, stderr=_subprocess.STDOUT,
+            text=True, encoding='utf-8', errors='replace')
+        last_lines = []
+        for line in proc.stdout:
+            line = line.rstrip()
+            if not line: continue
+            last_lines.append(line)
+            if len(last_lines) > 10:
+                last_lines.pop(0)
+            with _reindex_lock:
+                _reindex_state['message'] = line
+            m = re.search(r'掃描中.*?(\d[\d,]*)\s*個', line)
+            if m:
+                with _reindex_lock:
+                    _reindex_state['phase'] = 'scanning'
+                    _reindex_state['scanned'] = int(m.group(1).replace(',', ''))
+                continue
+            m = re.search(r'找到\s*(\d[\d,]*)\s*個', line)
+            if m:
+                with _reindex_lock:
+                    _reindex_state['total'] = int(m.group(1).replace(',', ''))
+                continue
+            m = re.search(r'(\d+)%.*?(\d[\d,]*)/(\d[\d,]*)', line)
+            if m:
+                with _reindex_lock:
+                    _reindex_state['phase'] = 'indexing'
+                    _reindex_state['indexed'] = int(m.group(2).replace(',', ''))
+                    _reindex_state['total'] = int(m.group(3).replace(',', ''))
+                continue
+            m = re.search(r'完成.*新增:(\d[\d,]*)', line)
+            if m:
+                with _reindex_lock:
+                    _reindex_state['indexed'] = int(m.group(1).replace(',', ''))
+        proc.wait()
+        if proc.returncode == 0:
+            try:
+                PDM_DB_PATH = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'PDMSearch', 'pdm_search.db')
+                conn_tmp = sqlite3.connect(PDM_DB_PATH)
+                cnt = conn_tmp.execute('SELECT COUNT(*) FROM drawing_index').fetchone()[0]
+                conn_tmp.close()
+            except Exception:
+                cnt = _reindex_state['indexed']
+            with _reindex_lock:
+                _reindex_state.update(running=False, phase='done', last_count=cnt,
+                    last_run=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    message=f'更新完成，共 {cnt:,} 筆圖面資料')
+        else:
+            err_detail = ' | '.join(last_lines[-3:]) if last_lines else '無輸出'
+            with _reindex_lock:
+                _reindex_state.update(running=False, phase='error', error=f'重建失敗: {err_detail}')
+    except Exception as exc:
+        with _reindex_lock:
+            _reindex_state.update(running=False, phase='error', error=str(exc))
+
+
+@app.route('/api/drawing/reindex', methods=['POST'])
+def drawing_reindex():
+    with _reindex_lock:
+        if _reindex_state['running']:
+            return jsonify({'success': False, 'error': '索引重建已在執行中，請稍候'}), 409
+    data = request.get_json() or {}
+    update_only = data.get('update_only', True)
+    t = threading.Thread(target=_run_reindex, args=(update_only,), daemon=True)
+    t.start()
+    return jsonify({'success': True, 'message': '索引重建已啟動'})
+
+
+@app.route('/api/drawing/reindex/status', methods=['GET'])
+def drawing_reindex_status():
+    with _reindex_lock:
+        return jsonify(dict(_reindex_state))
 
 
 @app.route('/api/zume/status')
