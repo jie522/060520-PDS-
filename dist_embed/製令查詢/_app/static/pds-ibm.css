@@ -1,0 +1,302 @@
+/* ================================================================
+   PDS IBM Design System — Global Theme
+   Based on IBM Carbon Design System, adapted for manufacturing
+   載入於各 template <style> 之後，覆蓋舊版 ERP Blue 主題
+================================================================ */
+
+/* ── Design Tokens：--erp-* 命名 (index / drawing / production) ── */
+:root {
+  --erp-blue:        #0f62fe;
+  --erp-blue-dark:   #0050e6;
+  --erp-blue-mid:    #0f62fe;
+  --erp-blue-light:  #edf4ff;
+  --erp-blue-pale:   #edf4ff;
+  --erp-blue-xpale:  #f4f8ff;
+
+  --erp-bg:          #f4f4f4;
+  --erp-surface:     #ffffff;
+  --erp-surface-2:   #f8f8f8;
+
+  --erp-border:      #e0e0e0;
+  --erp-border-dark: #c6c6c6;
+  --erp-border-dk:   #c6c6c6;
+
+  --erp-text:        #161616;
+  --erp-text-2:      #525252;
+  --erp-text-muted:  #6f6f6f;
+  --erp-muted:       #6f6f6f;
+  --erp-muted-light: #a8a8a8;
+
+  --erp-header-bg:   #0f62fe;
+  --erp-row-even:    #f4f4f4;
+  --erp-row-hover:   #edf4ff;
+
+  --success:         #24a148;
+  --success-bg:      #defbe6;
+  --warning:         #e65100;
+  --warning-bg:      #fff2e8;
+  --danger:          #da1e28;
+  --danger-bg:       #fff1f1;
+  --machine-bg:      #fef5c3;
+  --machine-text:    #7a4400;
+}
+
+/* ── Design Tokens：--blue / -- 短命名 (routing / bom / equipment) ── */
+:root {
+  --blue:        #0f62fe;
+  --blue-d:      #0050e6;
+  --blue-mid:    #0f62fe;
+  --blue-light:  #edf4ff;
+  --blue-pale:   #edf4ff;
+  --blue-xpale:  #f4f8ff;
+  --blue-bg:     #edf4ff;
+
+  --bg:          #f4f4f4;
+  --surface:     #ffffff;
+  --surface-2:   #f8f8f8;
+
+  --border:      #e0e0e0;
+  --border-d:    #c6c6c6;
+
+  --text:        #161616;
+  --text-2:      #525252;
+  --muted:       #6f6f6f;
+  --muted-light: #a8a8a8;
+
+  --row-even:    #f4f4f4;
+  --row-hover:   #edf4ff;
+
+  --shadow-sm:   0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:   0 3px 10px rgba(0,0,0,.09), 0 2px 4px rgba(0,0,0,.05);
+  --shadow-lg:   0 8px 24px rgba(0,0,0,.12), 0 3px 6px rgba(0,0,0,.06);
+  --radius:      6px;
+  --radius-sm:   4px;
+}
+
+/* ── Base ─────────────────────────────────────────────────────── */
+body {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── Header：移除漸變，改為 IBM 純藍 ──────────────────────────── */
+.header {
+  background: #0f62fe;
+  box-shadow: 0 1px 4px rgba(0,0,0,.18);
+}
+
+/* ── Sub-tabs (routing) ───────────────────────────────────────── */
+.sub-tab.active    { color: #0f62fe; border-bottom-color: #0f62fe; }
+.sub-tab:hover     { color: #0050e6; }
+
+/* ── routing.html 專用按鈕 (.btn-primary / .btn-success) ─────── */
+.btn-primary {
+  background: #0f62fe;
+  box-shadow: none;
+  transform: none;
+}
+.btn-primary:hover {
+  background: #0050e6;
+  box-shadow: none;
+  transform: none;
+}
+.btn-primary:active { background: #002d9c; transform: none; }
+
+.btn-success {
+  background: #24a148;
+  box-shadow: none;
+  transform: none;
+}
+.btn-success:hover { background: #198038; transform: none; }
+.btn-success:active { background: #0f730a; }
+.btn-success:disabled { background: #c6c6c6; box-shadow: none; }
+
+/* ── routing.html search-input ────────────────────────────────── */
+.search-input {
+  border-color: #c6c6c6;
+  border-width: 1px;
+}
+.search-input:focus {
+  border-color: #0f62fe;
+  box-shadow: 0 0 0 2px rgba(15,98,254,.15);
+}
+
+/* ── Toolbar border (production / equipment) ─────────────────── */
+.toolbar-wrap,
+.toolbar { border-bottom-color: #0f62fe; }
+
+/* ── Buttons：移除所有漸變，改為平面 IBM 風格 ─────────────────── */
+.btn-erp {
+  background: #ffffff;
+  border: 1px solid #c6c6c6;
+  color: #161616;
+  font-size: 13px;
+  border-radius: 4px;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.btn-erp:hover {
+  background: #edf4ff;
+  border-color: #0f62fe;
+  color: #0050e6;
+}
+.btn-erp:active { background: #d0e2ff; }
+
+.btn-erp-primary {
+  background: #0f62fe;
+  border: 1px solid #0050e6;
+  color: #ffffff;
+  font-weight: 600;
+}
+.btn-erp-primary:hover  { background: #0050e6; color: #ffffff; }
+.btn-erp-primary:active { background: #002d9c; }
+
+.btn-erp-amber {
+  background: #b45309;
+  border: 1px solid #92400e;
+  color: #ffffff;
+  font-weight: 600;
+}
+.btn-erp-amber:hover { background: #92400e; color: #ffffff; }
+
+.btn-erp-green {
+  background: #24a148;
+  border: 1px solid #198038;
+  color: #ffffff;
+  font-weight: 600;
+}
+.btn-erp-green:hover { background: #198038; }
+
+.btn-erp-cyan {
+  background: #0072c3;
+  border: 1px solid #005fa3;
+  color: #ffffff;
+  font-weight: 600;
+}
+.btn-erp-cyan:hover    { background: #005fa3; color: #ffffff; }
+.btn-erp-cyan.opened   { background: #24a148; border-color: #198038; }
+
+.btn-erp-blue { background: #0f62fe; }
+.btn-erp-blue:hover { background: #0050e6; }
+
+.btn-query {
+  background: #0f62fe;
+  border-color: #0050e6;
+}
+.btn-query:hover { background: #0050e6; }
+
+/* ── Tables ───────────────────────────────────────────────────── */
+.table,
+table { font-size: 13px; }
+
+.table thead th,
+thead th {
+  background: #0f62fe;
+  color: #ffffff;
+  border-color: #0050e6;
+  font-size: 12px;
+  padding: 0.45rem 0.65rem;
+  font-weight: 600;
+}
+/* production.html 的 thead hover */
+thead th:hover { background: #0050e6; }
+
+.table td,
+tbody td {
+  padding: 0.38rem 0.65rem;
+  border-color: #e0e0e0;
+}
+.table tbody tr:nth-child(even) td { background: #f4f4f4; }
+.table tbody tr:hover td           { background: #edf4ff; }
+/* production.html 使用 tr:nth-child(odd) 樣式另行處理 */
+
+/* ── Card headers (bom.html) ──────────────────────────────────── */
+.card-header {
+  background: #0f62fe;
+  color: #ffffff;
+}
+
+/* ── Form Controls ────────────────────────────────────────────── */
+.form-control,
+.form-select,
+.toolbar input[type=date],
+.toolbar select,
+.toolbar-wrap select,
+.search-row input {
+  border-color: #c6c6c6;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.form-control:focus,
+.form-select:focus,
+.toolbar input[type=date]:focus,
+.toolbar select:focus,
+.toolbar-wrap select:focus {
+  border-color: #0f62fe;
+  box-shadow: 0 0 0 2px rgba(15,98,254,.15);
+  outline: none;
+}
+.form-control::placeholder { color: #a8a8a8; }
+
+/* ── Panels / Cards ───────────────────────────────────────────── */
+.erp-panel {
+  border-color: #e0e0e0;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.erp-panel-toolbar,
+.search-row,
+.reindex-bar { background: #f8f8f8; border-bottom-color: #e0e0e0; }
+
+.card { border-color: #e0e0e0; }
+
+/* ── Progress bar (drawing reindex) ──────────────────────────── */
+.reindex-progress-fill { background: #0f62fe; }
+.reindex-progress      { background: #e0e0e0; }
+
+/* ── Proc code chip ───────────────────────────────────────────── */
+.proc-code {
+  background: #edf4ff;
+  color: #0050e6;
+  border: 1px solid #c9d8f7;
+}
+
+/* ── Detail sections (index.html modal) ───────────────────────── */
+.detail-section-material .detail-section-title { background: #e5f5ec; color: #0e6027; }
+.detail-section-process  .detail-section-title { background: #fdf2ec; color: #7a3300; }
+.detail-section-transfer .detail-section-title { background: #f0ecfb; color: #5a2a8a; }
+
+/* ── Status badges ────────────────────────────────────────────── */
+.badge-done {
+  background: #defbe6; color: #0e6027;
+  border: 1px solid #a7f0ba;
+}
+.badge-undone {
+  background: #fff1f1; color: #b81921;
+  border: 1px solid #ffc2c5;
+}
+.badge-wait {
+  background: #fff2e8; color: #b83d00;
+  border: 1px solid #ffdabf;
+}
+.badge-pass {
+  background: #edf4ff; color: #0043ce;
+  border: 1px solid #c9d8f7;
+}
+.badge-exempt {
+  background: #f4f4f4; color: #525252;
+  border: 1px solid #e0e0e0;
+}
+
+/* ── Machine / status dropdown (equipment) ────────────────────── */
+.ms-btn:hover, .ms-btn.open { border-color: #0f62fe; }
+.ms-ddhdr { background: #edf4ff; }
+.ms-ddhdr span { color: #0050e6; }
+.ms-ddhdr-btns button:hover { border-color: #0f62fe; color: #0f62fe; }
+.ms-opt:hover { background: #edf4ff; }
+.ms-opt input[type=checkbox] { accent-color: #0f62fe; }
+.ms-dropdown { border-color: #0f62fe; }
+
+/* ── Scrollbar ────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: #f4f4f4; }
+::-webkit-scrollbar-thumb { background: #c6c6c6; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }

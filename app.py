@@ -131,7 +131,9 @@ def _auto_import_zume_csv():
 _init_zume_db()
 _auto_import_zume_csv()   # 啟動時自動掃描匯入
 
-app = Flask(__name__, template_folder=os.path.join(_BASE, 'templates'))
+app = Flask(__name__,
+            template_folder=os.path.join(_BASE, 'templates'),
+            static_folder=os.path.join(_BASE, 'static'))
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 @app.after_request

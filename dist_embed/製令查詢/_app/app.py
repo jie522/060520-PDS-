@@ -44,7 +44,9 @@ if not os.path.exists(PDM_DB_PATH):
     if os.path.exists(_bundled_db):
         PDM_DB_PATH = _bundled_db
 
-app = Flask(__name__, template_folder=os.path.join(_BASE, 'templates'))
+app = Flask(__name__,
+            template_folder=os.path.join(_BASE, 'templates'),
+            static_folder=os.path.join(_BASE, 'static'))
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 @app.after_request
