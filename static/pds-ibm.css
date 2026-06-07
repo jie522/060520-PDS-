@@ -13,23 +13,23 @@
   --erp-blue-pale:   #edf4ff;
   --erp-blue-xpale:  #f4f8ff;
 
-  --erp-bg:          #f4f4f4;
-  --erp-surface:     #ffffff;
-  --erp-surface-2:   #f8f8f8;
+  --erp-bg:          #f0ebe3;   /* 暖米色底 */
+  --erp-surface:     #faf8f5;   /* 卡片/面板：稍暖白 */
+  --erp-surface-2:   #ede8df;   /* 工具列次要背景 */
 
-  --erp-border:      #e0e0e0;
-  --erp-border-dark: #c6c6c6;
-  --erp-border-dk:   #c6c6c6;
+  --erp-border:      #ddd8cf;   /* 暖灰邊框 */
+  --erp-border-dark: #c8c2b8;
+  --erp-border-dk:   #c8c2b8;
 
-  --erp-text:        #161616;
-  --erp-text-2:      #525252;
-  --erp-text-muted:  #6f6f6f;
-  --erp-muted:       #6f6f6f;
-  --erp-muted-light: #a8a8a8;
+  --erp-text:        #1a1714;   /* 深暖黑文字 */
+  --erp-text-2:      #4a443c;
+  --erp-text-muted:  #6e6258;
+  --erp-muted:       #6e6258;
+  --erp-muted-light: #a89f93;
 
   --erp-header-bg:   #0f62fe;
-  --erp-row-even:    #f4f4f4;
-  --erp-row-hover:   #edf4ff;
+  --erp-row-even:    #ede8df;   /* 偶數列暖米色 */
+  --erp-row-hover:   #e0dbd2;   /* hover 略深米色 */
 
   --success:         #24a148;
   --success-bg:      #defbe6;
@@ -51,20 +51,20 @@
   --blue-xpale:  #f4f8ff;
   --blue-bg:     #edf4ff;
 
-  --bg:          #f4f4f4;
-  --surface:     #ffffff;
-  --surface-2:   #f8f8f8;
+  --bg:          #f0ebe3;
+  --surface:     #faf8f5;
+  --surface-2:   #ede8df;
 
-  --border:      #e0e0e0;
-  --border-d:    #c6c6c6;
+  --border:      #ddd8cf;
+  --border-d:    #c8c2b8;
 
-  --text:        #161616;
-  --text-2:      #525252;
-  --muted:       #6f6f6f;
-  --muted-light: #a8a8a8;
+  --text:        #1a1714;
+  --text-2:      #4a443c;
+  --muted:       #6e6258;
+  --muted-light: #a89f93;
 
-  --row-even:    #f4f4f4;
-  --row-hover:   #edf4ff;
+  --row-even:    #ede8df;
+  --row-hover:   #e0dbd2;
 
   --shadow-sm:   0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
   --shadow-md:   0 3px 10px rgba(0,0,0,.09), 0 2px 4px rgba(0,0,0,.05);
@@ -244,9 +244,9 @@ tbody td {
 }
 .erp-panel-toolbar,
 .search-row,
-.reindex-bar { background: #f8f8f8; border-bottom-color: #e0e0e0; }
+.reindex-bar { background: #ede8df; border-bottom-color: #ddd8cf; }
 
-.card { border-color: #e0e0e0; }
+.card { border-color: #ddd8cf; }
 
 /* ── Progress bar (drawing reindex) ──────────────────────────── */
 .reindex-progress-fill { background: #0f62fe; }
@@ -297,6 +297,6 @@ tbody td {
 
 /* ── Scrollbar ────────────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 7px; height: 7px; }
-::-webkit-scrollbar-track { background: #f4f4f4; }
-::-webkit-scrollbar-thumb { background: #c6c6c6; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+::-webkit-scrollbar-track { background: #ede8df; }
+::-webkit-scrollbar-thumb { background: #c8c2b8; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #a89f93; }
