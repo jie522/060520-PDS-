@@ -1705,22 +1705,29 @@ def bom_routing():
                 SELECT
                     f.MF003,
                     RTRIM(ISNULL(f.MF004,'')),
-                    RTRIM(ISNULL(w.MW002,''))  AS proc_name,
+                    RTRIM(ISNULL(w.MW002,''))   AS proc_name,
                     f.MF005,
                     RTRIM(ISNULL(f.MF006,'')),
                     RTRIM(ISNULL(f.MF007,'')),
                     RTRIM(ISNULL(f.MF008,'')),
-                    CAST(ISNULL(f.MF012,0) AS VARCHAR(20)),
                     RTRIM(ISNULL(f.MF040,'')),
-                    RTRIM(ISNULL(f.MF034,''))
+                    RTRIM(ISNULL(f.MF034,'')),
+                    CAST(ISNULL(f.MF010,0) AS DECIMAL(10,3)),
+                    RTRIM(ISNULL(x.MX003,''))   AS machine_name
                 FROM BOMMF f
-                LEFT JOIN CMSMW w ON RTRIM(w.MW001) = RTRIM(f.MF004)
+                LEFT JOIN CMSMW  w ON RTRIM(w.MW001) = RTRIM(f.MF004)
+                LEFT JOIN CMSMX  x ON RTRIM(x.MX001) = RTRIM(f.MF040)
                 WHERE RTRIM(f.MF001) = ? AND f.MF002 = ?
                 ORDER BY f.MF003
             """, (item_no, latest_ver))
             rows = cur.fetchall()
             for r in rows:
                 nature_code = str(r[3] or '').strip()
+                vmh_raw = r[9]
+                if vmh_raw is None or float(vmh_raw) == 0:
+                    vmh = ''
+                else:
+                    vmh = '{:g}'.format(float(vmh_raw))
                 routing.append({
                     'seq':          str(r[0] or '').strip(),
                     'proc_code':    str(r[1] or '').strip(),
@@ -1729,9 +1736,10 @@ def bom_routing():
                     'vendor_no':    str(r[4] or '').strip(),
                     'vendor_name':  str(r[5] or '').strip(),
                     'description':  str(r[6] or '').strip(),
-                    'man_hrs':      str(r[7] or '').strip(),
-                    'machine_code': str(r[8] or '').strip(),
-                    'res_group':    str(r[9] or '').strip(),
+                    'machine_code': str(r[7] or '').strip(),
+                    'res_group':    str(r[8] or '').strip(),
+                    'var_man_hrs':  vmh,
+                    'machine_name': str(r[10] or '').strip(),
                 })
 
         conn.close()

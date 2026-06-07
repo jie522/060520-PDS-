@@ -613,14 +613,15 @@
               <tr>
                 <th style="width:54px" class="center">順序</th>
                 <th style="width:82px">製程代號</th>
-                <th style="width:92px">機台代號</th>
-                <th style="width:105px">資源群組</th>
+                <th style="width:88px">機台代號</th>
+                <th style="width:88px">機台名稱</th>
+                <th style="width:100px">資源群組</th>
                 <th style="width:120px">製程名稱</th>
                 <th style="width:82px">性質</th>
                 <th style="width:88px">線別/廠商</th>
                 <th style="width:120px">廠商名稱</th>
+                <th style="width:72px;text-align:right">變動人時</th>
                 <th>製程敘述</th>
-                <th style="width:68px;text-align:right">工時批量</th>
               </tr>
             </thead>
             <tbody id="r-tbody"></tbody>
@@ -651,10 +652,10 @@
             <button class="btn btn-primary" onclick="bSearch()">搜尋</button>
           </div>
           <div class="prefix-filter">
-            <label class="prefix-btn"><input type="radio" name="bprefix" value="" checked><span>全部</span></label>
-            <label class="prefix-btn"><input type="radio" name="bprefix" value="5"><span>5開頭</span></label>
-            <label class="prefix-btn"><input type="radio" name="bprefix" value="6"><span>6開頭</span></label>
-            <label class="prefix-btn"><input type="radio" name="bprefix" value="56"><span>5+6</span></label>
+            <label class="prefix-btn"><input type="radio" name="bprefix" value="" checked onchange="bSearch()"><span>全部</span></label>
+            <label class="prefix-btn"><input type="radio" name="bprefix" value="5" onchange="bSearch()"><span>5開頭</span></label>
+            <label class="prefix-btn"><input type="radio" name="bprefix" value="6" onchange="bSearch()"><span>6開頭</span></label>
+            <label class="prefix-btn"><input type="radio" name="bprefix" value="56" onchange="bSearch()"><span>5+6</span></label>
           </div>
           <div id="b-search-info" class="msg-info"></div>
         </div>
@@ -792,13 +793,14 @@ function rRenderRouting(rows) {
       <td class="td-seq">${esc(r.seq)}</td>
       <td class="td-code">${esc(r.proc_code)}</td>
       <td class="td-code">${esc(r.machine_code)}</td>
+      <td>${esc(r.machine_name ?? '')}</td>
       <td>${esc(r.res_group)}</td>
       <td>${esc(r.proc_name)}</td>
       <td><span class="nature-tag ${natCls}">${esc(r.nature)}</span></td>
       <td>${esc(r.vendor_no)}</td>
       <td>${esc(r.vendor_name)}</td>
+      <td class="td-num">${esc(r.var_man_hrs ?? '')}</td>
       <td class="td-desc">${esc(r.description)}</td>
-      <td class="td-num">${esc(r.man_hrs)}</td>
     </tr>`;
   }).join('');
   document.getElementById('r-empty-msg').style.display = 'none';
@@ -1036,14 +1038,15 @@ async function bShowRouting() {
         <thead><tr>
           <th style="width:54px" class="center">順序</th>
           <th style="width:80px">製程代號</th>
-          <th style="width:90px">機台代號</th>
+          <th style="width:88px">機台代號</th>
+          <th style="width:88px">機台名稱</th>
           <th style="width:100px">資源群組</th>
           <th style="width:120px">製程名稱</th>
           <th style="width:82px">性質</th>
           <th style="width:88px">廠商代號</th>
           <th style="width:120px">廠商名稱</th>
+          <th style="width:72px;text-align:right">變動人時</th>
           <th>製程敘述</th>
-          <th style="width:68px;text-align:right">工時批量</th>
         </tr></thead>
         <tbody>${data.routing.map(r => {
           const natCls = r.nature.includes('廠內') ? 'nature-inner'
@@ -1052,13 +1055,14 @@ async function bShowRouting() {
             <td class="td-seq">${esc(r.seq)}</td>
             <td class="td-code">${esc(r.proc_code)}</td>
             <td class="td-code">${esc(r.machine_code)}</td>
+            <td>${esc(r.machine_name ?? '')}</td>
             <td>${esc(r.res_group)}</td>
             <td>${esc(r.proc_name)}</td>
             <td><span class="nature-tag ${natCls}">${esc(r.nature)}</span></td>
             <td>${esc(r.vendor_no)}</td>
             <td>${esc(r.vendor_name)}</td>
+            <td class="td-num">${esc(r.var_man_hrs ?? '')}</td>
             <td class="td-desc">${esc(r.description)}</td>
-            <td class="td-num">${esc(r.man_hrs)}</td>
           </tr>`;
         }).join('')}</tbody>
       </table>`;
