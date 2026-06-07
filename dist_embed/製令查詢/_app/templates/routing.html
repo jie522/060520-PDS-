@@ -760,6 +760,7 @@ function switchSubTab(tab) {
   document.querySelector(`.sub-tab[data-tab="${tab}"]`).classList.add('active');
   document.getElementById(`tab-${tab}`).classList.add('active');
   history.replaceState(null, '', `/routing?tab=${tab}`);
+  _saveState();
 }
 
 (function() {
@@ -836,6 +837,7 @@ async function rSearch() {
         <div class="item-no">${esc(it.item_no)}</div>
         <div class="item-name">${esc(it.item_name)}</div>
       </div>`).join('');
+    _saveState();
   } catch(e) {
     list.innerHTML = `<div class="msg-error">搜尋失敗：${esc(e.message)}</div>`;
   }
@@ -877,6 +879,7 @@ async function rSelectItem(idx) {
     }
     _rRouting = data.routing;
     rRenderRouting(_rRouting);
+    _saveState();
   } catch(e) {
     document.getElementById('r-empty-msg').innerHTML =
       `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
@@ -919,6 +922,7 @@ async function bSearch() {
         <div class="item-no">${esc(it.item_no)}</div>
         <div class="item-name">${esc(it.item_name)}</div>
       </div>`).join('');
+    _saveState();
   } catch(e) {
     list.innerHTML = `<div class="msg-error">搜尋失敗：${esc(e.message)}</div>`;
   }
@@ -979,6 +983,7 @@ async function bSelectItem(idx) {
     document.getElementById('b-chk-all').checked = false;
     document.getElementById('b-empty-msg').style.display = 'none';
     document.getElementById('b-table').style.display = '';
+    _saveState();
 
   } catch(e) {
     document.getElementById('b-empty-msg').innerHTML =
@@ -1081,6 +1086,131 @@ function closeRoutingModal() {
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ═══════════════════════════════════════════════════
+// State persistence — 切換頁面後自動還原查詢結果
+// ═══════════════════════════════════════════════════
+const _SS_KEY = 'pds_routing';
+
+function _saveState() {
+  try {
+    const prefixEl = document.querySelector('input[name=bprefix]:checked');
+    sessionStorage.setItem(_SS_KEY, JSON.stringify({
+      _ts: Date.now(),
+      activeTab: (document.querySelector('.sub-tab.active') || {}).dataset?.tab || 'routing',
+      r: {
+        query: document.getElementById('r-search-input').value,
+        line:  document.getElementById('r-line-filter').value,
+        items: _rItems,
+        selectedNo: rCurrentItem ? rCurrentItem.item_no : '',
+        routing: _rRouting,
+        header: rCurrentItem ? {
+          item_no:   document.getElementById('r-info-no').textContent,
+          item_name: document.getElementById('r-info-name').textContent,
+          unit:      document.getElementById('r-info-unit').textContent,
+          version:   document.getElementById('r-info-ver').textContent,
+        } : null,
+      },
+      b: {
+        query: document.getElementById('b-search-input').value,
+        prefix: prefixEl ? prefixEl.value : '',
+        items: _bItems,
+        selectedNo: bCurrentItem ? bCurrentItem.item_no : '',
+        bom_html: bCurrentItem
+          ? document.getElementById('b-tbody').innerHTML
+          : '',
+        header: bCurrentItem ? {
+          item_no:   document.getElementById('b-info-no').textContent,
+          item_name: document.getElementById('b-info-name').textContent,
+          unit:      document.getElementById('b-info-unit').textContent,
+        } : null,
+      }
+    }));
+  } catch(e) { /* sessionStorage 滿了或私密模式 */ }
+}
+
+function _restoreState() {
+  try {
+    const raw = sessionStorage.getItem(_SS_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (!s || (Date.now() - s._ts) > 3_600_000) return;  // 1 小時後不還原
+
+    // 還原 sub-tab
+    const urlTab = new URLSearchParams(window.location.search).get('tab');
+    const tab = urlTab || s.activeTab || 'routing';
+    if (tab !== 'routing') switchSubTab(tab);
+
+    // ── 途程 tab ──
+    const r = s.r || {};
+    if (r.query) {
+      document.getElementById('r-search-input').value = r.query || '';
+      if (r.line) document.getElementById('r-line-filter').value = r.line;
+      if (r.items && r.items.length) {
+        _rItems = r.items;
+        document.getElementById('r-result-count').textContent = _rItems.length;
+        document.getElementById('r-result-list').innerHTML = _rItems.map((it, i) =>
+          `<div class="result-item${it.item_no === r.selectedNo ? ' selected' : ''}"
+                onclick="rSelectItem(${i})" data-no="${esc(it.item_no)}">
+            <div class="item-no">${esc(it.item_no)}</div>
+            <div class="item-name">${esc(it.item_name)}</div>
+          </div>`).join('');
+
+        if (r.selectedNo && r.header && r.routing && r.routing.length) {
+          rCurrentItem = _rItems.find(it => it.item_no === r.selectedNo) || null;
+          if (rCurrentItem) {
+            _rRouting = r.routing;
+            document.getElementById('r-item-title').textContent  = r.selectedNo;
+            document.getElementById('r-info-no').textContent     = r.header.item_no   || '';
+            document.getElementById('r-info-name').textContent   = r.header.item_name || '';
+            document.getElementById('r-info-unit').textContent   = r.header.unit      || '';
+            document.getElementById('r-info-ver').textContent    = r.header.version   || '-';
+            document.getElementById('r-detail-info').style.display = '';
+            rRenderRouting(_rRouting);
+          }
+        }
+      }
+    }
+
+    // ── BOM tab ──
+    const b = s.b || {};
+    if (b.query) {
+      document.getElementById('b-search-input').value = b.query || '';
+      if (b.prefix !== undefined) {
+        const radio = document.querySelector(`input[name=bprefix][value="${b.prefix}"]`);
+        if (radio) radio.checked = true;
+      }
+      if (b.items && b.items.length) {
+        _bItems = b.items;
+        document.getElementById('b-result-count').textContent = _bItems.length;
+        document.getElementById('b-result-list').innerHTML = _bItems.map((it, i) =>
+          `<div class="result-item${it.item_no === b.selectedNo ? ' selected' : ''}"
+                onclick="bSelectItem(${i})" data-no="${esc(it.item_no)}">
+            <div class="item-no">${esc(it.item_no)}</div>
+            <div class="item-name">${esc(it.item_name)}</div>
+          </div>`).join('');
+
+        if (b.selectedNo && b.header && b.bom_html) {
+          bCurrentItem = _bItems.find(it => it.item_no === b.selectedNo) || null;
+          if (bCurrentItem) {
+            document.getElementById('b-item-title').textContent  = b.selectedNo;
+            document.getElementById('b-info-no').textContent     = b.header.item_no   || '';
+            document.getElementById('b-info-name').textContent   = b.header.item_name || '';
+            document.getElementById('b-info-unit').textContent   = b.header.unit      || '';
+            document.getElementById('b-detail-info').style.display = '';
+            document.getElementById('b-toolbar').style.display = '';
+            document.getElementById('b-btn-routing').disabled = false;
+            document.getElementById('b-tbody').innerHTML = b.bom_html;
+            document.getElementById('b-empty-msg').style.display = 'none';
+            document.getElementById('b-table').style.display = '';
+          }
+        }
+      }
+    }
+  } catch(e) {}
+}
+
+document.addEventListener('DOMContentLoaded', _restoreState);
 </script>
 </body>
 </html>

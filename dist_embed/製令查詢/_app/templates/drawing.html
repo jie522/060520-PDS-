@@ -506,6 +506,56 @@
             reindexFill.style.background = '#E53935';
             reindexBtn.disabled = false;
         }
+
+        // ── State persistence ──────────────────────────────
+        const _DRW_KEY = 'pds_drawing';
+        function _saveDrawingState() {
+          try {
+            sessionStorage.setItem(_DRW_KEY, JSON.stringify({
+              _ts: Date.now(),
+              query: searchInput.value,
+              files: window._drawingFiles || []
+            }));
+          } catch(e) {}
+        }
+        function _restoreDrawingState() {
+          try {
+            const raw = sessionStorage.getItem(_DRW_KEY);
+            if (!raw) return;
+            const s = JSON.parse(raw);
+            if (!s || (Date.now() - s._ts) > 3_600_000) return;
+            if (s.query) searchInput.value = s.query;
+            if (s.files && s.files.length) {
+              window._drawingFiles = s.files;
+              resultBody.innerHTML = '';
+              resultCount.textContent = s.files.length;
+              s.files.forEach((f, idx) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML =
+                  '<td><span class="pin-hao">' + esc(f.pin_hao) + '</span></td>' +
+                  '<td class="wrap-cell">' + esc(f.product_name) + '</td>' +
+                  '<td>' + (f.ji_xing ? '<span style="background:#E3F2FD;color:#0D47A1;padding:0 5px;border:1px solid #90CAF9;font-size:0.75rem;border-radius:2px;">' + esc(f.ji_xing) + '</span>' : '') + '</td>' +
+                  '<td>' + esc(f.xing_hao) + '</td>' +
+                  '<td class="wrap-cell" style="font-family:Consolas,monospace;font-size:0.78rem;">' + esc(f.file_name) + '</td>' +
+                  '<td class="date-val">' + esc(f.modified_at) + '</td>' +
+                  '<td class="text-center">' +
+                    '<button class="btn-erp btn-erp-cyan open-btn" data-idx="' + idx + '">📐 SW開啟</button>' +
+                  '</td>';
+                resultBody.appendChild(tr);
+              });
+              initHint.style.display      = 'none';
+              resultArea.style.display    = 'block';
+              resultToolbar.style.display = 'flex';
+            }
+          } catch(e) {}
+        }
+        // 每次搜尋成功後存檔（在已有的 doSearch 成功路徑加 hook）
+        const _origDrawSearch = doSearch;
+        doSearch = async function() {
+          await _origDrawSearch();
+          if (window._drawingFiles && window._drawingFiles.length) _saveDrawingState();
+        };
+        _restoreDrawingState();
     </script>
 </body>
 </html>

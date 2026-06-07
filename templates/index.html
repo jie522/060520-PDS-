@@ -916,6 +916,77 @@
         searchBtn.addEventListener('click', doSearch);
         orderInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
         nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+        // ── State persistence ──────────────────────────────
+        const _IDX_KEY = 'pds_index';
+        function _saveIndexState() {
+          try {
+            sessionStorage.setItem(_IDX_KEY, JSON.stringify({
+              _ts: Date.now(),
+              orderId: orderInput.value,
+              productName: nameInput.value,
+              unit: unitSelect.value,
+              results: window._searchResults || []
+            }));
+          } catch(e) {}
+        }
+        function _restoreIndexState() {
+          try {
+            const raw = sessionStorage.getItem(_IDX_KEY);
+            if (!raw) return;
+            const s = JSON.parse(raw);
+            if (!s || (Date.now() - s._ts) > 3_600_000) return;
+            if (s.orderId)     orderInput.value   = s.orderId;
+            if (s.productName) nameInput.value     = s.productName;
+            if (s.unit)        unitSelect.value    = s.unit;
+            if (s.results && s.results.length) {
+              window._searchResults = s.results;
+              resultBody.innerHTML = '';
+              resultCount.textContent = s.results.length;
+              resultToolbar.style.display = 'flex';
+              s.results.forEach((row, idx) => {
+                const tr = document.createElement('tr');
+                const oid = row['製令'] || '';
+                const rt  = row['即時生產量'] || '';
+                const machine = row['生產機台'] || '';
+                const hasRt = rt && parseInt(rt.replace(/,/g,'')) > 0;
+                const rtCls = hasRt ? ' realtime-active' : ' qty-val';
+                const finishDate = row['預計完工日'] || '';
+                const hasSft = row['has_sft_finish'];
+                const finishCell = finishDate
+                  ? (hasSft
+                    ? '<span class="date-val">' + esc(finishDate) + '</span>'
+                    : '<span class="date-est" title="SFT尚未排程，以預計開工日估算">' + esc(finishDate) + '</span>')
+                  : '';
+                if (hasRt) tr.classList.add('realtime-row');
+                tr.innerHTML =
+                  '<td class="text-center"><input type="checkbox" class="row-check" data-index="' + idx + '"></td>' +
+                  '<td><span class="order-id">' + esc(oid) + '</span></td>' +
+                  '<td><span class="clickable" onclick="showDetail(\'' + escAttr(oid) + '\')">' + esc(row['品號']) + '</span></td>' +
+                  '<td class="wrap-cell">' + esc(row['品名']) + '</td>' +
+                  '<td class="text-center std-time">' + esc(row['加工順序']) + '</td>' +
+                  '<td class="text-center"><span class="proc-code">' + esc(row['製程代號']) + '</span></td>' +
+                  '<td>' + esc(row['製程名稱']) + '</td>' +
+                  '<td class="std-time">' + esc(row['標工']) + '</td>' +
+                  '<td class="text-end qty-val">' + esc(row['預計生產量']) + '</td>' +
+                  '<td class="date-val">' + esc(row['預計開工日']) + '</td>' +
+                  '<td>' + finishCell + '</td>' +
+                  '<td class="text-end' + rtCls + '">' + esc(rt) + '</td>' +
+                  '<td class="text-center machine-cell">' + esc(machine) + '</td>';
+                resultBody.appendChild(tr);
+              });
+              resultArea.style.display = 'block';
+            }
+          } catch(e) {}
+        }
+        // 搜尋成功後自動存檔
+        const _origDoSearch = doSearch;
+        doSearch = async function() {
+          await _origDoSearch();
+          if (window._searchResults && window._searchResults.length) _saveIndexState();
+        };
+        document.addEventListener('DOMContentLoaded', _restoreIndexState);
+        _restoreIndexState();  // 腳本已執行到底部，DOM 已就緒
     </script>
 </body>
 </html>
