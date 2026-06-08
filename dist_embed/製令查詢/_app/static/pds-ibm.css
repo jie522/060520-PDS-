@@ -4,6 +4,9 @@
    載入於各 template <style> 之後，覆蓋舊版 ERP Blue 主題
 ================================================================ */
 
+/* ── 字型：Noto Sans TC（思源黑體）— 比 Microsoft JhengHei 更現代清晰 ── */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap');
+
 /* ── Design Tokens：--erp-* 命名 (index / drawing / production) ── */
 :root {
   --erp-blue:        #0f62fe;
@@ -75,8 +78,11 @@
 
 /* ── Base ─────────────────────────────────────────────────────── */
 body {
+  font-family: 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', 'Heiti TC', sans-serif;
   font-size: 14px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 /* ── Header：移除漸變，改為 IBM 純藍 ──────────────────────────── */
