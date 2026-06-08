@@ -440,6 +440,12 @@ CREATE INDEX IF NOT EXISTS idx_modified ON drawing_index (modified_at);
 def init_db(conn, full_rebuild):
     cur = conn.cursor()
     cur.executescript(SCHEMA)
+    # 舊版 DB 升級：補上 indexed_at 欄位（冪等）
+    try:
+        cur.execute("ALTER TABLE drawing_index ADD COLUMN indexed_at TEXT")
+        conn.commit()
+    except Exception:
+        pass  # 欄位已存在
     if full_rebuild:
         cur.execute('DELETE FROM drawing_index')
     conn.commit()

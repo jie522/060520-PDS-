@@ -181,8 +181,8 @@ body {
 .btn-erp-cyan:hover    { background: #005fa3; color: #ffffff; }
 .btn-erp-cyan.opened   { background: #24a148; border-color: #198038; }
 
-.btn-erp-blue { background: #0f62fe; }
-.btn-erp-blue:hover { background: #0050e6; }
+.btn-erp-blue { background: #0f62fe; border-color: #0050e6; color: #ffffff; font-weight: 600; }
+.btn-erp-blue:hover { background: #0050e6; color: #ffffff; }
 
 .btn-query {
   background: #0f62fe;

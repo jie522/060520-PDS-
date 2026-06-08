@@ -1211,6 +1211,11 @@ def _pdm_last_indexed():
         c = get_pdm_db()
         if not c:
             return None, 0
+        # 舊版 DB 可能沒有 indexed_at 欄位，ALTER TABLE 補上（冪等）
+        try:
+            c.execute("ALTER TABLE drawing_index ADD COLUMN indexed_at TEXT")
+        except Exception:
+            pass  # 欄位已存在
         row = c.execute(
             "SELECT MAX(indexed_at), COUNT(*) FROM drawing_index"
         ).fetchone()
@@ -1225,10 +1230,13 @@ def drawing_reindex_status():
     """回傳索引重建進度狀態（含 DB 持久化的 last_run）"""
     with _reindex_lock:
         state = dict(_reindex_state)
-    # 若記憶體中 last_run 為空（剛重啟），從 DB 讀取
+    # 若記憶體中 last_run 為空（剛重啟），從 DB 讀取並快取到 _reindex_state
     if not state.get('last_run'):
         db_ts, db_cnt = _pdm_last_indexed()
         if db_ts:
+            with _reindex_lock:
+                _reindex_state['last_run']   = db_ts
+                _reindex_state['last_count'] = db_cnt
             state['last_run']   = db_ts
             state['last_count'] = db_cnt
     return jsonify(state)
