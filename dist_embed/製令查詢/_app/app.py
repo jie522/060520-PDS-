@@ -17,6 +17,11 @@ from flask import Flask, render_template, request, jsonify, redirect
 import requests
 from requests_ntlm import HttpNtlmAuth
 from urllib.parse import quote
+try:
+    import openpyxl
+    _OPENPYXL_OK = True
+except ImportError:
+    _OPENPYXL_OK = False
 
 # ── PyInstaller 路徑處理 ────────────────────────────────────────
 # 執行為 EXE 時：_MEIPASS 為解壓目錄（含 templates）；
@@ -28,6 +33,13 @@ if getattr(sys, 'frozen', False):
 else:
     _BASE = os.path.dirname(os.path.abspath(__file__))
     _APP_DIR = _BASE
+    # python311._pth 存在時，嵌入式 Python 不自動加入腳本目錄
+    # 需手動插入，讓 import config / templates 等都能正常運作
+    if _APP_DIR not in sys.path:
+        sys.path.insert(0, _APP_DIR)
+    _PARENT = os.path.dirname(_APP_DIR)
+    if os.path.exists(os.path.join(_PARENT, 'config.py')) and _PARENT not in sys.path:
+        sys.path.insert(0, _PARENT)
 
 import config
 
@@ -43,6 +55,81 @@ if not os.path.exists(PDM_DB_PATH):
     _bundled_db = os.path.join(_APP_DIR, 'pdm_search.db')
     if os.path.exists(_bundled_db):
         PDM_DB_PATH = _bundled_db
+
+# ── 技術資料清單資料庫（zume-n.com 圖號↔URL 對照表）──────────────────────
+ZUME_DB_PATH = os.path.join(_APP_DIR, 'zume_drawings.db')
+
+def _init_zume_db():
+    con = sqlite3.connect(ZUME_DB_PATH)
+    con.execute('''
+        CREATE TABLE IF NOT EXISTS drawings (
+            part_no   TEXT PRIMARY KEY,
+            part_name TEXT,
+            url       TEXT NOT NULL
+        )
+    ''')
+    con.execute('''
+        CREATE TABLE IF NOT EXISTS import_log (
+            filename  TEXT PRIMARY KEY,
+            imported_at TEXT,
+            count     INTEGER
+        )
+    ''')
+    con.commit(); con.close()
+
+def _parse_zume_csv(filepath):
+    """解析 zume-n_data_list_*.csv，回傳 [(part_no, part_name, url), ...]"""
+    rows = []
+    try:
+        with open(filepath, encoding='utf-8-sig', newline='') as f:
+            reader = csv.reader(f)
+            headers = [h.strip() for h in next(reader)]
+            idx_no  = next((i for i,h in enumerate(headers) if '圖號' in h), None)
+            idx_url = next((i for i,h in enumerate(headers) if h.upper() == 'URL'), None)
+            idx_nm  = next((i for i,h in enumerate(headers) if '品名' in h), 1)
+            if idx_no is None or idx_url is None:
+                return []
+            for row in reader:
+                if len(row) > max(idx_no, idx_url):
+                    no  = row[idx_no].strip()
+                    url = row[idx_url].strip()
+                    nm  = row[idx_nm].strip() if idx_nm < len(row) else ''
+                    if no and url.startswith('http'):
+                        rows.append((no, nm, url))
+    except Exception:
+        pass
+    return rows
+
+def _auto_import_zume_csv():
+    """啟動時自動掃描 Downloads 資料夾，匯入最新的 zume-n_data_list_*.csv"""
+    import glob as _glob, getpass as _gp
+    try:
+        user = _gp.getuser()
+    except Exception:
+        user = os.environ.get('USERNAME', 'user')
+    downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
+    pattern = os.path.join(downloads, 'zume-n_data_list_*.csv')
+    files = sorted(_glob.glob(pattern), key=os.path.getmtime, reverse=True)
+    if not files:
+        return
+    latest = files[0]
+    fname  = os.path.basename(latest)
+    con = sqlite3.connect(ZUME_DB_PATH)
+    already = con.execute('SELECT count FROM import_log WHERE filename=?', (fname,)).fetchone()
+    con.close()
+    if already:
+        return  # 已匯入過，略過
+    rows = _parse_zume_csv(latest)
+    if not rows:
+        return
+    con = sqlite3.connect(ZUME_DB_PATH)
+    con.executemany('INSERT OR REPLACE INTO drawings(part_no,part_name,url) VALUES(?,?,?)', rows)
+    con.execute('INSERT OR REPLACE INTO import_log(filename,imported_at,count) VALUES(?,datetime("now"),?)',
+                (fname, len(rows)))
+    con.commit(); con.close()
+
+_init_zume_db()
+_auto_import_zume_csv()   # 啟動時自動掃描匯入
 
 app = Flask(__name__,
             template_folder=os.path.join(_BASE, 'templates'),
@@ -64,6 +151,23 @@ def set_no_cache(response):
         except Exception:
             pass
     return response
+
+# ── 全域錯誤處理（確保所有錯誤都回傳 JSON，而非 HTML）────────
+@app.errorhandler(400)
+def bad_request(e):
+    return jsonify({'success': False, 'error': f'請求錯誤：{str(e)}'}), 400
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({'success': False, 'error': f'路由不存在：{str(e)}'}), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({'success': False, 'error': f'伺服器錯誤：{str(e)}'}), 500
+
+@app.errorhandler(Exception)
+def unhandled_exception(e):
+    return jsonify({'success': False, 'error': f'未預期的錯誤：{str(e)}'}), 500
 
 # ── TTL 快取（避免每次搜尋都重新呼叫 SSRS）──────────────────
 CACHE_TTL = 120  # 快取有效期 120 秒
@@ -985,73 +1089,102 @@ def open_drawing():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ── PDM 索引重建 ───────────────────────────────────────────────────────────────
+
+import threading as _threading
 import subprocess as _subprocess
-import datetime
+import re as _re
 
 _reindex_state = {
-    'running': False, 'phase': 'idle',
-    'scanned': 0, 'total': 0, 'indexed': 0,
-    'message': '', 'error': '', 'last_run': None, 'last_count': 0,
+    'running':    False,
+    'phase':      'idle',   # idle | scanning | indexing | done | error
+    'scanned':    0,
+    'total':      0,
+    'indexed':    0,
+    'message':    '',
+    'error':      '',
+    'last_run':   None,
+    'last_count': 0,
 }
-_reindex_lock = threading.Lock()
+_reindex_lock = _threading.Lock()
+
 
 def _run_reindex(update_only: bool):
+    """背景執行索引重建，解析 stdout 更新進度狀態"""
+    global _reindex_state
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'build_pdm_index.py')
     cmd = [sys.executable, script] + (['--update'] if update_only else [])
+
     with _reindex_lock:
         _reindex_state.update(running=True, phase='scanning', scanned=0,
                               total=0, indexed=0, message='啟動中...', error='')
+
     try:
-        proc = _subprocess.Popen(cmd, stdout=_subprocess.PIPE, stderr=_subprocess.STDOUT,
-            text=True, encoding='utf-8', errors='replace')
-        last_lines = []
+        proc = _subprocess.Popen(
+            cmd, stdout=_subprocess.PIPE, stderr=_subprocess.STDOUT,
+            text=True, encoding='utf-8', errors='replace'
+        )
         for line in proc.stdout:
             line = line.rstrip()
-            if not line: continue
-            last_lines.append(line)
-            if len(last_lines) > 10:
-                last_lines.pop(0)
+            if not line:
+                continue
             with _reindex_lock:
                 _reindex_state['message'] = line
-            m = re.search(r'掃描中.*?(\d[\d,]*)\s*個', line)
+
+            # 解析掃描進度：「掃描中... 1,200 個檔案」
+            m = _re.search(r'掃描中.*?(\d[\d,]*)\s*個', line)
             if m:
                 with _reindex_lock:
-                    _reindex_state['phase'] = 'scanning'
+                    _reindex_state['phase']   = 'scanning'
                     _reindex_state['scanned'] = int(m.group(1).replace(',', ''))
                 continue
-            m = re.search(r'找到\s*(\d[\d,]*)\s*個', line)
+
+            # 解析找到總數：「找到 X 個 .SLDDRW」
+            m = _re.search(r'找到\s*(\d[\d,]*)\s*個', line)
             if m:
                 with _reindex_lock:
                     _reindex_state['total'] = int(m.group(1).replace(',', ''))
                 continue
-            m = re.search(r'(\d+)%.*?(\d[\d,]*)/(\d[\d,]*)', line)
+
+            # 解析寫入進度：「 33%  1000/3000  新增:X」
+            m = _re.search(r'(\d+)%.*?(\d[\d,]*)/(\d[\d,]*)', line)
             if m:
                 with _reindex_lock:
-                    _reindex_state['phase'] = 'indexing'
+                    _reindex_state['phase']   = 'indexing'
                     _reindex_state['indexed'] = int(m.group(2).replace(',', ''))
-                    _reindex_state['total'] = int(m.group(3).replace(',', ''))
+                    _reindex_state['total']   = int(m.group(3).replace(',', ''))
                 continue
-            m = re.search(r'完成.*新增:(\d[\d,]*)', line)
+
+            # 完成行：「完成！新增:X  更新:X  ...」
+            m = _re.search(r'完成.*新增:(\d[\d,]*)', line)
             if m:
                 with _reindex_lock:
                     _reindex_state['indexed'] = int(m.group(1).replace(',', ''))
+
         proc.wait()
+
         if proc.returncode == 0:
+            # 取得資料庫最新筆數
             try:
-                PDM_DB_PATH = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'PDMSearch', 'pdm_search.db')
-                conn_tmp = sqlite3.connect(PDM_DB_PATH)
-                cnt = conn_tmp.execute('SELECT COUNT(*) FROM drawing_index').fetchone()[0]
-                conn_tmp.close()
+                conn_tmp = get_pdm_db()
+                if conn_tmp:
+                    cnt = conn_tmp.execute('SELECT COUNT(*) FROM drawing_index').fetchone()[0]
+                    conn_tmp.close()
+                else:
+                    cnt = _reindex_state['indexed']
             except Exception:
                 cnt = _reindex_state['indexed']
+
             with _reindex_lock:
-                _reindex_state.update(running=False, phase='done', last_count=cnt,
+                _reindex_state.update(
+                    running=False, phase='done', last_count=cnt,
                     last_run=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    message=f'更新完成，共 {cnt:,} 筆圖面資料')
+                    message=f'更新完成，共 {cnt:,} 筆圖面資料'
+                )
         else:
-            err_detail = ' | '.join(last_lines[-3:]) if last_lines else '無輸出'
             with _reindex_lock:
-                _reindex_state.update(running=False, phase='error', error=f'重建失敗: {err_detail}')
+                _reindex_state.update(running=False, phase='error',
+                                      error='重建失敗，請查看伺服器日誌')
     except Exception as exc:
         with _reindex_lock:
             _reindex_state.update(running=False, phase='error', error=str(exc))
@@ -1059,35 +1192,191 @@ def _run_reindex(update_only: bool):
 
 @app.route('/api/drawing/reindex', methods=['POST'])
 def drawing_reindex():
+    """啟動 PDM 圖面索引重建（背景執行）"""
     with _reindex_lock:
         if _reindex_state['running']:
             return jsonify({'success': False, 'error': '索引重建已在執行中，請稍候'}), 409
-    data = request.get_json() or {}
-    update_only = data.get('update_only', True)
-    t = threading.Thread(target=_run_reindex, args=(update_only,), daemon=True)
+
+    data        = request.get_json() or {}
+    update_only = data.get('update_only', True)   # 預設增量更新
+
+    t = _threading.Thread(target=_run_reindex, args=(update_only,), daemon=True)
     t.start()
     return jsonify({'success': True, 'message': '索引重建已啟動'})
 
 
+def _pdm_last_indexed():
+    """從 drawing_index 讀取最後一次 indexed_at（持久，不受重啟影響）"""
+    try:
+        c = get_pdm_db()
+        if not c:
+            return None, 0
+        row = c.execute(
+            "SELECT MAX(indexed_at), COUNT(*) FROM drawing_index"
+        ).fetchone()
+        c.close()
+        return (row[0] or None), (row[1] or 0)
+    except Exception:
+        return None, 0
+
+
 @app.route('/api/drawing/reindex/status', methods=['GET'])
 def drawing_reindex_status():
+    """回傳索引重建進度狀態（含 DB 持久化的 last_run）"""
     with _reindex_lock:
-        return jsonify(dict(_reindex_state))
+        state = dict(_reindex_state)
+    # 若記憶體中 last_run 為空（剛重啟），從 DB 讀取
+    if not state.get('last_run'):
+        db_ts, db_cnt = _pdm_last_indexed()
+        if db_ts:
+            state['last_run']   = db_ts
+            state['last_count'] = db_cnt
+    return jsonify(state)
+
+
+@app.route('/api/zume/status')
+def zume_status():
+    """回傳技術資料清單的目前狀態（件數、最後匯入檔案）"""
+    try:
+        con = sqlite3.connect(ZUME_DB_PATH)
+        total = con.execute('SELECT COUNT(*) FROM drawings').fetchone()[0]
+        last  = con.execute('SELECT filename, imported_at FROM import_log ORDER BY imported_at DESC LIMIT 1').fetchone()
+        con.close()
+        return jsonify({'total': total, 'last_file': last[0] if last else None, 'last_at': last[1] if last else None})
+    except Exception as e:
+        return jsonify({'total': 0, 'last_file': None, 'last_at': None, 'error': str(e)})
+
+
+@app.route('/api/zume/scan', methods=['POST'])
+def zume_scan():
+    """重新掃描 Downloads 資料夾並匯入最新 CSV（強制重掃）"""
+    import glob as _glob
+    downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
+    pattern   = os.path.join(downloads, 'zume-n_data_list_*.csv')
+    files     = sorted(_glob.glob(pattern), key=os.path.getmtime, reverse=True)
+    if not files:
+        return jsonify({'success': False, 'error': f'Downloads 資料夾找不到 zume-n_data_list_*.csv\n路徑：{downloads}'}), 404
+    latest = files[0]
+    fname  = os.path.basename(latest)
+    rows   = _parse_zume_csv(latest)
+    if not rows:
+        return jsonify({'success': False, 'error': f'檔案解析失敗或無資料：{fname}'}), 400
+    con = sqlite3.connect(ZUME_DB_PATH)
+    con.executemany('INSERT OR REPLACE INTO drawings(part_no,part_name,url) VALUES(?,?,?)', rows)
+    con.execute('INSERT OR REPLACE INTO import_log(filename,imported_at,count) VALUES(?,datetime("now"),?)',
+                (fname, len(rows)))
+    con.commit()
+    total = con.execute('SELECT COUNT(*) FROM drawings').fetchone()[0]
+    con.close()
+    return jsonify({'success': True, 'imported': len(rows), 'total': total, 'file': fname})
+
+
+@app.route('/api/zume/import', methods=['POST'])
+def zume_import():
+    """手動上傳 CSV/XLSX 匯入（保留作為備用方式）"""
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'success': False, 'error': '未上傳檔案'}), 400
+    fname_lower = f.filename.lower()
+    rows = []
+    try:
+        if fname_lower.endswith('.csv'):
+            content = f.read().decode('utf-8-sig')
+            reader  = csv.reader(io.StringIO(content))
+            headers = [h.strip() for h in next(reader)]
+            idx_no  = next((i for i,h in enumerate(headers) if '圖號' in h), None)
+            idx_url = next((i for i,h in enumerate(headers) if h.upper() == 'URL'), None)
+            idx_nm  = next((i for i,h in enumerate(headers) if '品名' in h), 1)
+            if idx_no is None or idx_url is None:
+                return jsonify({'success': False, 'error': f'找不到「圖號」或「URL」欄'}), 400
+            for row in reader:
+                if len(row) > max(idx_no, idx_url):
+                    no  = row[idx_no].strip(); url = row[idx_url].strip()
+                    nm  = row[idx_nm].strip() if idx_nm < len(row) else ''
+                    if no and url.startswith('http'):
+                        rows.append((no, nm, url))
+        elif fname_lower.endswith(('.xlsx', '.xlsm')):
+            if not _OPENPYXL_OK:
+                return jsonify({'success': False, 'error': '請改用 CSV 格式'}), 400
+            wb = openpyxl.load_workbook(io.BytesIO(f.read()), read_only=True)
+            ws = wb.active
+            headers = [str(c.value or '').strip() for c in next(ws.iter_rows(min_row=1, max_row=1))]
+            idx_no  = next((i for i,h in enumerate(headers) if '圖號' in h), None)
+            idx_url = next((i for i,h in enumerate(headers) if h.upper() == 'URL'), None)
+            idx_nm  = next((i for i,h in enumerate(headers) if '品名' in h), 1)
+            if idx_no is None or idx_url is None:
+                return jsonify({'success': False, 'error': '找不到「圖號」或「URL」欄'}), 400
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                no  = str(row[idx_no] or '').strip()
+                url = str(row[idx_url] or '').strip()
+                nm  = str(row[idx_nm]  or '').strip() if idx_nm < len(row) else ''
+                if no and url.startswith('http'):
+                    rows.append((no, nm, url))
+            wb.close()
+        else:
+            return jsonify({'success': False, 'error': '僅支援 .csv 或 .xlsx'}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'解析失敗：{e}'}), 500
+    if not rows:
+        return jsonify({'success': False, 'error': '檔案無有效資料'}), 400
+    fname = f.filename
+    con = sqlite3.connect(ZUME_DB_PATH)
+    con.executemany('INSERT OR REPLACE INTO drawings(part_no,part_name,url) VALUES(?,?,?)', rows)
+    con.execute('INSERT OR REPLACE INTO import_log(filename,imported_at,count) VALUES(?,datetime("now"),?)',
+                (fname, len(rows)))
+    con.commit()
+    total = con.execute('SELECT COUNT(*) FROM drawings').fetchone()[0]
+    con.close()
+    return jsonify({'success': True, 'imported': len(rows), 'total': total})
+
+
+@app.route('/api/zume/lookup', methods=['POST'])
+def zume_lookup():
+    """查詢品號對應的 zume-n.com URL；找不到則回傳搜尋 URL"""
+    try:
+        data     = request.get_json() or {}
+        item_nos = data.get('item_nos', [])
+        if not item_nos:
+            return jsonify({'success': False, 'error': '請提供品號'}), 400
+        con = sqlite3.connect(ZUME_DB_PATH)
+        result = []
+        for no in item_nos[:20]:
+            no = no.strip()
+            row = con.execute('SELECT part_name,url FROM drawings WHERE part_no=?', (no,)).fetchone()
+            if row:
+                result.append({'no': no, 'name': row[0], 'url': row[1], 'found': True})
+            else:
+                fallback_url = 'https://zume-n.com/freeword_search?query=' + urllib.parse.quote(no, safe='') + '&searchType=drawing'
+                result.append({'no': no, 'name': '', 'url': fallback_url, 'found': False})
+        con.close()
+        return jsonify({'success': True, 'items': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'查詢失敗：{str(e)}'}), 500
 
 
 @app.route('/api/zume/open', methods=['POST'])
 def zume_open():
-    """以系統預設瀏覽器開啟 zume-n.com 技術資料查詢（帶品號搜尋）"""
-    data    = request.get_json() or {}
-    item_nos = data.get('item_nos', [])
-    if not item_nos:
-        return jsonify({'success': False, 'error': '請提供品號'}), 400
-    opened = []
-    for no in item_nos[:8]:  # 最多 8 個
-        url = 'https://zume-n.com/freeword_search?q=' + urllib.parse.quote(no.strip(), safe='')
-        webbrowser.open(url, new=2)  # new=2 → 新分頁
-        opened.append(no.strip())
-    return jsonify({'success': True, 'opened': opened})
+    """以系統預設瀏覽器開啟 zume-n.com（優先用清單的直接 URL）"""
+    try:
+        data     = request.get_json() or {}
+        item_nos = data.get('item_nos', [])
+        if not item_nos:
+            return jsonify({'success': False, 'error': '請提供品號'}), 400
+        con = sqlite3.connect(ZUME_DB_PATH)
+        opened = []; not_found = []
+        for no in item_nos[:10]:
+            no = no.strip()
+            row = con.execute('SELECT url FROM drawings WHERE part_no=?', (no,)).fetchone()
+            url = row[0] if row else ('https://zume-n.com/freeword_search?query=' + urllib.parse.quote(no, safe='') + '&searchType=drawing')
+            webbrowser.open(url, new=2)
+            if row:
+                opened.append(no)
+            else:
+                not_found.append(no)
+        con.close()
+        return jsonify({'success': True, 'opened': opened, 'not_found': not_found})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'開啟失敗：{str(e)}'}), 500
 
 
 @app.route('/equipment')
@@ -1204,12 +1493,6 @@ def routing_page():
     return render_template('routing.html', app_version=APP_VERSION)
 
 
-@app.route('/bom')
-def bom_page():
-    # 舊連結相容：直接導向產品途程查詢頁（BOM子分頁）
-    return redirect('/routing?tab=bom')
-
-
 @app.route('/api/routing/search')
 def routing_search():
     """搜尋有途程的品號（INVMB + BOMME，多關鍵字空格分隔，品號/品名同時模糊搜尋）
@@ -1273,6 +1556,12 @@ def routing_search():
         return jsonify({'success': True, 'data': results, 'count': len(results)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/bom')
+def bom_page():
+    # 舊連結相容：直接導向產品途程查詢頁（BOM子分頁）
+    return redirect('/routing?tab=bom')
 
 
 @app.route('/api/bom/search')
@@ -1486,6 +1775,7 @@ def bom_routing():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 
 @app.route('/api/cache/refresh', methods=['POST'])

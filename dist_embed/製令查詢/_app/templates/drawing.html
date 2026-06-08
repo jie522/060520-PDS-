@@ -242,6 +242,7 @@
                 <button id="searchBtn" class="btn-erp btn-erp-primary">🔍 查詢</button>
                 <span style="flex:1"></span>
                 <button id="reindexBtn" class="btn-erp" title="掃描 PDM Vault 並更新圖面索引資料庫">🔄 更新圖檔索引</button>
+                <span id="lastIndexedLabel" style="font-size:0.78rem;color:var(--erp-text-muted,#6e6258);white-space:nowrap;"></span>
             </div>
 
             <!-- 索引更新進度列 -->
@@ -486,6 +487,7 @@
                     reindexPhase.className = 'reindex-done';
                     reindexMsg.textContent = s.message || `共 ${s.last_count.toLocaleString()} 筆圖面`;
                     reindexBtn.disabled = false;
+                    _showLastIndexed(s.last_run, s.last_count);
                     setTimeout(() => { reindexBar.classList.remove('show'); }, 8000);
 
                 } else if (s.phase === 'error') {
@@ -506,6 +508,24 @@
             reindexFill.style.background = '#E53935';
             reindexBtn.disabled = false;
         }
+
+        // ── 上次更新時間 ────────────────────────────────────
+        const lastIndexedLabel = document.getElementById('lastIndexedLabel');
+
+        function _showLastIndexed(ts, cnt) {
+            if (!ts) { lastIndexedLabel.textContent = ''; return; }
+            const cntStr = cnt ? `，共 ${Number(cnt).toLocaleString()} 筆` : '';
+            lastIndexedLabel.textContent = `索引更新：${ts}${cntStr}`;
+        }
+
+        // 頁面載入時立即查詢
+        (async () => {
+            try {
+                const res = await fetch('/api/drawing/reindex/status');
+                const s   = await res.json();
+                _showLastIndexed(s.last_run, s.last_count);
+            } catch(e) {}
+        })();
 
         // ── State persistence ──────────────────────────────
         const _DRW_KEY = 'pds_drawing';
