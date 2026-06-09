@@ -27,10 +27,8 @@
       --muted-light: #A8BAC8;
       --row-even:    #F7FAFF;
       --row-hover:   #EBF4FF;
-      --success:     #2E7D32;
-      --success-bg:  #E8F5E9;
-      --shadow-sm:   0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
-      --shadow-md:   0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06);
+      --shadow-sm:   0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
+      --shadow-md:   0 4px 12px rgba(0,0,0,.10),0 2px 4px rgba(0,0,0,.06);
       --radius:      8px;
       --radius-sm:   5px;
     }
@@ -53,7 +51,6 @@
       color: #fff;
       flex-shrink: 0;
       box-shadow: 0 2px 8px rgba(13,71,161,.4);
-      position: relative;
       z-index: 100;
     }
     .header-inner { display:flex; align-items:flex-end; padding:.4rem 1rem 0; }
@@ -75,21 +72,28 @@
       overflow: hidden;
     }
 
-    /* ══ Panels ══ */
+    /* ══ Left Panel ══ */
     .panel-left {
-      width: 360px;
+      width: 370px;
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.65rem;
+      gap: 0.55rem;
       overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-d) transparent;
     }
+    .panel-left::-webkit-scrollbar { width: 4px; }
+    .panel-left::-webkit-scrollbar-thumb { background: var(--border-d); border-radius: 2px; }
+
+    /* ══ Right Panel ══ */
     .panel-right {
       flex: 1;
+      min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.65rem;
-      min-width: 0;
+      overflow: hidden;
     }
 
     /* ══ Card ══ */
@@ -97,45 +101,39 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      overflow: hidden;
       box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      flex-shrink: 0;
     }
     .card-header {
       background: linear-gradient(135deg, var(--blue-mid) 0%, var(--blue-d) 100%);
       color: white;
-      padding: 0.5rem 0.85rem;
+      padding: 0.48rem 0.85rem;
       font-weight: 700;
       font-size: 0.8rem;
       display: flex;
       align-items: center;
       gap: 0.45rem;
     }
-    .card-header .badge {
-      background: rgba(255,255,255,0.22);
-      border-radius: 20px;
-      padding: 0.05rem 0.55rem;
-      font-size: 0.73rem;
-      font-weight: 600;
-      margin-left: auto;
-    }
-    .card-body { padding: 0.7rem 0.85rem; }
+    .card-header .ml-auto { margin-left: auto; }
+    .card-body { padding: 0.65rem 0.8rem; }
 
     /* ══ Form Controls ══ */
-    .form-group { margin-bottom: 0.65rem; }
+    .form-group { margin-bottom: 0.55rem; }
     .form-label {
       display: block;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       font-weight: 700;
       color: var(--text-2);
-      margin-bottom: 0.28rem;
+      margin-bottom: 0.22rem;
     }
     .form-label .req { color: #e53935; margin-left: 2px; }
     .form-control {
       width: 100%;
-      padding: 0.42rem 0.65rem;
+      padding: 0.38rem 0.6rem;
       border: 1.5px solid var(--border-d);
       border-radius: var(--radius-sm);
-      font-size: 0.83rem;
+      font-size: 0.82rem;
       font-family: inherit;
       color: var(--text);
       background: var(--surface);
@@ -146,16 +144,15 @@
       border-color: var(--blue-mid);
       box-shadow: 0 0 0 3px rgba(25,118,210,.12);
     }
-    textarea.form-control { resize: vertical; min-height: 72px; }
-    select.form-control { cursor: pointer; }
+    textarea.form-control { resize: vertical; min-height: 64px; }
 
-    /* ══ Type Selector (chip style) ══ */
-    .type-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
+    /* ══ Type Chips ══ */
+    .type-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.6rem; }
     .type-chip {
-      padding: 0.3rem 0.8rem;
+      padding: 0.25rem 0.7rem;
       border: 1.5px solid var(--border-d);
       border-radius: 20px;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       font-weight: 600;
       cursor: pointer;
       background: var(--surface-2);
@@ -164,14 +161,14 @@
       white-space: nowrap;
     }
     .type-chip:hover { border-color: var(--blue-mid); color: var(--blue); background: var(--blue-pale); }
-    .type-chip.active { background: var(--blue); color: #fff; border-color: var(--blue); box-shadow: 0 2px 6px rgba(21,101,192,.3); }
+    .type-chip.active { background: var(--blue); color: #fff; border-color: var(--blue); box-shadow: 0 2px 6px rgba(21,101,192,.28); }
 
     /* ══ Buttons ══ */
     .btn {
-      padding: 0.42rem 0.85rem;
+      padding: 0.38rem 0.8rem;
       border: none;
       border-radius: var(--radius-sm);
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       font-family: inherit;
       cursor: pointer;
       font-weight: 600;
@@ -179,455 +176,748 @@
       transition: all .15s ease;
       display: inline-flex;
       align-items: center;
-      gap: 0.3rem;
+      gap: 0.28rem;
     }
     .btn-primary {
       background: linear-gradient(135deg, var(--blue-mid) 0%, var(--blue) 100%);
       color: white;
-      box-shadow: 0 2px 5px rgba(21,101,192,.3);
+      box-shadow: 0 2px 5px rgba(21,101,192,.28);
     }
     .btn-primary:hover { background: linear-gradient(135deg, var(--blue-light) 0%, var(--blue-mid) 100%); transform: translateY(-1px); }
     .btn-primary:disabled { background: #B0BEC5; box-shadow: none; cursor: default; transform: none; }
     .btn-success {
       background: linear-gradient(135deg, #43A047 0%, #2E7D32 100%);
       color: white;
-      box-shadow: 0 2px 5px rgba(46,125,50,.3);
+      box-shadow: 0 2px 5px rgba(46,125,50,.28);
     }
     .btn-success:hover { background: linear-gradient(135deg, #66BB6A 0%, #388E3C 100%); transform: translateY(-1px); }
-    .btn-outline {
-      background: var(--surface);
-      color: var(--blue);
-      border: 1.5px solid var(--blue);
+    .btn-success:disabled { background: #B0BEC5; box-shadow: none; cursor: default; transform: none; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1.5px solid var(--border-d);
     }
-    .btn-outline:hover { background: var(--blue-pale); }
-    .btn-sm { padding: 0.26rem 0.65rem; font-size: 0.77rem; }
-    .btn-row { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.75rem; }
+    .btn-ghost:hover { background: var(--bg); color: var(--text-2); }
+    .btn-sm { padding: 0.24rem 0.6rem; font-size: 0.75rem; }
+    .btn-row { display: flex; gap: 0.45rem; justify-content: flex-end; margin-top: 0.6rem; }
 
     /* ══ Photo Upload ══ */
-    .photo-upload-area {
+    .photo-upload-zone {
       border: 2px dashed var(--border-d);
-      border-radius: var(--radius);
-      padding: 0.75rem;
+      border-radius: var(--radius-sm);
+      padding: 0.6rem 0.75rem;
       text-align: center;
       cursor: pointer;
-      transition: all .15s;
       background: var(--surface-2);
+      transition: all .15s;
+      font-size: 0.79rem;
+      color: var(--muted);
     }
-    .photo-upload-area:hover { border-color: var(--blue-mid); background: var(--blue-xpale); }
-    .photo-upload-area .upload-hint { color: var(--muted); font-size: 0.78rem; margin-top: 0.25rem; }
-    .photo-thumbs {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.4rem;
-      margin-top: 0.5rem;
-    }
-    .photo-thumb {
-      position: relative;
-      width: 72px;
-      height: 72px;
-    }
-    .photo-thumb img {
-      width: 72px;
-      height: 72px;
-      object-fit: cover;
-      border-radius: 4px;
-      border: 1.5px solid var(--border-d);
-    }
-    .photo-thumb .remove-btn {
-      position: absolute;
-      top: -5px;
-      right: -5px;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: #e53935;
-      color: #fff;
-      border: none;
-      cursor: pointer;
-      font-size: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      line-height: 1;
-    }
+    .photo-upload-zone:hover { border-color: var(--blue-mid); background: var(--blue-xpale); color: var(--blue); }
+    .photo-thumbs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
+    .photo-thumb { position: relative; width: 60px; height: 60px; }
+    .photo-thumb img { width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1.5px solid var(--border-d); }
+    .photo-thumb .rm { position:absolute; top:-5px; right:-5px; width:16px; height:16px; border-radius:50%; background:#e53935; color:#fff; border:none; cursor:pointer; font-size:9px; display:flex; align-items:center; justify-content:center; }
 
-    /* ══ Search Bar ══ */
-    .search-row { display: flex; gap: 0.4rem; align-items: center; }
+    /* ══ Form Section ══ */
+    .form-section { display: none; }
+    .form-section.active { display: block; }
+    .form-hint { text-align:center; color:var(--muted); padding:1.2rem 0; font-size:0.8rem; }
+    .divider { border:none; border-top:1px solid var(--border); margin:0.55rem 0; }
+
+    /* ══ Search Accordion ══ */
+    .search-toggle {
+      cursor: pointer;
+      user-select: none;
+    }
+    .search-toggle:hover { filter: brightness(1.1); }
+    .search-arrow {
+      margin-left: auto;
+      font-size: 0.7rem;
+      transition: transform .2s;
+    }
+    .search-arrow.open { transform: rotate(90deg); }
+    .search-body { overflow: hidden; }
+    .search-inner { padding: 0.6rem 0.75rem; }
+    .search-row { display: flex; gap: 0.35rem; align-items: center; margin-bottom: 0.45rem; }
     .search-input {
       flex: 1;
-      padding: 0.42rem 0.7rem;
+      padding: 0.38rem 0.6rem;
       border: 1.5px solid var(--border-d);
       border-radius: var(--radius-sm);
-      font-size: 0.84rem;
+      font-size: 0.82rem;
       font-family: inherit;
       color: var(--text);
       background: var(--surface);
-      transition: border-color .15s, box-shadow .15s;
     }
-    .search-input:focus { outline: none; border-color: var(--blue-mid); box-shadow: 0 0 0 3px rgba(25,118,210,.12); }
-    .search-input::placeholder { color: var(--muted-light); }
+    .search-input:focus { outline:none; border-color:var(--blue-mid); box-shadow:0 0 0 3px rgba(25,118,210,.1); }
+    .search-input::placeholder { color:var(--muted-light); }
     .filter-select {
-      font-size: 0.82rem;
-      padding: 0.4rem 0.6rem;
+      padding: 0.36rem 0.5rem;
       border: 1.5px solid var(--border-d);
       border-radius: var(--radius-sm);
-      background: var(--surface);
-      color: var(--text);
+      font-size: 0.8rem;
       font-family: inherit;
       font-weight: 600;
+      background: var(--surface);
+      color: var(--text);
       cursor: pointer;
+      width: 78px;
     }
-    .filter-select:focus { outline: none; border-color: var(--blue-mid); }
+    .filter-select:focus { outline:none; border-color:var(--blue-mid); }
 
-    /* ══ File List ══ */
+    /* ══ File List (in search accordion) ══ */
     .file-list {
-      flex: 1;
+      max-height: 260px;
       overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
       scrollbar-width: thin;
       scrollbar-color: var(--border-d) transparent;
     }
-    .file-list::-webkit-scrollbar { width: 5px; }
-    .file-list::-webkit-scrollbar-thumb { background: var(--border-d); border-radius: 3px; }
+    .file-list::-webkit-scrollbar { width: 4px; }
+    .file-list::-webkit-scrollbar-thumb { background: var(--border-d); border-radius: 2px; }
     .file-row {
       display: flex;
       align-items: center;
-      padding: 0.4rem 0.75rem;
+      padding: 0.32rem 0.6rem;
       border-bottom: 1px solid var(--row-even);
-      transition: background .12s;
-      gap: 0.6rem;
+      gap: 0.4rem;
+      transition: background .1s;
     }
+    .file-row:last-child { border-bottom: none; }
     .file-row:hover { background: var(--row-hover); }
-    .file-icon { font-size: 1.1rem; flex-shrink: 0; }
-    .file-name { flex: 1; font-size: 0.82rem; color: var(--text); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .file-meta { font-size: 0.74rem; color: var(--muted); white-space: nowrap; }
-    .empty-hint { padding: 2rem; text-align: center; color: var(--muted); font-size: 0.82rem; }
+    .file-name { flex:1; font-size:0.77rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-weight:600; }
+    .file-meta { font-size:0.71rem; color:var(--muted); white-space:nowrap; }
+    .list-empty { padding:1.2rem; text-align:center; color:var(--muted); font-size:0.79rem; }
+
+    /* ══ Preview Panel ══ */
+    .preview-card {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .preview-bg {
+      flex: 1;
+      overflow-y: auto;
+      background: #bfc4cc;
+      padding: 1.2rem 1.4rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      scrollbar-width: thin;
+      scrollbar-color: #999 transparent;
+    }
+    .preview-bg::-webkit-scrollbar { width: 5px; }
+    .preview-bg::-webkit-scrollbar-thumb { background: #aaa; border-radius: 3px; }
+    .preview-hint {
+      margin: auto;
+      text-align: center;
+      color: #8a8e96;
+      font-size: 0.85rem;
+      padding: 2rem 1rem;
+    }
+    .preview-hint .hint-icon { font-size: 2.5rem; display: block; margin-bottom: 0.5rem; opacity: .5; }
+
+    /* ══ Document Paper Styles ══ */
+    .doc-paper {
+      background: #fff;
+      width: 100%;
+      max-width: 660px;
+      min-height: 300px;
+      box-shadow: 0 3px 16px rgba(0,0,0,.22), 0 1px 4px rgba(0,0,0,.12);
+      border-radius: 2px;
+      padding: 1.8rem 2rem;
+      font-family: 'Microsoft JhengHei', 'Noto Sans TC', sans-serif;
+      font-size: 0.85rem;
+      color: #111;
+      line-height: 1.6;
+      animation: paperIn .2s ease;
+    }
+    @keyframes paperIn { from { opacity:0; transform:scale(.98) translateY(4px); } to { opacity:1; transform:none; } }
+
+    .doc-letterhead {
+      text-align: center;
+      border-bottom: 2.5px double #333;
+      padding-bottom: 0.7rem;
+      margin-bottom: 0.9rem;
+    }
+    .doc-co-name {
+      font-size: 1.1rem;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      color: #0a1a3a;
+    }
+    .doc-form-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-top: 0.15rem;
+      color: #1a2a50;
+    }
+    .doc-form-no {
+      font-size: 0.75rem;
+      color: #666;
+      margin-top: 0.08rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* Document table */
+    .doc-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 0;
+      font-size: 0.84rem;
+    }
+    .doc-table th {
+      background: #f0f2f7;
+      padding: 0.38rem 0.7rem;
+      border: 1px solid #bbb;
+      font-weight: 700;
+      text-align: center;
+      white-space: nowrap;
+      color: #2a3a5a;
+      font-size: 0.82rem;
+      width: 72px;
+    }
+    .doc-table td {
+      padding: 0.38rem 0.75rem;
+      border: 1px solid #bbb;
+      vertical-align: top;
+      color: #111;
+      font-size: 0.84rem;
+    }
+    .doc-table td.tall { min-height: 72px; white-space: pre-wrap; }
+    .doc-table td.center { text-align: center; }
+    .doc-placeholder { color: #bbb; font-style: italic; font-size: 0.8rem; }
+
+    /* Photos in preview */
+    .doc-photos-wrap { border: 1px solid #bbb; border-top: none; padding: 0.45rem 0.75rem; }
+    .doc-photos-label { font-size: 0.78rem; font-weight: 700; color: #444; margin-bottom: 0.4rem; }
+    .doc-photo-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .doc-photo { width: 90px; height: 90px; object-fit: cover; border: 1px solid #ccc; border-radius: 2px; }
+
+    /* Signature row */
+    .doc-sig-row {
+      display: flex;
+      border: 1px solid #bbb;
+      border-top: none;
+    }
+    .doc-sig-cell {
+      flex: 1;
+      padding: 0.38rem 0.75rem;
+      border-right: 1px solid #bbb;
+      min-height: 44px;
+    }
+    .doc-sig-cell:last-child { border-right: none; }
+    .doc-sig-label { font-size: 0.73rem; color: #777; font-weight: 600; }
+    .doc-sig-value { font-size: 0.84rem; color: #111; margin-top: 0.12rem; min-height: 1.2rem; }
 
     /* ══ Toast ══ */
     #toast {
-      position: fixed;
-      bottom: 1.5rem;
-      right: 1.5rem;
-      padding: 0.6rem 1.1rem;
-      border-radius: var(--radius);
-      font-size: 0.83rem;
-      font-weight: 600;
-      color: #fff;
-      box-shadow: var(--shadow-md);
-      z-index: 9999;
-      opacity: 0;
-      transform: translateY(10px);
-      transition: all .3s ease;
-      pointer-events: none;
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      padding: 0.55rem 1rem; border-radius: var(--radius);
+      font-size: 0.82rem; font-weight: 600; color: #fff;
+      box-shadow: var(--shadow-md); z-index: 9999;
+      opacity: 0; transform: translateY(8px);
+      transition: all .28s ease; pointer-events: none;
     }
-    #toast.show { opacity: 1; transform: translateY(0); }
-    #toast.success { background: #2e7d32; }
-    #toast.error   { background: #c62828; }
-    #toast.info    { background: var(--blue); }
-
-    /* ══ Form Section (每種表單的欄位區) ══ */
-    .form-section { display: none; }
-    .form-section.active { display: block; }
-
-    /* ══ Divider ══ */
-    .section-divider {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 0.65rem 0;
-    }
+    #toast.show { opacity:1; transform:translateY(0); }
+    #toast.success { background:#2e7d32; }
+    #toast.error   { background:#c62828; }
+    #toast.info    { background:var(--blue); }
   </style>
   <link rel="stylesheet" href="/static/pds-ibm.css">
 </head>
 <body>
-  <!-- ── Top Navigation ── -->
-  <div class="header">
-    <div class="header-inner">
-      <div class="header-title">加工部查詢系統PDS</div>
-      <div class="header-tabs">
-        <a href="/"           class="header-tab">製令查詢</a>
-        <a href="/production" class="header-tab">生產中製令</a>
-        <a href="/equipment"  class="header-tab">設備稼動</a>
-        <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
-        <a href="/routing"    class="header-tab">產品途程查詢</a>
-        <span class="header-tab active">申請單</span>
+
+<!-- ── Navigation ── -->
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">加工部查詢系統PDS</div>
+    <div class="header-tabs">
+      <a href="/"           class="header-tab">製令查詢</a>
+      <a href="/production" class="header-tab">生產中製令</a>
+      <a href="/equipment"  class="header-tab">設備稼動</a>
+      <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
+      <a href="/routing"    class="header-tab">產品途程查詢</a>
+      <span                 class="header-tab active">申請單</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main Layout ── -->
+<div class="page-body">
+
+  <!-- ════ LEFT: 填寫 + 搜尋 ════ -->
+  <div class="panel-left">
+
+    <!-- 新增申請單 -->
+    <div class="card">
+      <div class="card-header">📝 新增申請單</div>
+      <div class="card-body">
+
+        <!-- 表單類型選擇 -->
+        <div style="margin-bottom:.55rem;">
+          <div class="form-label">選擇表單類型</div>
+          <div class="type-chips">
+            {% for key, fd in form_types.items() %}
+            <div class="type-chip" data-type="{{ key }}" onclick="selectType('{{ key }}')">{{ fd.name }}</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- 動態表單欄位 -->
+        <div id="formSections">
+          {% for key, fd in form_types.items() %}
+          <div class="form-section" id="section-{{ key }}">
+            {% for f in fd.fields %}
+            <div class="form-group">
+              <label class="form-label" for="{{ key }}_{{ f.key }}">
+                {{ f.label }}{% if f.required %}<span class="req">*</span>{% endif %}
+              </label>
+              {% if f.type == 'textarea' %}
+              <textarea class="form-control" id="{{ key }}_{{ f.key }}" name="{{ f.key }}"
+                rows="3" placeholder="{{ f.label }}" oninput="updatePreview()"></textarea>
+              {% elif f.type == 'date' %}
+              <input type="date" class="form-control" id="{{ key }}_{{ f.key }}" name="{{ f.key }}"
+                oninput="updatePreview()">
+              {% else %}
+              <input type="text" class="form-control" id="{{ key }}_{{ f.key }}" name="{{ f.key }}"
+                placeholder="{{ f.label }}" oninput="updatePreview()">
+              {% endif %}
+            </div>
+            {% endfor %}
+
+            <!-- 照片上傳 -->
+            <div class="form-group">
+              <div class="form-label">附件照片（最多 5 張）</div>
+              <div class="photo-upload-zone" onclick="document.getElementById('photo-{{ key }}').click()">
+                📷 點擊選擇照片
+              </div>
+              <input type="file" id="photo-{{ key }}" accept="image/*" multiple style="display:none"
+                     onchange="handlePhotos(this,'{{ key }}')">
+              <div class="photo-thumbs" id="thumbs-{{ key }}"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- 無選擇提示 -->
+        <div id="noTypeHint" class="form-hint">↑ 請先選擇表單類型</div>
+
+        <!-- 提交按鈕 -->
+        <div id="formSubmitArea" style="display:none;">
+          <div class="btn-row">
+            <button class="btn btn-ghost btn-sm" onclick="clearForm()">清空</button>
+            <button class="btn btn-success" id="submitBtn" onclick="submitForm()">💾 存檔到 NAS</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 搜尋申請單（可摺疊） -->
+    <div class="card">
+      <div class="card-header search-toggle" onclick="toggleSearch()">
+        🔍 搜尋申請單
+        <span id="searchArrow" class="search-arrow ml-auto">▶</span>
+      </div>
+      <div id="searchBody" class="search-body" style="display:none;">
+        <div class="search-inner">
+          <div class="search-row">
+            <select class="filter-select" id="yearSelect">
+              {% set cur_year = 2026 %}
+              {% for y in range(cur_year, 2013, -1) %}
+              <option value="{{ y }}" {% if y == cur_year %}selected{% endif %}>{{ y }}</option>
+              {% endfor %}
+            </select>
+            <input class="search-input" id="keywordInput" type="text" placeholder="關鍵字…"
+                   onkeydown="if(event.key==='Enter') searchFiles()">
+            <button class="btn btn-primary btn-sm" onclick="searchFiles()">搜尋</button>
+          </div>
+          <div class="file-list" id="fileList">
+            <div class="list-empty">按搜尋載入清單</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end panel-left -->
+
+
+  <!-- ════ RIGHT: 預覽（固定） ════ -->
+  <div class="panel-right">
+    <div class="card preview-card">
+      <div class="card-header">
+        👁 表單預覽
+        <span id="previewFormLabel" class="ml-auto" style="font-weight:400;font-size:0.76rem;opacity:.85;"></span>
+      </div>
+      <div class="preview-bg" id="previewBg">
+        <div class="preview-hint">
+          <span class="hint-icon">📋</span>
+          選擇左側表單類型後，即時預覽會顯示在這裡
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ── Page Body ── -->
-  <div class="page-body">
+</div><!-- end page-body -->
 
-    <!-- ══ 左面板：新增申請單 ══ -->
-    <div class="panel-left">
-      <div class="card">
-        <div class="card-header">📝 新增申請單</div>
-        <div class="card-body">
-          <!-- 表單類型選擇 -->
-          <div class="form-group">
-            <div class="form-label">選擇表單類型</div>
-            <div class="type-chips" id="typeChips">
-              {% for key, fd in form_types.items() %}
-              <div class="type-chip" data-type="{{ key }}" onclick="selectType('{{ key }}')">{{ fd.name }}</div>
-              {% endfor %}
-            </div>
-          </div>
+<div id="toast"></div>
 
-          <hr class="section-divider">
+<script>
+// ── 狀態 ──────────────────────────────────────────────────────────
+let _type = null;
+const _photos = {};    // key -> File[]
+const _photoUrls = {}; // key -> ObjectURL[]
 
-          <!-- 各表單欄位（依類型 show/hide） -->
-          <div id="formSections">
-            {% for key, fd in form_types.items() %}
-            <div class="form-section" id="section-{{ key }}">
-              {% for f in fd.fields %}
-              <div class="form-group">
-                <label class="form-label">
-                  {{ f.label }}{% if f.required %}<span class="req">*</span>{% endif %}
-                </label>
-                {% if f.type == 'textarea' %}
-                <textarea class="form-control" name="{{ f.key }}" id="{{ key }}_{{ f.key }}" rows="3" placeholder="{{ f.label }}"></textarea>
-                {% elif f.type == 'date' %}
-                <input type="date" class="form-control" name="{{ f.key }}" id="{{ key }}_{{ f.key }}">
-                {% else %}
-                <input type="text" class="form-control" name="{{ f.key }}" id="{{ key }}_{{ f.key }}" placeholder="{{ f.label }}">
-                {% endif %}
-              </div>
-              {% endfor %}
+// ── 表單類型選擇 ─────────────────────────────────────────────────
+function selectType(key) {
+  _type = key;
+  document.querySelectorAll('.type-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.type === key));
+  document.querySelectorAll('.form-section').forEach(s => s.classList.remove('active'));
+  const sec = document.getElementById('section-' + key);
+  if (sec) sec.classList.add('active');
+  document.getElementById('formSubmitArea').style.display = '';
+  document.getElementById('noTypeHint').style.display = 'none';
+  // 自動填今天日期
+  const di = document.getElementById(key + '_date');
+  if (di && !di.value) di.value = todayStr();
+  updatePreview();
+}
 
-              <!-- 照片上傳 -->
-              <div class="form-group">
-                <div class="form-label">附件照片（選填，最多 5 張）</div>
-                <div class="photo-upload-area" onclick="document.getElementById('photoInput-{{ key }}').click()">
-                  📷 點擊選擇照片
-                  <div class="upload-hint">支援 JPG、PNG、BMP，單張建議 5MB 以下</div>
-                </div>
-                <input type="file" id="photoInput-{{ key }}" accept="image/*" multiple style="display:none"
-                       onchange="handlePhotos(this, '{{ key }}')">
-                <div class="photo-thumbs" id="thumbs-{{ key }}"></div>
-              </div>
-            </div>
-            {% endfor %}
-          </div>
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
 
-          <!-- 提交 -->
-          <div id="formSubmitArea" style="display:none">
-            <div class="btn-row">
-              <button class="btn btn-outline btn-sm" onclick="clearForm()">清空</button>
-              <button class="btn btn-success" id="submitBtn" onclick="submitForm()">💾 存檔到 NAS</button>
-            </div>
-          </div>
+// ── 照片 ─────────────────────────────────────────────────────────
+function handlePhotos(input, key) {
+  if (!_photos[key]) _photos[key] = [];
+  const files = Array.from(input.files);
+  const room  = 5 - _photos[key].length;
+  if (room <= 0) { showToast('最多 5 張照片', 'error'); input.value=''; return; }
+  const add = files.slice(0, room);
+  if (files.length > room) showToast(`最多 5 張，已略過多餘的 ${files.length-room} 張`, 'info');
+  add.forEach(f => _photos[key].push(f));
+  // 更新 ObjectURL 清單
+  if (!_photoUrls[key]) _photoUrls[key] = [];
+  add.forEach(f => _photoUrls[key].push(URL.createObjectURL(f)));
+  renderThumbs(key);
+  updatePreview();
+  input.value = '';
+}
 
-          <!-- 無選擇時的提示 -->
-          <div id="noTypeHint" style="text-align:center;color:var(--muted);padding:1.5rem 0;font-size:0.8rem;">
-            ↑ 請先選擇表單類型
-          </div>
-        </div>
+function renderThumbs(key) {
+  const wrap = document.getElementById('thumbs-' + key);
+  if (!wrap) return;
+  wrap.innerHTML = (_photos[key] || []).map((f, i) =>
+    `<div class="photo-thumb">
+       <img src="${_photoUrls[key][i]}" alt="">
+       <button class="rm" onclick="removePhoto('${key}',${i})" title="移除">✕</button>
+     </div>`
+  ).join('');
+}
+
+function removePhoto(key, idx) {
+  if (!_photos[key]) return;
+  URL.revokeObjectURL(_photoUrls[key][idx]);
+  _photos[key].splice(idx, 1);
+  _photoUrls[key].splice(idx, 1);
+  renderThumbs(key);
+  updatePreview();
+}
+
+// ── 送出 ─────────────────────────────────────────────────────────
+function submitForm() {
+  if (!_type) return;
+  const sec = document.getElementById('section-' + _type);
+  const fd  = new FormData();
+  fd.append('form_type', _type);
+  sec.querySelectorAll('[name]').forEach(el => fd.append(el.name, el.value));
+  (_photos[_type] || []).forEach(f => fd.append('photos[]', f));
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = '存檔中…';
+  fetch('/api/application/create', { method:'POST', body:fd })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        showToast('✅ 存檔成功：' + d.filename, 'success');
+        clearForm();
+        // 若搜尋面板是開啟的就重新搜尋
+        if (document.getElementById('searchBody').style.display !== 'none') searchFiles();
+      } else {
+        showToast('❌ ' + (d.error || '存檔失敗'), 'error');
+      }
+    })
+    .catch(e => showToast('❌ 網路錯誤：' + e.message, 'error'))
+    .finally(() => { btn.disabled=false; btn.innerHTML='💾 存檔到 NAS'; });
+}
+
+function clearForm() {
+  if (!_type) return;
+  document.getElementById('section-' + _type)
+    .querySelectorAll('input:not([type=file]),textarea').forEach(el => el.value='');
+  const di = document.getElementById(_type + '_date');
+  if (di) di.value = todayStr();
+  (_photoUrls[_type] || []).forEach(u => URL.revokeObjectURL(u));
+  _photos[_type]    = [];
+  _photoUrls[_type] = [];
+  renderThumbs(_type);
+  updatePreview();
+}
+
+// ── 搜尋 ─────────────────────────────────────────────────────────
+function toggleSearch() {
+  const body  = document.getElementById('searchBody');
+  const arrow = document.getElementById('searchArrow');
+  const open  = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  arrow.classList.toggle('open', open);
+  if (open && document.getElementById('fileList').innerHTML.includes('按搜尋')) searchFiles();
+}
+
+function searchFiles() {
+  const year    = document.getElementById('yearSelect').value;
+  const keyword = document.getElementById('keywordInput').value.trim();
+  const list    = document.getElementById('fileList');
+  list.innerHTML = '<div class="list-empty">搜尋中…</div>';
+  fetch(`/api/application/list?year=${encodeURIComponent(year)}&keyword=${encodeURIComponent(keyword)}`)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.files || !d.files.length) {
+        list.innerHTML = '<div class="list-empty">查無資料' + (d.error ? '（'+d.error+'）' : '') + '</div>';
+        return;
+      }
+      list.innerHTML = d.files.map(f => `
+        <div class="file-row">
+          <span style="font-size:1rem;flex-shrink:0;">📄</span>
+          <span class="file-name" title="${esc(f.filename)}">${esc(f.filename)}</span>
+          <span class="file-meta">${f.mtime.slice(0,10)}</span>
+          <button class="btn btn-ghost btn-sm" onclick="openFile(${JSON.stringify(f.path)})">開啟</button>
+        </div>`).join('');
+    })
+    .catch(e => { list.innerHTML = '<div class="list-empty">錯誤：' + e.message + '</div>'; });
+}
+
+function openFile(path) {
+  fetch('/api/application/open', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({path})
+  }).then(r => r.json()).then(d => { if (!d.ok) showToast('開啟失敗：'+(d.error||''), 'error'); });
+}
+
+// ── 即時預覽 ─────────────────────────────────────────────────────
+function val(id) {
+  const el = document.getElementById(id);
+  return el ? (el.value || '') : '';
+}
+function ph(v, placeholder) {
+  if (v) return esc(v).replace(/\n/g, '<br>');
+  return `<span class="doc-placeholder">${placeholder}</span>`;
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+const PREVIEW = {
+  pp015(photos) {
+    const date    = val('pp015_date');
+    const subject = val('pp015_subject');
+    const content = val('pp015_content');
+    const author  = val('pp015_author');
+    return `
+    <div class="doc-paper">
+      <div class="doc-letterhead">
+        <div class="doc-co-name">詠基工業股份有限公司</div>
+        <div class="doc-form-title">內部業務聯絡單</div>
+        <div class="doc-form-no">PP-M-015</div>
       </div>
-    </div>
-
-    <!-- ══ 右面板：搜尋既有申請單 ══ -->
-    <div class="panel-right">
-      <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
-        <div class="card-header">
-          🔍 搜尋申請單
-          <span class="badge" id="fileCountBadge">—</span>
-        </div>
-        <div class="card-body" style="flex-shrink:0;">
-          <div class="search-row">
-            <select class="filter-select" id="yearSelect" style="width:85px;">
-              {% set cur_year = 2026 %}
-              {% for y in range(cur_year, 2013, -1) %}
-              <option value="{{ y }}" {% if y == cur_year %}selected{% endif %}>{{ y }} 年</option>
-              {% endfor %}
-            </select>
-            <input class="search-input" id="keywordInput" type="text" placeholder="關鍵字搜尋檔名…"
-                   onkeydown="if(event.key==='Enter') searchFiles()">
-            <button class="btn btn-primary" onclick="searchFiles()">🔍 搜尋</button>
-          </div>
-        </div>
-        <div class="file-list" id="fileList">
-          <div class="empty-hint">請選擇年份並按搜尋</div>
-        </div>
+      <table class="doc-table">
+        <tr>
+          <th>日&emsp;期</th>
+          <td>${ph(date,'填寫日期')}</td>
+          <th>申請人</th>
+          <td>${ph(author,'姓名')}</td>
+        </tr>
+        <tr>
+          <th>主&emsp;旨</th>
+          <td colspan="3">${ph(subject,'填寫主旨')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">說明內容</th>
+          <td colspan="3" class="tall" style="min-height:100px;">${ph(content,'填寫說明內容…')}</td>
+        </tr>
+      </table>
+      ${photosHtml(photos)}
+      <div class="doc-sig-row">
+        <div class="doc-sig-cell"><div class="doc-sig-label">申請人簽名</div><div class="doc-sig-value">${esc(author)}</div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">直屬主管</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">廠長</div><div class="doc-sig-value"></div></div>
       </div>
-    </div>
+    </div>`;
+  },
+  pp017(photos) {
+    const date   = val('pp017_date');
+    const item   = val('pp017_item');
+    const reason = val('pp017_reason');
+    const qty    = val('pp017_qty');
+    const author = val('pp017_author');
+    return `
+    <div class="doc-paper">
+      <div class="doc-letterhead">
+        <div class="doc-co-name">詠基工業股份有限公司</div>
+        <div class="doc-form-title">報廢申請單</div>
+        <div class="doc-form-no">PP-M-017</div>
+      </div>
+      <table class="doc-table">
+        <tr>
+          <th>日&emsp;期</th>
+          <td colspan="3">${ph(date,'填寫日期')}</td>
+        </tr>
+        <tr>
+          <th>設備/物品</th>
+          <td colspan="3">${ph(item,'填寫設備或物品名稱')}</td>
+        </tr>
+        <tr>
+          <th>數&emsp;量</th>
+          <td>${ph(qty,'數量')} </td>
+          <th>申請人</th>
+          <td>${ph(author,'姓名')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">報廢原因</th>
+          <td colspan="3" class="tall" style="min-height:90px;">${ph(reason,'填寫報廢原因…')}</td>
+        </tr>
+      </table>
+      ${photosHtml(photos)}
+      <div class="doc-sig-row">
+        <div class="doc-sig-cell"><div class="doc-sig-label">申請人</div><div class="doc-sig-value">${esc(author)}</div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">直屬主管</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">廠長核示</div><div class="doc-sig-value"></div></div>
+      </div>
+    </div>`;
+  },
+  pp078(photos) {
+    const date     = val('pp078_date');
+    const proposer = val('pp078_proposer');
+    const problem  = val('pp078_problem');
+    const solution = val('pp078_solution');
+    return `
+    <div class="doc-paper">
+      <div class="doc-letterhead">
+        <div class="doc-co-name">詠基工業股份有限公司</div>
+        <div class="doc-form-title">提案改善單</div>
+        <div class="doc-form-no">PP-M-078</div>
+      </div>
+      <table class="doc-table">
+        <tr>
+          <th>日&emsp;期</th>
+          <td>${ph(date,'填寫日期')}</td>
+          <th>提案人</th>
+          <td>${ph(proposer,'姓名')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">問題描述</th>
+          <td colspan="3" class="tall" style="min-height:90px;">${ph(problem,'描述現況問題…')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">改善方案</th>
+          <td colspan="3" class="tall" style="min-height:90px;">${ph(solution,'說明改善做法…')}</td>
+        </tr>
+      </table>
+      ${photosHtml(photos)}
+      <div class="doc-sig-row">
+        <div class="doc-sig-cell"><div class="doc-sig-label">提案人</div><div class="doc-sig-value">${esc(proposer)}</div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">直屬主管</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">廠長核示</div><div class="doc-sig-value"></div></div>
+      </div>
+    </div>`;
+  },
+  m1(photos) {
+    const date    = val('m1_date');
+    const subject = val('m1_subject');
+    const amount  = val('m1_amount');
+    const content = val('m1_content');
+    const author  = val('m1_author');
+    return `
+    <div class="doc-paper">
+      <div class="doc-letterhead">
+        <div class="doc-co-name">詠基工業股份有限公司</div>
+        <div class="doc-form-title">預算追加簽呈</div>
+        <div class="doc-form-no">M1</div>
+      </div>
+      <table class="doc-table">
+        <tr>
+          <th>日&emsp;期</th>
+          <td>${ph(date,'填寫日期')}</td>
+          <th>申請人</th>
+          <td>${ph(author,'姓名')}</td>
+        </tr>
+        <tr>
+          <th>主&emsp;旨</th>
+          <td colspan="3">${ph(subject,'填寫主旨')}</td>
+        </tr>
+        <tr>
+          <th>申請金額</th>
+          <td colspan="3">${amount ? '<strong>' + esc(amount) + '</strong>' : '<span class="doc-placeholder">填寫金額</span>'}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">說&emsp;明</th>
+          <td colspan="3" class="tall" style="min-height:100px;">${ph(content,'填寫說明…')}</td>
+        </tr>
+      </table>
+      ${photosHtml(photos)}
+      <div class="doc-sig-row">
+        <div class="doc-sig-cell"><div class="doc-sig-label">申請人</div><div class="doc-sig-value">${esc(author)}</div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">直屬主管</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">廠長核示</div><div class="doc-sig-value"></div></div>
+      </div>
+    </div>`;
+  }
+};
 
-  </div><!-- end page-body -->
+function photosHtml(urls) {
+  if (!urls || !urls.length) return '';
+  return `
+    <div class="doc-photos-wrap">
+      <div class="doc-photos-label">附件照片</div>
+      <div class="doc-photo-grid">
+        ${urls.map(u => `<img class="doc-photo" src="${u}" alt="">`).join('')}
+      </div>
+    </div>`;
+}
 
-  <!-- Toast -->
-  <div id="toast"></div>
+const FORM_NAMES = {
+  pp015: 'PP-M-015 內部業務聯絡單',
+  pp017: 'PP-M-017 報廢申請單',
+  pp078: 'PP-M-078 提案改善單',
+  m1:    'M1 預算追加簽呈',
+};
 
-  <script>
-    // ── 狀態 ──────────────────────────────────────────────────────
-    let _currentType = null;
-    // 每個 type key 對應的 File 陣列
-    const _photos = {};
+function updatePreview() {
+  const bg = document.getElementById('previewBg');
+  if (!_type || !PREVIEW[_type]) {
+    bg.innerHTML = `<div class="preview-hint"><span class="hint-icon">📋</span>選擇左側表單類型後，即時預覽會顯示在這裡</div>`;
+    document.getElementById('previewFormLabel').textContent = '';
+    return;
+  }
+  const urls = _photoUrls[_type] || [];
+  bg.innerHTML = PREVIEW[_type](urls);
+  document.getElementById('previewFormLabel').textContent = FORM_NAMES[_type] || '';
+}
 
-    // ── 表單類型選擇 ──────────────────────────────────────────────
-    function selectType(key) {
-      _currentType = key;
-      // 更新 chip 樣式
-      document.querySelectorAll('.type-chip').forEach(c => {
-        c.classList.toggle('active', c.dataset.type === key);
-      });
-      // 顯示對應欄位區
-      document.querySelectorAll('.form-section').forEach(s => s.classList.remove('active'));
-      const sec = document.getElementById('section-' + key);
-      if (sec) sec.classList.add('active');
-      // 顯示提交按鈕，隱藏提示
-      document.getElementById('formSubmitArea').style.display = '';
-      document.getElementById('noTypeHint').style.display = 'none';
-      // 自動填入今天日期
-      const dateInput = document.getElementById(key + '_date');
-      if (dateInput && !dateInput.value) {
-        dateInput.value = new Date().toISOString().slice(0, 10);
-      }
-    }
-
-    // ── 照片處理 ──────────────────────────────────────────────────
-    function handlePhotos(input, key) {
-      if (!_photos[key]) _photos[key] = [];
-      const files = Array.from(input.files);
-      const remaining = 5 - _photos[key].length;
-      if (files.length > remaining) {
-        showToast('最多只能附 5 張照片', 'error');
-      }
-      const toAdd = files.slice(0, remaining);
-      toAdd.forEach(f => _photos[key].push(f));
-      renderThumbs(key);
-      input.value = '';  // 清空 input，允許重複選同檔
-    }
-
-    function renderThumbs(key) {
-      const thumbs = document.getElementById('thumbs-' + key);
-      thumbs.innerHTML = '';
-      (_photos[key] || []).forEach((f, i) => {
-        const url = URL.createObjectURL(f);
-        const div = document.createElement('div');
-        div.className = 'photo-thumb';
-        div.innerHTML = `<img src="${url}" alt="photo">
-          <button class="remove-btn" onclick="removePhoto('${key}', ${i})" title="移除">✕</button>`;
-        thumbs.appendChild(div);
-      });
-    }
-
-    function removePhoto(key, idx) {
-      if (_photos[key]) {
-        _photos[key].splice(idx, 1);
-        renderThumbs(key);
-      }
-    }
-
-    // ── 提交表單 ──────────────────────────────────────────────────
-    function submitForm() {
-      if (!_currentType) return;
-      const section = document.getElementById('section-' + _currentType);
-      const fd = new FormData();
-      fd.append('form_type', _currentType);
-      // 收集所有欄位
-      section.querySelectorAll('[name]').forEach(el => {
-        fd.append(el.name, el.value);
-      });
-      // 附加照片
-      (_photos[_currentType] || []).forEach(f => fd.append('photos[]', f));
-
-      const btn = document.getElementById('submitBtn');
-      btn.disabled = true;
-      btn.textContent = '存檔中…';
-
-      fetch('/api/application/create', { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(d => {
-          if (d.ok) {
-            showToast('✅ 存檔成功：' + d.filename, 'success');
-            clearForm();
-            // 刷新右側列表
-            searchFiles();
-          } else {
-            showToast('❌ 存檔失敗：' + (d.error || '未知錯誤'), 'error');
-          }
-        })
-        .catch(e => showToast('❌ 網路錯誤：' + e.message, 'error'))
-        .finally(() => {
-          btn.disabled = false;
-          btn.innerHTML = '💾 存檔到 NAS';
-        });
-    }
-
-    function clearForm() {
-      if (!_currentType) return;
-      const section = document.getElementById('section-' + _currentType);
-      section.querySelectorAll('input:not([type=file]),textarea').forEach(el => el.value = '');
-      // 重設日期為今天
-      const dateInput = document.getElementById(_currentType + '_date');
-      if (dateInput) dateInput.value = new Date().toISOString().slice(0, 10);
-      // 清照片
-      _photos[_currentType] = [];
-      renderThumbs(_currentType);
-    }
-
-    // ── 搜尋申請單 ───────────────────────────────────────────────
-    function searchFiles() {
-      const year    = document.getElementById('yearSelect').value;
-      const keyword = document.getElementById('keywordInput').value.trim();
-      document.getElementById('fileList').innerHTML = '<div class="empty-hint">搜尋中…</div>';
-
-      const url = `/api/application/list?year=${encodeURIComponent(year)}&keyword=${encodeURIComponent(keyword)}`;
-      fetch(url)
-        .then(r => r.json())
-        .then(d => {
-          const list = document.getElementById('fileList');
-          document.getElementById('fileCountBadge').textContent = (d.total ?? 0) + ' 筆';
-          if (!d.files || d.files.length === 0) {
-            list.innerHTML = '<div class="empty-hint">查無資料' + (d.error ? '（' + d.error + '）' : '') + '</div>';
-            return;
-          }
-          list.innerHTML = d.files.map(f => `
-            <div class="file-row">
-              <span class="file-icon">📄</span>
-              <span class="file-name" title="${escHtml(f.filename)}">${escHtml(f.filename)}</span>
-              <span class="file-meta">${f.mtime}</span>
-              <span class="file-meta" style="margin-left:4px;">${formatSize(f.size)}</span>
-              <button class="btn btn-outline btn-sm" style="margin-left:0.5rem;"
-                onclick="openFile(${JSON.stringify(f.path)})">開啟</button>
-            </div>
-          `).join('');
-        })
-        .catch(e => {
-          document.getElementById('fileList').innerHTML = '<div class="empty-hint">錯誤：' + e.message + '</div>';
-        });
-    }
-
-    function openFile(path) {
-      fetch('/api/application/open', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ path })
-      })
-        .then(r => r.json())
-        .then(d => {
-          if (!d.ok) showToast('開啟失敗：' + (d.error || ''), 'error');
-        });
-    }
-
-    // ── 工具函式 ─────────────────────────────────────────────────
-    function escHtml(s) {
-      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-    function formatSize(bytes) {
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1048576) return (bytes/1024).toFixed(0) + ' KB';
-      return (bytes/1048576).toFixed(1) + ' MB';
-    }
-
-    let _toastTimer;
-    function showToast(msg, type='info') {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.className = 'show ' + type;
-      clearTimeout(_toastTimer);
-      _toastTimer = setTimeout(() => { t.className = ''; }, 3500);
-    }
-
-    // 頁面載入時自動搜尋當年申請單
-    window.addEventListener('DOMContentLoaded', () => searchFiles());
-  </script>
+// ── Toast ──────────────────────────────────────────────────────────
+let _tt;
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show ' + type;
+  clearTimeout(_tt); _tt = setTimeout(() => t.className='', 3500);
+}
+</script>
 </body>
 </html>
