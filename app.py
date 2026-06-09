@@ -23,6 +23,13 @@ try:
 except ImportError:
     _OPENPYXL_OK = False
 
+try:
+    from docxtpl import DocxTemplate, InlineImage
+    from docx.shared import Mm
+    _DOCXTPL_OK = True
+except ImportError:
+    _DOCXTPL_OK = False
+
 # ── PyInstaller 路徑處理 ────────────────────────────────────────
 # 執行為 EXE 時：_MEIPASS 為解壓目錄（含 templates）；
 # EXE 同目錄為使用者可編輯的 config.py / pdm_search.db
@@ -1819,6 +1826,187 @@ def refresh_cache():
     with _cache_lock:
         _cache.clear()
     return jsonify({'success': True, 'message': '快取已清除'})
+
+
+# ════════════════════════════════════════════════════════════════
+#  申請單功能
+# ════════════════════════════════════════════════════════════════
+
+# 各表單類型定義（type_key → 顯示名稱、範本檔名、欄位清單）
+_FORM_TYPES = {
+    'pp015': {
+        'name': 'PP-M-015 內部業務聯絡單',
+        'template': 'pp015.docx',
+        'fields': [
+            {'key': 'date',    'label': '日期',   'type': 'date',     'required': True},
+            {'key': 'subject', 'label': '主旨',   'type': 'text',     'required': True},
+            {'key': 'content', 'label': '說明內容', 'type': 'textarea', 'required': True},
+            {'key': 'author',  'label': '申請人', 'type': 'text',     'required': False},
+        ],
+    },
+    'pp017': {
+        'name': 'PP-M-017 報廢申請單',
+        'template': 'pp017.docx',
+        'fields': [
+            {'key': 'date',    'label': '日期',     'type': 'date',     'required': True},
+            {'key': 'item',    'label': '設備/物品名稱', 'type': 'text',  'required': True},
+            {'key': 'reason',  'label': '報廢原因', 'type': 'textarea', 'required': True},
+            {'key': 'qty',     'label': '數量',     'type': 'text',     'required': False},
+            {'key': 'author',  'label': '申請人',   'type': 'text',     'required': False},
+        ],
+    },
+    'pp078': {
+        'name': 'PP-M-078 提案改善單',
+        'template': 'pp078.docx',
+        'fields': [
+            {'key': 'date',     'label': '日期',     'type': 'date',     'required': True},
+            {'key': 'proposer', 'label': '提案人',   'type': 'text',     'required': True},
+            {'key': 'problem',  'label': '問題描述', 'type': 'textarea', 'required': True},
+            {'key': 'solution', 'label': '改善方案', 'type': 'textarea', 'required': True},
+        ],
+    },
+    'm1': {
+        'name': 'M1 預算追加簽呈',
+        'template': 'm1.docx',
+        'fields': [
+            {'key': 'date',    'label': '日期',   'type': 'date',     'required': True},
+            {'key': 'subject', 'label': '主旨',   'type': 'text',     'required': True},
+            {'key': 'amount',  'label': '金額',   'type': 'text',     'required': True},
+            {'key': 'content', 'label': '說明',   'type': 'textarea', 'required': True},
+            {'key': 'author',  'label': '申請人', 'type': 'text',     'required': False},
+        ],
+    },
+}
+
+
+@app.route('/application')
+def application_page():
+    """申請單主頁"""
+    return render_template('application.html', form_types=_FORM_TYPES)
+
+
+@app.route('/api/application/list')
+def application_list():
+    """列出 NAS 申請單資料夾的既有檔案"""
+    import datetime as _dt
+    year = request.args.get('year', str(_dt.date.today().year))
+    keyword = request.args.get('keyword', '').strip()
+    base = getattr(config, 'APPLICATION_STORE_PATH', '')
+    if not base:
+        return jsonify({'error': '未設定 APPLICATION_STORE_PATH'}), 500
+
+    target = os.path.join(base, year)
+    try:
+        entries = os.scandir(target)
+    except Exception as e:
+        return jsonify({'files': [], 'error': str(e)})
+
+    files = []
+    for e in entries:
+        if not e.is_file():
+            continue
+        name_lower = e.name.lower()
+        if not (name_lower.endswith('.doc') or name_lower.endswith('.docx')):
+            continue
+        if keyword and keyword.lower() not in e.name.lower():
+            continue
+        stat = e.stat()
+        files.append({
+            'filename': e.name,
+            'path': e.path,
+            'size': stat.st_size,
+            'mtime': _dt.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'),
+        })
+    files.sort(key=lambda x: x['mtime'], reverse=True)
+    return jsonify({'files': files, 'year': year, 'total': len(files)})
+
+
+@app.route('/api/application/create', methods=['POST'])
+def application_create():
+    """接收表單資料 + 照片，產生 .docx 存到 NAS"""
+    import datetime as _dt
+    import tempfile
+    import shutil
+
+    if not _DOCXTPL_OK:
+        return jsonify({'ok': False, 'error': 'docxtpl 套件未安裝，請執行 pip install docxtpl'}), 500
+
+    form_type = request.form.get('form_type', '')
+    if form_type not in _FORM_TYPES:
+        return jsonify({'ok': False, 'error': f'未知表單類型: {form_type}'}), 400
+
+    form_def = _FORM_TYPES[form_type]
+    template_path = os.path.join(
+        getattr(config, 'FORM_TEMPLATES_DIR',
+                os.path.join(_APP_DIR, 'static', 'form_templates')),
+        form_def['template']
+    )
+
+    if not os.path.exists(template_path):
+        return jsonify({
+            'ok': False,
+            'error': f'找不到 Word 範本：{template_path}，請先將 .docx 範本放入 static/form_templates/'
+        }), 500
+
+    # 收集欄位值
+    context = {}
+    for f in form_def['fields']:
+        context[f['key']] = request.form.get(f['key'], '')
+
+    # 處理照片（暫存 → 轉成 InlineImage）
+    tmp_dir = tempfile.mkdtemp(prefix='pds_upload_')
+    photo_objects = []
+    try:
+        photos = request.files.getlist('photos[]')
+        for idx, photo in enumerate(photos):
+            if photo and photo.filename:
+                ext = os.path.splitext(photo.filename)[1].lower() or '.jpg'
+                tmp_path = os.path.join(tmp_dir, f'photo_{idx}{ext}')
+                photo.save(tmp_path)
+                photo_objects.append(tmp_path)
+
+        # 組裝 docxtpl context（照片用 InlineImage）
+        tpl = DocxTemplate(template_path)
+        for i, p in enumerate(photo_objects):
+            context[f'pic_{i+1}'] = InlineImage(tpl, p, width=Mm(120))
+        # 未填照片位置補空字串，避免 KeyError
+        for i in range(len(photo_objects) + 1, 6):
+            context.setdefault(f'pic_{i}', '')
+
+        tpl.render(context)
+
+        # 決定輸出檔名
+        date_str = context.get('date', '').replace('-', '') or _dt.date.today().strftime('%Y%m%d')
+        subject = context.get('subject') or context.get('item') or context.get('problem', '')
+        subject = re.sub(r'[\\/:*?"<>|]', '_', subject)[:40]  # 去除非法字元，限長 40
+        out_filename = f'{date_str} {subject}.docx'
+
+        # 存到 NAS
+        year = date_str[:4]
+        store_base = getattr(config, 'APPLICATION_STORE_PATH', '')
+        out_dir = os.path.join(store_base, year)
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, out_filename)
+        tpl.save(out_path)
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return jsonify({'ok': True, 'filename': out_filename, 'path': out_path})
+
+
+@app.route('/api/application/open', methods=['POST'])
+def application_open():
+    """用 Shell 開啟指定 NAS 上的申請單檔案"""
+    data = request.get_json(silent=True) or {}
+    path = data.get('path', '')
+    if not path:
+        return jsonify({'ok': False, 'error': '缺少 path 參數'}), 400
+    try:
+        os.startfile(path)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 def _preload_cache():

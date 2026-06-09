@@ -33,6 +33,15 @@ def sync():
     n = len(os.listdir(tpl_dst))
     print(f'  [OK] templates/ ({n} 個檔案)')
 
+    # 3b. 同步 static（含 pds-ibm.css 與 form_templates/）
+    static_src = os.path.join(SRC, 'static')
+    static_dst = os.path.join(APP, 'static')
+    if os.path.exists(static_src):
+        if os.path.exists(static_dst):
+            shutil.rmtree(static_dst)
+        shutil.copytree(static_src, static_dst)
+        print(f'  [OK] static/')
+
     # 4. 清除快取
     for cache_dir in [
         os.path.join(APP, '__pycache__'),
