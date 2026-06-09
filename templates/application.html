@@ -485,6 +485,12 @@
               {% elif f.type == 'date' %}
               <input type="date" class="form-control" id="{{ key }}_{{ f.key }}" name="{{ f.key }}"
                 oninput="updatePreview()">
+              {% elif f.type == 'select' %}
+              <select class="form-control" id="{{ key }}_{{ f.key }}" name="{{ f.key }}" onchange="updatePreview()">
+                {% for opt in f.options %}
+                <option value="{{ opt }}">{{ opt }}</option>
+                {% endfor %}
+              </select>
               {% else %}
               <input type="text" class="form-control" id="{{ key }}_{{ f.key }}" name="{{ f.key }}"
                 placeholder="{{ f.label }}" oninput="updatePreview()">
@@ -724,162 +730,180 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// 勾選框輔助：選中顯示 ■，未選顯示 □
+function chk(current, target) {
+  return (current === target ? '■' : '□') + target;
+}
+
 const PREVIEW = {
+  // ── PP-M-015 內部業務聯絡單 ──
   pp015(photos) {
-    const date    = val('pp015_date');
-    const subject = val('pp015_subject');
-    const content = val('pp015_content');
-    const author  = val('pp015_author');
+    const date      = val('pp015_date');
+    const priority  = val('pp015_priority');
+    const recipient = val('pp015_recipient');
+    const author    = val('pp015_author');
+    const subject   = val('pp015_subject');
+    const content   = val('pp015_content');
     return `
     <div class="doc-paper">
       <div class="doc-letterhead">
-        <div class="doc-co-name">詠基工業股份有限公司</div>
+        <div class="doc-co-name">詠 基 工 業 股 份 有 限 公 司</div>
         <div class="doc-form-title">內部業務聯絡單</div>
-        <div class="doc-form-no">PP-M-015</div>
+        <div class="doc-form-no">${date ? rocDate(date) : '　年　月　日'}　【PP-M-015】</div>
       </div>
       <table class="doc-table">
         <tr>
-          <th>日&emsp;期</th>
-          <td>${ph(date,'填寫日期')}</td>
-          <th>申請人</th>
-          <td>${ph(author,'姓名')}</td>
+          <th>速&emsp;別</th>
+          <td>
+            <span style="margin-right:1rem;">${chk(priority,'最速件')}</span>
+            <span style="margin-right:1rem;">${chk(priority,'速件')}</span>
+            <span>${chk(priority,'普通件')}</span>
+          </td>
+        </tr>
+        <tr>
+          <th>受文單位</th>
+          <td>${ph(recipient,'例：總經理 / 資材部…')}</td>
+        </tr>
+        <tr>
+          <th>承辦人</th>
+          <td>${ph(author,'填寫承辦人')}</td>
         </tr>
         <tr>
           <th>主&emsp;旨</th>
-          <td colspan="3">${ph(subject,'填寫主旨')}</td>
+          <td>${ph(subject,'填寫主旨')}</td>
         </tr>
         <tr>
-          <th style="vertical-align:top;padding-top:.5rem;">說明內容</th>
-          <td colspan="3" class="tall" style="min-height:100px;">${ph(content,'填寫說明內容…')}</td>
+          <th style="vertical-align:top;padding-top:.5rem;">說&emsp;明</th>
+          <td class="tall" style="min-height:120px;">${ph(content,'填寫說明內容…')}</td>
         </tr>
       </table>
       ${photosHtml(photos)}
       <div class="doc-sig-row">
-        <div class="doc-sig-cell"><div class="doc-sig-label">申請人簽名</div><div class="doc-sig-value">${esc(author)}</div></div>
-        <div class="doc-sig-cell"><div class="doc-sig-label">直屬主管</div><div class="doc-sig-value"></div></div>
-        <div class="doc-sig-cell"><div class="doc-sig-label">廠長</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">承辦人</div><div class="doc-sig-value">${esc(author)}</div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">部門主管</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">單位主管</div><div class="doc-sig-value"></div></div>
       </div>
     </div>`;
   },
+
+  // ── P-HR-028-01A 人事懲戒核定書 ──
+  hr028(photos) {
+    const date     = val('hr028_date');
+    const empNo    = val('hr028_emp_no');
+    const name     = val('hr028_name');
+    const title    = val('hr028_title');
+    const punish   = val('hr028_punish');
+    const reason   = val('hr028_reason');
+    const evidence = val('hr028_evidence');
+    const method   = val('hr028_method');
+    // 懲戒分類兩排顯示
+    const row1 = ['職位降調','停職停薪','不經預告解僱'];
+    const row2 = ['大過','小過','申誡','警告'];
+    return `
+    <div class="doc-paper">
+      <div class="doc-letterhead">
+        <div class="doc-co-name">詠基工業股份有限公司</div>
+        <div class="doc-form-title">人事懲戒核定書</div>
+        <div class="doc-form-no">通知日期：${date ? rocDate(date) : '　年　月　日'}　【P-HR-028-01A】</div>
+      </div>
+      <table class="doc-table">
+        <tr>
+          <th>員工編號</th><td>${ph(empNo,'')}</td>
+          <th>單&emsp;位</th><td>加工課</td>
+        </tr>
+        <tr>
+          <th>姓&emsp;名</th><td>${ph(name,'填寫姓名')}</td>
+          <th>職&emsp;稱</th><td>${ph(title,'')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.4rem;">懲戒分類</th>
+          <td colspan="3">
+            <div style="margin-bottom:.3rem;">
+              ${row1.map(o => `<span style="margin-right:1.2rem;">${chk(punish,o)}</span>`).join('')}
+            </div>
+            <div>
+              ${row2.map(o => `<span style="margin-right:1.2rem;">${chk(punish,o)}</span>`).join('')}
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">懲戒事由</th>
+          <td colspan="3" class="tall" style="min-height:80px;">${ph(reason,'填寫懲戒事由…')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">檢附之證據</th>
+          <td colspan="3" class="tall" style="min-height:60px;">${ph(evidence,'填寫檢附之證據…')}</td>
+        </tr>
+        <tr>
+          <th>懲戒方式</th>
+          <td colspan="3">${ph(method,'填寫懲戒方式')}</td>
+        </tr>
+      </table>
+      ${photosHtml(photos)}
+      <div class="doc-sig-row">
+        <div class="doc-sig-cell"><div class="doc-sig-label">管理部建議</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">部門主管建議</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">總經理核定意見</div><div class="doc-sig-value"></div></div>
+      </div>
+    </div>`;
+  },
+
+  // ── PP-M-017 報廢申請單 ──
   pp017(photos) {
-    const date   = val('pp017_date');
-    const item   = val('pp017_item');
-    const reason = val('pp017_reason');
-    const qty    = val('pp017_qty');
-    const author = val('pp017_author');
+    const date      = val('pp017_date');
+    const category  = val('pp017_category');
+    const applicant = val('pp017_applicant');
+    const item      = val('pp017_item');
+    const itemNo    = val('pp017_item_no');
+    const qty       = val('pp017_qty');
+    const reason    = val('pp017_reason');
+    const cats = ['機器','模治具','量規儀器','其他'];
     return `
     <div class="doc-paper">
       <div class="doc-letterhead">
         <div class="doc-co-name">詠基工業股份有限公司</div>
         <div class="doc-form-title">報廢申請單</div>
-        <div class="doc-form-no">PP-M-017</div>
+        <div class="doc-form-no">【PP-M-017】　總經理：＿＿＿＿＿＿</div>
       </div>
       <table class="doc-table">
         <tr>
-          <th>日&emsp;期</th>
-          <td colspan="3">${ph(date,'填寫日期')}</td>
+          <th style="width:auto;">類別</th>
+          <td colspan="3">
+            ${cats.map(o => `<span style="margin-right:1.2rem;">${chk(category,o)}</span>`).join('')}
+          </td>
         </tr>
         <tr>
-          <th>設備/物品</th>
-          <td colspan="3">${ph(item,'填寫設備或物品名稱')}</td>
+          <th>申請人</th><td>${ph(applicant,'填寫申請人')}</td>
+          <th>申請日期</th><td>${date ? rocDate(date) : '<span class="doc-placeholder">填寫日期</span>'}</td>
         </tr>
         <tr>
-          <th>數&emsp;量</th>
-          <td>${ph(qty,'數量')} </td>
-          <th>申請人</th>
-          <td>${ph(author,'姓名')}</td>
+          <th>品名/規格</th><td>${ph(item,'填寫品名/規格')}</td>
+          <th>部門主管</th><td></td>
         </tr>
         <tr>
-          <th style="vertical-align:top;padding-top:.5rem;">報廢原因</th>
-          <td colspan="3" class="tall" style="min-height:90px;">${ph(reason,'填寫報廢原因…')}</td>
+          <th>編號/品號</th><td>${ph(itemNo,'')}</td>
+          <th>數&emsp;量</th><td>${ph(qty,'')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">報廢理由</th>
+          <td colspan="3" class="tall" style="min-height:110px;">${ph(reason,'填寫報廢理由…')}</td>
         </tr>
       </table>
       ${photosHtml(photos)}
       <div class="doc-sig-row">
-        <div class="doc-sig-cell"><div class="doc-sig-label">申請人</div><div class="doc-sig-value">${esc(author)}</div></div>
-        <div class="doc-sig-cell"><div class="doc-sig-label">直屬主管</div><div class="doc-sig-value"></div></div>
-        <div class="doc-sig-cell"><div class="doc-sig-label">廠長核示</div><div class="doc-sig-value"></div></div>
-      </div>
-    </div>`;
-  },
-  pp078(photos) {
-    const date     = val('pp078_date');
-    const proposer = val('pp078_proposer');
-    const problem  = val('pp078_problem');
-    const solution = val('pp078_solution');
-    return `
-    <div class="doc-paper">
-      <div class="doc-letterhead">
-        <div class="doc-co-name">詠基工業股份有限公司</div>
-        <div class="doc-form-title">提案改善單</div>
-        <div class="doc-form-no">PP-M-078</div>
-      </div>
-      <table class="doc-table">
-        <tr>
-          <th>日&emsp;期</th>
-          <td>${ph(date,'填寫日期')}</td>
-          <th>提案人</th>
-          <td>${ph(proposer,'姓名')}</td>
-        </tr>
-        <tr>
-          <th style="vertical-align:top;padding-top:.5rem;">問題描述</th>
-          <td colspan="3" class="tall" style="min-height:90px;">${ph(problem,'描述現況問題…')}</td>
-        </tr>
-        <tr>
-          <th style="vertical-align:top;padding-top:.5rem;">改善方案</th>
-          <td colspan="3" class="tall" style="min-height:90px;">${ph(solution,'說明改善做法…')}</td>
-        </tr>
-      </table>
-      ${photosHtml(photos)}
-      <div class="doc-sig-row">
-        <div class="doc-sig-cell"><div class="doc-sig-label">提案人</div><div class="doc-sig-value">${esc(proposer)}</div></div>
-        <div class="doc-sig-cell"><div class="doc-sig-label">直屬主管</div><div class="doc-sig-value"></div></div>
-        <div class="doc-sig-cell"><div class="doc-sig-label">廠長核示</div><div class="doc-sig-value"></div></div>
-      </div>
-    </div>`;
-  },
-  m1(photos) {
-    const date    = val('m1_date');
-    const subject = val('m1_subject');
-    const amount  = val('m1_amount');
-    const content = val('m1_content');
-    const author  = val('m1_author');
-    return `
-    <div class="doc-paper">
-      <div class="doc-letterhead">
-        <div class="doc-co-name">詠基工業股份有限公司</div>
-        <div class="doc-form-title">預算追加簽呈</div>
-        <div class="doc-form-no">M1</div>
-      </div>
-      <table class="doc-table">
-        <tr>
-          <th>日&emsp;期</th>
-          <td>${ph(date,'填寫日期')}</td>
-          <th>申請人</th>
-          <td>${ph(author,'姓名')}</td>
-        </tr>
-        <tr>
-          <th>主&emsp;旨</th>
-          <td colspan="3">${ph(subject,'填寫主旨')}</td>
-        </tr>
-        <tr>
-          <th>申請金額</th>
-          <td colspan="3">${amount ? '<strong>' + esc(amount) + '</strong>' : '<span class="doc-placeholder">填寫金額</span>'}</td>
-        </tr>
-        <tr>
-          <th style="vertical-align:top;padding-top:.5rem;">說&emsp;明</th>
-          <td colspan="3" class="tall" style="min-height:100px;">${ph(content,'填寫說明…')}</td>
-        </tr>
-      </table>
-      ${photosHtml(photos)}
-      <div class="doc-sig-row">
-        <div class="doc-sig-cell"><div class="doc-sig-label">申請人</div><div class="doc-sig-value">${esc(author)}</div></div>
-        <div class="doc-sig-cell"><div class="doc-sig-label">直屬主管</div><div class="doc-sig-value"></div></div>
-        <div class="doc-sig-cell"><div class="doc-sig-label">廠長核示</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell" style="flex:2;"><div class="doc-sig-label">總經理裁示說明</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">申請人</div><div class="doc-sig-value">${esc(applicant)}</div></div>
       </div>
     </div>`;
   }
 };
+
+// 西元日期 → 民國日期字串（YYYY-MM-DD → 民國XXX年XX月XX日）
+function rocDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return esc(iso);
+  return `民國${parseInt(m[1],10)-1911}年${parseInt(m[2],10)}月${parseInt(m[3],10)}日`;
+}
 
 function photosHtml(urls) {
   if (!urls || !urls.length) return '';
@@ -894,9 +918,8 @@ function photosHtml(urls) {
 
 const FORM_NAMES = {
   pp015: 'PP-M-015 內部業務聯絡單',
+  hr028: 'P-HR-028-01A 人事懲戒核定書',
   pp017: 'PP-M-017 報廢申請單',
-  pp078: 'PP-M-078 提案改善單',
-  m1:    'M1 預算追加簽呈',
 };
 
 function updatePreview() {

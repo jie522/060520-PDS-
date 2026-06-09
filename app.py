@@ -1838,45 +1838,50 @@ _FORM_TYPES = {
         'name': 'PP-M-015 內部業務聯絡單',
         'template': 'pp015.docx',
         'fields': [
-            {'key': 'date',    'label': '日期',   'type': 'date',     'required': True},
-            {'key': 'subject', 'label': '主旨',   'type': 'text',     'required': True},
-            {'key': 'content', 'label': '說明內容', 'type': 'textarea', 'required': True},
-            {'key': 'author',  'label': '申請人', 'type': 'text',     'required': False},
+            {'key': 'date',      'label': '日期',     'type': 'date',     'required': True},
+            {'key': 'priority',  'label': '速別',     'type': 'select',   'required': False, 'options': ['普通件', '速件', '最速件']},
+            {'key': 'recipient', 'label': '受文單位', 'type': 'text',     'required': False},
+            {'key': 'author',    'label': '承辦人',   'type': 'text',     'required': False},
+            {'key': 'subject',   'label': '主旨',     'type': 'text',     'required': True},
+            {'key': 'content',   'label': '說明',     'type': 'textarea', 'required': True},
+        ],
+    },
+    'hr028': {
+        'name': 'P-HR-028-01A 人事懲戒核定書',
+        'template': 'hr028.docx',
+        'fields': [
+            {'key': 'date',     'label': '通知日期',   'type': 'date',     'required': True},
+            {'key': 'emp_no',   'label': '員工編號',   'type': 'text',     'required': False},
+            {'key': 'name',     'label': '姓名',       'type': 'text',     'required': True},
+            {'key': 'title',    'label': '職稱',       'type': 'text',     'required': False},
+            {'key': 'punish',   'label': '懲戒分類',   'type': 'select',   'required': True, 'options': ['警告', '申誡', '小過', '大過', '職位降調', '停職停薪', '不經預告解僱']},
+            {'key': 'reason',   'label': '懲戒事由',   'type': 'textarea', 'required': True},
+            {'key': 'evidence', 'label': '檢附之證據', 'type': 'textarea', 'required': False},
+            {'key': 'method',   'label': '懲戒方式',   'type': 'text',     'required': False},
         ],
     },
     'pp017': {
         'name': 'PP-M-017 報廢申請單',
         'template': 'pp017.docx',
         'fields': [
-            {'key': 'date',    'label': '日期',     'type': 'date',     'required': True},
-            {'key': 'item',    'label': '設備/物品名稱', 'type': 'text',  'required': True},
-            {'key': 'reason',  'label': '報廢原因', 'type': 'textarea', 'required': True},
-            {'key': 'qty',     'label': '數量',     'type': 'text',     'required': False},
-            {'key': 'author',  'label': '申請人',   'type': 'text',     'required': False},
-        ],
-    },
-    'pp078': {
-        'name': 'PP-M-078 提案改善單',
-        'template': 'pp078.docx',
-        'fields': [
-            {'key': 'date',     'label': '日期',     'type': 'date',     'required': True},
-            {'key': 'proposer', 'label': '提案人',   'type': 'text',     'required': True},
-            {'key': 'problem',  'label': '問題描述', 'type': 'textarea', 'required': True},
-            {'key': 'solution', 'label': '改善方案', 'type': 'textarea', 'required': True},
-        ],
-    },
-    'm1': {
-        'name': 'M1 預算追加簽呈',
-        'template': 'm1.docx',
-        'fields': [
-            {'key': 'date',    'label': '日期',   'type': 'date',     'required': True},
-            {'key': 'subject', 'label': '主旨',   'type': 'text',     'required': True},
-            {'key': 'amount',  'label': '金額',   'type': 'text',     'required': True},
-            {'key': 'content', 'label': '說明',   'type': 'textarea', 'required': True},
-            {'key': 'author',  'label': '申請人', 'type': 'text',     'required': False},
+            {'key': 'date',      'label': '申請日期',  'type': 'date',     'required': True},
+            {'key': 'category',  'label': '類別',      'type': 'select',   'required': True, 'options': ['機器', '模治具', '量規儀器', '其他']},
+            {'key': 'applicant', 'label': '申請人',    'type': 'text',     'required': True},
+            {'key': 'item',      'label': '品名/規格', 'type': 'text',     'required': True},
+            {'key': 'item_no',   'label': '編號/品號', 'type': 'text',     'required': False},
+            {'key': 'qty',       'label': '數量',      'type': 'text',     'required': False},
+            {'key': 'reason',    'label': '報廢理由',  'type': 'textarea', 'required': True},
         ],
     },
 }
+
+# 各表單輸出檔名規則（form_type → 產生檔名主體的函式）
+def _application_filename_base(form_type, ctx):
+    if form_type == 'pp017':
+        return f'{ctx.get("item", "")}_報廢單'.strip('_')
+    if form_type == 'hr028':
+        return f'人事懲處({ctx.get("name", "")})'
+    return ctx.get('subject', '') or '內部業務聯絡單'
 
 
 @app.route('/application')
@@ -1953,6 +1958,41 @@ def application_create():
     for f in form_def['fields']:
         context[f['key']] = request.form.get(f['key'], '')
 
+    # 衍生欄位：核取記號（■/□）與民國日期，供範本 placeholder 使用
+    def _mark(selected, target):
+        return '■' if selected == target else '□'
+
+    def _roc(iso):
+        """西元 ISO 日期（YYYY-MM-DD）轉民國 XXX年XX月XX日"""
+        try:
+            y, m, d = iso.split('-')
+            return f'中華民國 {int(y) - 1911} 年 {int(m)} 月 {int(d)} 日'
+        except Exception:
+            return ''
+
+    context['roc_date'] = _roc(context.get('date', ''))
+
+    if form_type == 'pp015':
+        pri = context.get('priority', '')
+        context['pri1'] = _mark(pri, '最速件')
+        context['pri2'] = _mark(pri, '速件')
+        context['pri3'] = _mark(pri, '普通件')
+    elif form_type == 'hr028':
+        pun = context.get('punish', '')
+        context['pun_a'] = _mark(pun, '職位降調')
+        context['pun_b'] = _mark(pun, '停職停薪')
+        context['pun_c'] = _mark(pun, '不經預告解僱')
+        context['pun_d'] = _mark(pun, '大過')
+        context['pun_e'] = _mark(pun, '小過')
+        context['pun_f'] = _mark(pun, '申誡')
+        context['pun_g'] = _mark(pun, '警告')
+    elif form_type == 'pp017':
+        cat = context.get('category', '')
+        context['cat_a'] = _mark(cat, '機器')
+        context['cat_b'] = _mark(cat, '模治具')
+        context['cat_c'] = _mark(cat, '量規儀器')
+        context['cat_d'] = _mark(cat, '其他')
+
     # 處理照片（暫存 → 轉成 InlineImage）
     tmp_dir = tempfile.mkdtemp(prefix='pds_upload_')
     photo_objects = []
@@ -1975,9 +2015,9 @@ def application_create():
 
         tpl.render(context)
 
-        # 決定輸出檔名
+        # 決定輸出檔名（依表單類型套用對應命名規則）
         date_str = context.get('date', '').replace('-', '') or _dt.date.today().strftime('%Y%m%d')
-        subject = context.get('subject') or context.get('item') or context.get('problem', '')
+        subject = _application_filename_base(form_type, context)
         subject = re.sub(r'[\\/:*?"<>|]', '_', subject)[:40]  # 去除非法字元，限長 40
         out_filename = f'{date_str} {subject}.docx'
 
