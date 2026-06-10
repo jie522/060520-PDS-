@@ -180,37 +180,79 @@ def _open_app_window():
     return False
 
 
+def _is_flask_alive():
+    """檢查 Flask 是否已在運行"""
+    import urllib.request
+    try:
+        urllib.request.urlopen(f'http://127.0.0.1:{PORT}/', timeout=2)
+        return True
+    except Exception:
+        return False
+
+
+def _ensure_single_instance():
+    """使用 Windows Mutex 確保只有一個實例。回傳 True = 本次可繼續啟動"""
+    try:
+        import ctypes
+        mutex = ctypes.windll.kernel32.CreateMutexW(None, False, f"PDS_製令查詢_{PORT}")
+        return ctypes.windll.kernel32.GetLastError() != 183  # 183 = ERROR_ALREADY_EXISTS
+    except Exception:
+        return True  # 無法建立 mutex，讓它繼續（不卡死）
+
+
 def main():
     try:
-        # 先殺掉佔用 port 的舊進程
-        _kill_old_process_on_port(PORT)
-
-        print(f"[1] 啟動 Flask (port={PORT})...")
-        flask_thread = threading.Thread(target=_run_flask, daemon=True)
-        flask_thread.start()
-
-        threading.Thread(target=flask_app._preload_cache, daemon=True).start()
-
-        print(f"[2] 等待 Flask 就緒 ({URL})...")
-        if not _wait_for_flask():
-            msg = "Flask 伺服器啟動逾時"
-            print(f"[!] {msg}")
-            _log_error(msg)
+        # ── 單例檢查：防止雙視窗 ──────────────────────────
+        if not _ensure_single_instance():
+            print("[!] 程式已在運行，本次啟動取消")
+            # 若 Flask 還活著，把現有視窗帶到最前（Win32 FindWindow）
             try:
                 import ctypes
-                ctypes.windll.user32.MessageBoxW(0, msg, WIN_TITLE, 0x10)
+                hwnd = ctypes.windll.user32.FindWindowW(None, WIN_TITLE)
+                if hwnd:
+                    ctypes.windll.user32.ShowWindow(hwnd, 9)   # SW_RESTORE
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
             except Exception:
                 pass
-            sys.exit(1)
+            sys.exit(0)
 
-        print("[3] Flask 就緒，開啟視窗...")
-        if _open_app_window():
-            print("[4] 已用 Edge/Chrome --app 模式開啟")
+        # ── 若 Flask 已在運行，直接開新視窗即可 ───────────
+        if _is_flask_alive():
+            print(f"[1] 偵測到 Flask 已在運行（port={PORT}），直接開啟視窗")
+            if _open_app_window():
+                print("[2] 視窗已開啟")
+            else:
+                import webbrowser
+                webbrowser.open(URL)
         else:
-            # 找不到 Edge/Chrome，用預設瀏覽器
-            import webbrowser
-            webbrowser.open(URL)
-            print("[4] 已用預設瀏覽器開啟")
+            # 先殺掉佔用 port 的舊進程
+            _kill_old_process_on_port(PORT)
+
+            print(f"[1] 啟動 Flask (port={PORT})...")
+            flask_thread = threading.Thread(target=_run_flask, daemon=True)
+            flask_thread.start()
+
+            threading.Thread(target=flask_app._preload_cache, daemon=True).start()
+
+            print(f"[2] 等待 Flask 就緒 ({URL})...")
+            if not _wait_for_flask():
+                msg = "Flask 伺服器啟動逾時"
+                print(f"[!] {msg}")
+                _log_error(msg)
+                try:
+                    import ctypes
+                    ctypes.windll.user32.MessageBoxW(0, msg, WIN_TITLE, 0x10)
+                except Exception:
+                    pass
+                sys.exit(1)
+
+            print("[3] Flask 就緒，開啟視窗...")
+            if _open_app_window():
+                print("[4] 已用 Edge/Chrome --app 模式開啟")
+            else:
+                import webbrowser
+                webbrowser.open(URL)
+                print("[4] 已用預設瀏覽器開啟")
 
         # 保持程式運行（Flask 在背景執行緒）
         print(f"[5] 系統運行中... 按 Ctrl+C 結束")
