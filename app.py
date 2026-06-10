@@ -1961,15 +1961,18 @@ def application_create():
     def _mark(selected, target):
         return '■' if selected == target else '□'
 
-    def _roc(iso):
-        """西元 ISO 日期（YYYY-MM-DD）轉民國 XXX年XX月XX日"""
+    def _fmt_date(iso, use_roc=False):
+        """ISO 日期轉中文格式；use_roc=True 時用民國年，否則用西元年"""
         try:
             y, m, d = iso.split('-')
-            return f'中華民國 {int(y) - 1911} 年 {int(m)} 月 {int(d)} 日'
+            if use_roc:
+                return f'中華民國 {int(y) - 1911} 年 {int(m):02d} 月 {int(d):02d} 日'
+            return f'{y} 年 {int(m):02d} 月 {int(d):02d} 日'
         except Exception:
             return ''
 
-    context['roc_date'] = _roc(context.get('date', ''))
+    # hr028（人事懲戒）採民國年；其餘用西元年
+    context['roc_date'] = _fmt_date(context.get('date', ''), use_roc=(form_type == 'hr028'))
 
     if form_type == 'pp015':
         pri = context.get('priority', '')
