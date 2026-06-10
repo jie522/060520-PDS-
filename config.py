@@ -33,8 +33,8 @@ WINDOW_TITLE = '詠基-加工部查詢系統PDIS'
 # ── 申請單功能設定 ────────────────────────────────────────────────
 # 申請單存放路徑（NAS）
 APPLICATION_STORE_PATH = r'\\192.168.1.99\加工部-資料夾\部門別日常管理-製一\@內部業務聯絡單'
-# Word 範本存放資料夾（相對於 app.py 的 static/form_templates/）
-FORM_TEMPLATES_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'static', 'form_templates')
+# Word 範本資料夾（None = 自動使用 app.py 旁邊的 static/form_templates/，無需修改）
+FORM_TEMPLATES_DIR = None
 
 # ── ERP SQL Server 連線設定（BOM查詢用）──────────────────────────
 # 連線至 192.168.1.140 的 Computech ERP YC01 資料庫

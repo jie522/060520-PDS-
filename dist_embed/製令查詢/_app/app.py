@@ -1942,8 +1942,7 @@ def application_create():
 
     form_def = _FORM_TYPES[form_type]
     template_path = os.path.join(
-        getattr(config, 'FORM_TEMPLATES_DIR',
-                os.path.join(_APP_DIR, 'static', 'form_templates')),
+        getattr(config, 'FORM_TEMPLATES_DIR', None) or os.path.join(_APP_DIR, 'static', 'form_templates'),
         form_def['template']
     )
 
