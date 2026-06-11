@@ -16,15 +16,4 @@ If fso.FolderExists(cache) Then fso.DeleteFolder cache, True
 ' 等待 port 釋放
 WScript.Sleep 1200
 
-' 啟動 Flask（背景，不顯示視窗）
 shell.Run Chr(34) & pyexe & Chr(34) & " " & Chr(34) & script & Chr(34), 0, False
-
-' 等待 Flask 就緒（給足夠時間初始化資料庫）
-WScript.Sleep 4000
-
-' 以 Edge App 模式開啟視窗
-Dim edge : edge = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-If Not fso.FileExists(edge) Then
-    edge = "C:\Program Files\Microsoft\Edge\Application\msedge.exe"
-End If
-shell.Run Chr(34) & edge & Chr(34) & " --app=" & url & " --window-size=1400,900", 1, False

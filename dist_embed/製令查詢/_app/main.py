@@ -51,6 +51,167 @@ except Exception:
 
 URL = f"http://127.0.0.1:{PORT}/"
 
+
+# ── 瀏覽器尋找與視窗開啟（搬到最前面，讓單例鎖檢查也能用）──────────
+def _find_edge():
+    """尋找 Microsoft Edge 執行檔路徑"""
+    candidates = [
+        os.path.join(os.environ.get('ProgramFiles(x86)', ''), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        os.path.join(os.environ.get('ProgramFiles', ''), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    return None
+
+
+def _find_chrome():
+    """尋找 Google Chrome 執行檔路徑"""
+    candidates = [
+        os.path.join(os.environ.get('ProgramFiles', ''), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        os.path.join(os.environ.get('ProgramFiles(x86)', ''), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    return None
+
+
+def _is_flask_alive():
+    """檢查 Flask 是否已在運行"""
+    import urllib.request
+    try:
+        urllib.request.urlopen(f'http://127.0.0.1:{PORT}/', timeout=2)
+        return True
+    except Exception:
+        return False
+
+
+def _find_app_hwnd():
+    """用 EnumWindows 找視窗標題「包含」關鍵字的視窗（標題會被 JS 改成「製令查詢 V...」，
+    FindWindowW 只能精確比對會找不到）"""
+    import ctypes as _c
+    _u32 = _c.windll.user32
+    _keywords = ('製令查詢', '加工部查詢系統PDS', WIN_TITLE)
+    _found = []
+
+    @_c.WINFUNCTYPE(_c.c_bool, _c.c_void_p, _c.c_void_p)
+    def _enum_proc(hwnd, lparam):
+        if not _u32.IsWindowVisible(hwnd):
+            return True
+        length = _u32.GetWindowTextLengthW(hwnd)
+        if length == 0:
+            return True
+        buf = _c.create_unicode_buffer(length + 1)
+        _u32.GetWindowTextW(hwnd, buf, length + 1)
+        title = buf.value
+        if any(k in title for k in _keywords):
+            _found.append(hwnd)
+        return True
+
+    try:
+        _u32.EnumWindows(_enum_proc, 0)
+    except Exception:
+        pass
+    return _found[0] if _found else 0
+
+
+def _open_app_window():
+    """用 Edge/Chrome --app 模式開啟（看起來像原生視窗）"""
+    browser = _find_edge() or _find_chrome()
+    if browser:
+        import json
+
+        # ── 使用固定的 profile 目錄（避免每次新目錄觸發 Edge 初始化視窗）──
+        user_data = os.path.abspath(os.path.join(_APP_DIR, '..', '_edge_data'))
+        default_dir = os.path.join(user_data, 'Default')
+        os.makedirs(default_dir, exist_ok=True)
+
+        # ── 刪除 session 還原相關檔案，避免重開時跳出舊分頁/視窗 ──────
+        for _name in ('Sessions', 'Last Session', 'Last Tabs', 'Current Session', 'Current Tabs'):
+            _p = os.path.join(default_dir, _name)
+            try:
+                if os.path.isdir(_p):
+                    import shutil as _shutil
+                    _shutil.rmtree(_p, ignore_errors=True)
+                elif os.path.isfile(_p):
+                    os.remove(_p)
+            except Exception:
+                pass
+
+        # ── 寫入 Preferences：強制禁止 session 還原，防止舊視窗重現 ──────
+        prefs_path = os.path.join(default_dir, 'Preferences')
+        try:
+            prefs = {}
+            if os.path.isfile(prefs_path):
+                with open(prefs_path, 'r', encoding='utf-8') as f:
+                    prefs = json.load(f)
+            prefs.setdefault('session', {})
+            prefs['session']['restore_on_startup'] = 1   # 1=開新分頁，不還原 session
+            prefs['session']['startup_urls'] = []
+            prefs.setdefault('profile', {})
+            prefs['profile']['exited_cleanly'] = True
+            prefs['profile']['exit_type'] = 'Normal'
+            with open(prefs_path, 'w', encoding='utf-8') as f:
+                json.dump(prefs, f)
+        except Exception:
+            pass
+
+        cache_bust = int(time.time())
+        subprocess.Popen([
+            browser,
+            f'--app={URL}?_t={cache_bust}',
+            f'--window-size=1400,900',
+            f'--user-data-dir={user_data}',
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--no-restore-last-session',
+            '--disable-restore-session-state',
+            '--disable-extensions',
+            '--disable-background-networking',
+            '--disable-background-mode',
+            '--aggressive-cache-discard',
+        ])
+        return True
+    return False
+
+
+# ── 最早期單例鎖（在 Flask 匯入前，防止快速雙擊出現兩個實例）──────
+# 把 Mutex 放在這裡：Flask import 需要 2-5 秒，若等到 main() 才建立，
+# 兩次點擊都會通過檢查，造成雙視窗。
+_MUTEX_HANDLE = None
+try:
+    import ctypes as _c
+    _k32 = _c.WinDLL('kernel32', use_last_error=True)
+    _MUTEX_HANDLE = _k32.CreateMutexW(None, False, f"PDS_製令查詢_{PORT}")
+    if _c.get_last_error() == 183:          # ERROR_ALREADY_EXISTS
+        # 另一個實例已在跑 → 找視窗帶前台，然後立刻退出（不繼續匯入 Flask）
+        try:
+            _u32 = _c.windll.user32
+            # 輪詢找視窗：第一個實例可能還在匯入 Flask（2-5秒），
+            # 視窗尚未開出來，先等一下再判斷，避免誤判「視窗已關閉」而多開一個
+            _hwnd = 0
+            for _i in range(8):
+                _hwnd = _find_app_hwnd()
+                if _hwnd:
+                    break
+                time.sleep(0.5)
+            if _hwnd:
+                _u32.ShowWindow(_hwnd, 9)       # SW_RESTORE
+                _u32.SetForegroundWindow(_hwnd)
+            elif _is_flask_alive():
+                # 視窗已被關閉，但 Flask 仍在跑 → 開新視窗
+                _open_app_window()
+        except Exception:
+            pass
+        sys.exit(0)
+except SystemExit:
+    raise
+except Exception:
+    pass
+
 # ── 匯入 Flask app ────────────────────────────────────────
 # 強制確保 _APP_DIR 是 sys.path 的第一個（最高優先）
 if sys.path[0] != _APP_DIR:
@@ -132,89 +293,11 @@ def _wait_for_flask():
     return False
 
 
-def _find_edge():
-    """尋找 Microsoft Edge 執行檔路徑"""
-    candidates = [
-        os.path.join(os.environ.get('ProgramFiles(x86)', ''), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
-        os.path.join(os.environ.get('ProgramFiles', ''), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
-        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
-    ]
-    for path in candidates:
-        if path and os.path.isfile(path):
-            return path
-    return None
-
-
-def _find_chrome():
-    """尋找 Google Chrome 執行檔路徑"""
-    candidates = [
-        os.path.join(os.environ.get('ProgramFiles', ''), 'Google', 'Chrome', 'Application', 'chrome.exe'),
-        os.path.join(os.environ.get('ProgramFiles(x86)', ''), 'Google', 'Chrome', 'Application', 'chrome.exe'),
-        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Google', 'Chrome', 'Application', 'chrome.exe'),
-    ]
-    for path in candidates:
-        if path and os.path.isfile(path):
-            return path
-    return None
-
-
-def _open_app_window():
-    """用 Edge/Chrome --app 模式開啟（看起來像原生視窗）"""
-    browser = _find_edge() or _find_chrome()
-    if browser:
-        # 使用獨立的 user-data-dir 避免快取問題
-        user_data = os.path.join(_APP_DIR, '..', '_edge_data')
-        user_data = os.path.abspath(user_data)
-        cache_bust = int(time.time())
-        subprocess.Popen([
-            browser,
-            f'--app={URL}?_t={cache_bust}',
-            f'--window-size=1400,900',
-            f'--user-data-dir={user_data}',
-            '--no-first-run',
-            '--disable-extensions',
-            '--disable-background-networking',
-            '--aggressive-cache-discard',
-        ])
-        return True
-    return False
-
-
-def _is_flask_alive():
-    """檢查 Flask 是否已在運行"""
-    import urllib.request
-    try:
-        urllib.request.urlopen(f'http://127.0.0.1:{PORT}/', timeout=2)
-        return True
-    except Exception:
-        return False
-
-
-def _ensure_single_instance():
-    """使用 Windows Mutex 確保只有一個實例。回傳 True = 本次可繼續啟動"""
-    try:
-        import ctypes
-        mutex = ctypes.windll.kernel32.CreateMutexW(None, False, f"PDS_製令查詢_{PORT}")
-        return ctypes.windll.kernel32.GetLastError() != 183  # 183 = ERROR_ALREADY_EXISTS
-    except Exception:
-        return True  # 無法建立 mutex，讓它繼續（不卡死）
-
 
 def main():
     try:
-        # ── 單例檢查：防止雙視窗 ──────────────────────────
-        if not _ensure_single_instance():
-            print("[!] 程式已在運行，本次啟動取消")
-            # 若 Flask 還活著，把現有視窗帶到最前（Win32 FindWindow）
-            try:
-                import ctypes
-                hwnd = ctypes.windll.user32.FindWindowW(None, WIN_TITLE)
-                if hwnd:
-                    ctypes.windll.user32.ShowWindow(hwnd, 9)   # SW_RESTORE
-                    ctypes.windll.user32.SetForegroundWindow(hwnd)
-            except Exception:
-                pass
-            sys.exit(0)
+        # ── 注意：單例 Mutex 已在 module level 建立（Flask import 之前），
+        # 若本次到達這裡，代表本進程是第一個實例，直接往下執行。
 
         # ── 若 Flask 已在運行，直接開新視窗即可 ───────────
         if _is_flask_alive():

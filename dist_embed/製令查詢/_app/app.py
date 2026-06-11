@@ -1838,12 +1838,30 @@ _FORM_TYPES = {
         'name': 'PP-M-015 內部業務聯絡單',
         'template': 'pp015.docx',
         'fields': [
-            {'key': 'date',      'label': '日期',     'type': 'date',     'required': True},
-            {'key': 'priority',  'label': '速別',     'type': 'select',   'required': False, 'options': ['普通件', '速件', '最速件']},
-            {'key': 'recipient', 'label': '受文單位', 'type': 'text',     'required': False},
-            {'key': 'author',    'label': '承辦人',   'type': 'text',     'required': False},
-            {'key': 'subject',   'label': '主旨',     'type': 'text',     'required': True},
-            {'key': 'content',   'label': '說明',     'type': 'textarea', 'required': True},
+            {'key': 'date',     'label': '日期',   'type': 'date',           'required': True},
+            {'key': 'priority', 'label': '速別',   'type': 'select',         'required': False, 'options': ['普通件', '速件', '最速件']},
+            {'key': 'depts', 'label': '受文單位', 'type': 'checkbox_group', 'required': False,
+             'options': [
+                 '總經理', '副總',
+                 '總經理室', '生技', '資管', '美工設計',
+                 '資材部',  '採購', '生管', '倉管',
+                 '管理部',  '財會', '總務人資',
+                 '加工部',  '成品部',
+                 '業務部',  '研發部', '品保部',
+             ],
+             'groups': [                                  # 每個子列表 = 一排
+                 ['總經理', '副總'],
+                 ['總經理室', '生技', '資管', '美工設計'],
+                 ['資材部',  '採購', '生管', '倉管'],
+                 ['管理部',  '財會', '總務人資'],
+                 ['加工部',  '成品部'],
+                 ['業務部',  '研發部', '品保部'],
+             ],
+             'sub_opts': ['生技', '資管', '美工設計', '採購', '生管', '倉管', '財會', '總務人資', '成品部'],
+             'defaults': ['總經理', '加工部']},
+            {'key': 'author',   'label': '承辦人', 'type': 'text',           'required': False},
+            {'key': 'subject',  'label': '主旨',   'type': 'text',           'required': True},
+            {'key': 'content',  'label': '說明',   'type': 'textarea',       'required': True},
         ],
     },
     'hr028': {
@@ -1854,7 +1872,8 @@ _FORM_TYPES = {
             {'key': 'emp_no',   'label': '員工編號',   'type': 'text',     'required': False},
             {'key': 'name',     'label': '姓名',       'type': 'text',     'required': True},
             {'key': 'title',    'label': '職稱',       'type': 'text',     'required': False},
-            {'key': 'punish',   'label': '懲戒分類',   'type': 'select',   'required': True, 'options': ['警告', '申誡', '小過', '大過', '職位降調', '停職停薪', '不經預告解僱']},
+            {'key': 'punish',     'label': '懲戒分類',   'type': 'select',   'required': True, 'options': ['大過', '小過', '申誡', '警告']},
+            {'key': 'pun_count', 'label': '懲戒次數',   'type': 'select',   'required': False, 'options': ['1', '2', '3']},
             {'key': 'reason',   'label': '懲戒事由',   'type': 'textarea', 'required': True},
             {'key': 'evidence', 'label': '檢附之證據', 'type': 'textarea', 'required': False},
             {'key': 'method',   'label': '懲戒方式',   'type': 'text',     'required': False},
@@ -1873,6 +1892,17 @@ _FORM_TYPES = {
             {'key': 'reason',    'label': '報廢理由',  'type': 'textarea', 'required': True},
         ],
     },
+    'gcd': {
+        'name': '公出單',
+        'template': 'gcd.docx',
+        'store_path': r'\\192.168.1.99\加工部-資料夾\【技術資料】\W.表單.活動\工出單',
+        'fields': [
+            {'key': 'date',     'label': '日期',     'type': 'date',     'required': True},
+            {'key': 'name',     'label': '姓名',     'type': 'text',     'required': True},
+            {'key': 'location', 'label': '地點',     'type': 'text',     'required': True},
+            {'key': 'reason',   'label': '外出原因', 'type': 'textarea', 'required': True},
+        ],
+    },
 }
 
 # 各表單輸出檔名規則（form_type → 產生檔名主體的函式）
@@ -1881,6 +1911,8 @@ def _application_filename_base(form_type, ctx):
         return f'{ctx.get("item", "")}_報廢單'.strip('_')
     if form_type == 'hr028':
         return f'人事懲處({ctx.get("name", "")})'
+    if form_type == 'gcd':
+        return f'{ctx.get("name", "")}_公出單'.strip('_')
     return ctx.get('subject', '') or '內部業務聯絡單'
 
 
@@ -1952,10 +1984,14 @@ def application_create():
             'error': f'找不到 Word 範本：{template_path}，請先將 .docx 範本放入 static/form_templates/'
         }), 500
 
-    # 收集欄位值
+    # 收集欄位值（checkbox_group 用 getlist；其餘用 get）
     context = {}
     for f in form_def['fields']:
-        context[f['key']] = request.form.get(f['key'], '')
+        if f['type'] == 'checkbox_group':
+            # checkbox 值以陣列送入（name="depts[]"），不放入 context（由下方衍生欄位處理）
+            pass
+        else:
+            context[f['key']] = request.form.get(f['key'], '')
 
     # 衍生欄位：核取記號（■/□）與民國日期，供範本 placeholder 使用
     def _mark(selected, target):
@@ -1971,29 +2007,83 @@ def application_create():
         except Exception:
             return ''
 
-    # hr028（人事懲戒）採民國年；其餘用西元年
-    context['roc_date'] = _fmt_date(context.get('date', ''), use_roc=(form_type == 'hr028'))
+    # 所有表單統一用西元年
+    context['roc_date'] = _fmt_date(context.get('date', ''))
+
+    def _fmt_date_slash(iso):
+        """ISO 日期轉 YYYY/M/D 格式"""
+        try:
+            y, m, d = iso.split('-')
+            return f'{int(y)}/{int(m)}/{int(d)}'
+        except Exception:
+            return ''
+
+    context['gcd_date'] = _fmt_date_slash(context.get('date', ''))
 
     if form_type == 'pp015':
         pri = context.get('priority', '')
         context['pri1'] = _mark(pri, '最速件')
         context['pri2'] = _mark(pri, '速件')
         context['pri3'] = _mark(pri, '普通件')
+        # 受文單位（可複選）→ ■/□ 記號
+        depts_sel = request.form.getlist('depts[]')
+        # 主部門 → ■/□
+        main_dept_map = [
+            ('chk_gm',    '總經理'),
+            ('chk_vp',    '副總'),
+            ('chk_gmo',   '總經理室'),
+            ('chk_mat',   '資材部'),
+            ('chk_adm',   '管理部'),
+            ('chk_proc',  '加工部'),
+            ('chk_sales', '業務部'),
+            ('chk_rd',    '研發部'),
+            ('chk_qa',    '品保部'),
+        ]
+        for key, dept in main_dept_map:
+            context[key] = '■' if dept in depts_sel else '□'
+        # 子部門 → ●/○
+        sub_dept_map = [
+            ('chk_jt',     '生技'),
+            ('chk_it',     '資管'),
+            ('chk_design', '美工設計'),
+            ('chk_pur',    '採購'),
+            ('chk_pm',     '生管'),
+            ('chk_wh',     '倉管'),
+            ('chk_fin',    '財會'),
+            ('chk_hr',     '總務人資'),
+            ('chk_fp',     '成品部'),
+        ]
+        for key, dept in sub_dept_map:
+            context[key] = '●' if dept in depts_sel else '○'
     elif form_type == 'hr028':
         pun = context.get('punish', '')
-        context['pun_a'] = _mark(pun, '職位降調')
-        context['pun_b'] = _mark(pun, '停職停薪')
-        context['pun_c'] = _mark(pun, '不經預告解僱')
+        cnt = context.get('pun_count', '')
+        # 只保留 4 種懲戒
         context['pun_d'] = _mark(pun, '大過')
         context['pun_e'] = _mark(pun, '小過')
         context['pun_f'] = _mark(pun, '申誡')
         context['pun_g'] = _mark(pun, '警告')
+        # 次數欄位（只填入對應懲戒分類的次數）
+        context['cnt_d'] = cnt if pun == '大過' else ''
+        context['cnt_e'] = cnt if pun == '小過' else ''
+        context['cnt_f'] = cnt if pun == '申誡' else ''
+        context['cnt_g'] = cnt if pun == '警告' else ''
     elif form_type == 'pp017':
         cat = context.get('category', '')
         context['cat_a'] = _mark(cat, '機器')
         context['cat_b'] = _mark(cat, '模治具')
         context['cat_c'] = _mark(cat, '量規儀器')
         context['cat_d'] = _mark(cat, '其他')
+    elif form_type == 'gcd':
+        veh = context.get('vehicle', '')
+        context['veh_car']     = _mark(veh, '汽車')
+        context['veh_moto']    = _mark(veh, '機車')
+        context['veh_priv']    = _mark(veh, '私車公用')
+        context['veh_company'] = _mark(veh, '公司車')
+        context['veh_other']   = _mark(veh, '其它')
+        context.setdefault('emp_no', '')
+        context.setdefault('km', '')
+        context.setdefault('plate', '')
 
     # 處理照片（暫存 → 轉成 InlineImage）
     tmp_dir = tempfile.mkdtemp(prefix='pds_upload_')
@@ -2017,24 +2107,142 @@ def application_create():
 
         tpl.render(context)
 
+        # 處理附件檔案（呈現於文件第2頁）
+        attachments = request.files.getlist('attachments[]')
+        attach_paths = []
+        for idx, att in enumerate(attachments):
+            if att and att.filename:
+                ext = os.path.splitext(att.filename)[1].lower() or '.bin'
+                tmp_path = os.path.join(tmp_dir, f'attach_{idx}{ext}')
+                att.save(tmp_path)
+                attach_paths.append((tmp_path, att.filename))
+
+        if attach_paths:
+            doc = tpl.get_docx()
+            doc.add_page_break()
+            doc.add_heading('附件', level=1)
+            for p, orig_name in attach_paths:
+                ext = os.path.splitext(orig_name)[1].lower()
+                if ext in ('.jpg', '.jpeg', '.png', '.gif', '.bmp'):
+                    try:
+                        doc.add_picture(p, width=Mm(160))
+                    except Exception:
+                        doc.add_paragraph(orig_name)
+                else:
+                    doc.add_paragraph(orig_name)
+
         # 決定輸出檔名（依表單類型套用對應命名規則）
         date_str = context.get('date', '').replace('-', '') or _dt.date.today().strftime('%Y%m%d')
         subject = _application_filename_base(form_type, context)
         subject = re.sub(r'[\\/:*?"<>|]', '_', subject)[:40]  # 去除非法字元，限長 40
         out_filename = f'{date_str} {subject}.docx'
 
-        # 存到 NAS
+        # 存到 NAS（若失敗則 fallback 存桌面）
         year = date_str[:4]
-        store_base = getattr(config, 'APPLICATION_STORE_PATH', '')
+        store_base = form_def.get('store_path') or getattr(config, 'APPLICATION_STORE_PATH', '')
         out_dir = os.path.join(store_base, year)
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, out_filename)
-        tpl.save(out_path)
+        _nas_warning = None
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+            out_path = os.path.join(out_dir, out_filename)
+            tpl.save(out_path)
+        except (PermissionError, OSError) as _e:
+            # NAS 無法存取（權限、網路、檔案被鎖定等）→ 改存桌面
+            _desktop = os.path.join(os.environ.get('USERPROFILE', os.path.expanduser('~')), 'Desktop')
+            os.makedirs(_desktop, exist_ok=True)
+            # 若桌面同名檔案已存在，加時間戳避免衝突
+            _base, _ext = os.path.splitext(out_filename)
+            _desk_name = out_filename
+            if os.path.exists(os.path.join(_desktop, _desk_name)):
+                _desk_name = f"{_base}_{int(time.time())}{_ext}"
+            out_path = os.path.join(_desktop, _desk_name)
+            tpl.save(out_path)
+            _nas_warning = f'NAS 無法存取（{type(_e).__name__}），檔案已改存至桌面：{out_path}'
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    return jsonify({'ok': True, 'filename': out_filename, 'path': out_path})
+    resp = {'ok': True, 'filename': out_filename, 'path': out_path}
+    if _nas_warning:
+        resp['warning'] = _nas_warning
+    return jsonify(resp)
+
+
+def _docx_to_html(path):
+    """將 .docx 轉成可預覽的 HTML（保留段落、表格、內嵌圖片）"""
+    import base64
+    from markupsafe import escape
+    from docx import Document as _Document
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+    from docx.oxml.ns import qn
+
+    doc = _Document(path)
+
+    def _img_tags(elm):
+        tags = ''
+        for blip in elm.iter(qn('a:blip')):
+            rId = blip.get(qn('r:embed'))
+            if not rId:
+                continue
+            try:
+                image_part = doc.part.related_parts[rId]
+                b64 = base64.b64encode(image_part.blob).decode('ascii')
+                tags += (f'<img src="data:{image_part.content_type};base64,{b64}" '
+                         f'style="max-width:100%;display:block;margin:.3rem 0;">')
+            except Exception:
+                pass
+        return tags
+
+    def _para_html(p):
+        text = p.text.strip()
+        imgs = _img_tags(p._p)
+        if not text and not imgs:
+            return ''
+        align = ''
+        try:
+            if int(p.alignment) == 1:  # WD_ALIGN_PARAGRAPH.CENTER
+                align = 'text-align:center;'
+        except Exception:
+            pass
+        body = str(escape(text)).replace('\n', '<br>') if text else ''
+        return f'<p style="margin:.25rem 0;{align}">{body}{imgs}</p>'
+
+    def _table_html(tbl):
+        rows_html = ''
+        for row in tbl.rows:
+            cells_html = ''
+            for cell in row.cells:
+                cell_text = str(escape(cell.text)).replace('\n', '<br>')
+                cell_imgs = _img_tags(cell._tc)
+                cells_html += (f'<td style="border:1px solid #E0DACC;padding:.3rem .5rem;'
+                                f'vertical-align:top;">{cell_text}{cell_imgs}</td>')
+            rows_html += f'<tr>{cells_html}</tr>'
+        return f'<table style="width:100%;border-collapse:collapse;margin:.4rem 0;font-size:0.92rem;">{rows_html}</table>'
+
+    parts = []
+    for child in doc.element.body.iterchildren():
+        if child.tag == qn('w:p'):
+            html = _para_html(Paragraph(child, doc))
+            if html:
+                parts.append(html)
+        elif child.tag == qn('w:tbl'):
+            parts.append(_table_html(Table(child, doc)))
+    return ''.join(parts)
+
+
+@app.route('/api/application/view')
+def application_view():
+    """預覽既有申請單檔案內容（轉成 HTML）"""
+    path = request.args.get('path', '')
+    if not path or not os.path.isfile(path):
+        return jsonify({'ok': False, 'error': '檔案不存在'}), 404
+    if not path.lower().endswith('.docx'):
+        return jsonify({'ok': False, 'error': '僅支援預覽 .docx 格式，請點擊開啟檔案查看'}), 400
+    try:
+        return jsonify({'ok': True, 'html': _docx_to_html(path)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/application/open', methods=['POST'])
