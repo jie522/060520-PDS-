@@ -124,6 +124,29 @@ SSRS 查詢有 120 秒 TTL 快取（`cache_get/cache_set`），避免頻繁呼�
 - **陰影**：`box-shadow: 0 2px 6px rgba(0,0,0,.3)`
 - **位置**：`position: sticky; top: 0; z-index: 200`（黏性定位，頁面置頂）
 
+## 字體規範
+
+全站統一採用 **Noto Sans TC**（Google Fonts 開源字體），確保中英文顯示清晰一致。
+
+### 引入方式
+在 HTML `<head>` 中新增：
+```html
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+```
+
+### CSS 設定
+```css
+body, * {
+  font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+}
+```
+
+### 字重對應
+- `400`：正常（Regular）
+- `500`：中等（Medium）
+- `600`：加粗（SemiBold）
+- `700`：粗體（Bold）
+
 ## 語言規則
 
 與使用者溝通（說明、進度、總結、錯誤訊息）一律使用繁體中文，不可使用英文或簡體中文。程式碼中的變數/函式/檔名等技術識別字維持英文，但註解一律繁體中文。
