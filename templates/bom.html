@@ -30,13 +30,13 @@
     }
 
     /* ── Header ── */
-    .header{background:linear-gradient(180deg,#1976D2,#0D47A1);color:#fff;
+    .header{background:#1565C0;color:#fff;
       position:sticky;top:0;z-index:200;box-shadow:0 2px 6px rgba(0,0,0,.3)}
     .header-inner{display:flex;align-items:flex-end;padding:.4rem 1rem 0}
     .header-title{font-size:1.1rem;font-weight:700;padding-bottom:.45rem;white-space:nowrap;margin-right:.5rem}
     .header-tabs{display:flex;align-items:flex-end;gap:2px}
-    .header-tab{display:inline-block;padding:.3rem 1rem;font-size:.82rem;font-weight:600;
-      color:rgba(255,255,255,.85);text-decoration:none;border-radius:6px 6px 0 0;
+    .header-tab{display:inline-block;padding:.3rem 1rem;font-size:1rem;font-weight:600;
+      color:rgba(255,255,255,.85);text-decoration:none;border-radius:0;
       background:rgba(255,255,255,.15);cursor:pointer;transition:background .15s}
     .header-tab.active,.header-tab:hover{background:#fff;color:var(--blue-d)}
 
@@ -359,7 +359,7 @@
       <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
       <a href="/routing"     class="header-tab">產品途程查詢</a>
       <span                 class="header-tab active">BOM查詢</span>
-      <a href="/application" class="header-tab">申請單</a>
+      <a href="/management" class="header-tab">管理</a>
     </div>
   </div>
 </div>

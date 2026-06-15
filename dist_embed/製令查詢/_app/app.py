@@ -260,6 +260,43 @@ def fetch_report_csv(report_path, params=None):
     return resp.content.decode('utf-8-sig')
 
 
+def fetch_google_sheet_csv(sheet_id, sheet_name=None, gid=None):
+    """從 Google 試算表（共用設定：知道連結的人均可檢視）取得指定分頁的 CSV 資料
+    可用分頁名稱（sheet_name）或分頁 gid 指定要讀取的分頁"""
+    if gid is not None:
+        url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&gid={gid}'
+    else:
+        url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={quote(sheet_name)}'
+    resp = requests.get(url, timeout=10)
+    resp.raise_for_status()
+    text = resp.content.decode('utf-8-sig')
+    reader = csv.reader(io.StringIO(text))
+    rows = list(reader)
+    if not rows:
+        return []
+    header = rows[0]
+    return [dict(zip(header, row)) for row in rows[1:] if any(cell.strip() for cell in row)]
+
+
+def fetch_employee_name_map():
+    """讀取 Google 試算表『員工登錄系統』，回傳 {工號ID: 姓名} 對照表（含快取）"""
+    cache_key = 'employee_name_map'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    rows = fetch_google_sheet_csv(config.EMPLOYEE_SHEET_ID, gid=config.EMPLOYEE_SHEET_GID)
+    name_map = {}
+    for r in rows:
+        emp_id = (r.get('工號ID') or '').strip()
+        emp_name = (r.get('姓名') or '').strip()
+        if emp_id and emp_name:
+            name_map[emp_id] = emp_name
+
+    cache_set(cache_key, name_map)
+    return name_map
+
+
 def fetch_efficiency_all_groups():
     """透過 SSRS SOAP Execution Service 取得加工部總效率(全部)報表 CSV"""
     import base64 as _b64
@@ -480,7 +517,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260520001'
+APP_VERSION = 'V20260615'
 
 @app.route('/ver')
 def ver_check():
@@ -1686,7 +1723,7 @@ def bom_detail():
                 'attr':      _ATTR_MAP.get(str(hrow[5]).strip(), str(hrow[5]).strip()),
             }
 
-        # 取材料BOM明細（BOMMD JOIN INVMB 取子件品名/規格/屬性）
+        # 取材料BOM明細（BOMMD JOIN INVMB 取子件品名/規格/屬性，並加總 INVMC 現有量為庫存數量）
         cur.execute("""
             SELECT
                 d.MD002                           AS seq,
@@ -1696,7 +1733,8 @@ def bom_detail():
                 ISNULL(d.MD004,'')                AS unit,
                 ISNULL(d.MD005,'')                AS sub_unit,
                 ISNULL(b.MB025,'')                AS attr_code,
-                CAST(ISNULL(d.MD006,0) AS VARCHAR(20)) AS qty
+                CAST(ISNULL(d.MD006,0) AS VARCHAR(20)) AS qty,
+                CAST(ISNULL((SELECT SUM(c.MC007) FROM INVMC c WHERE RTRIM(c.MC001) = RTRIM(d.MD003)),0) AS VARCHAR(20)) AS stock_qty
             FROM BOMMD d
             LEFT JOIN INVMB b ON RTRIM(b.MB001) = RTRIM(d.MD003)
             WHERE RTRIM(d.MD001) = ?
@@ -1717,6 +1755,7 @@ def bom_detail():
                 'sub_unit':   str(r[5] or '').strip(),
                 'attr':       _ATTR_MAP.get(attr_code, attr_code),
                 'qty':        str(r[7] or '').strip(),
+                'stock_qty':  str(r[8] or '').strip(),
             })
 
         return jsonify({'success': True, 'header': header, 'detail': detail})
@@ -1751,6 +1790,15 @@ def bom_routing():
                 'unit':      hrow[3],
                 'attr':      _ATTR_MAP.get(str(hrow[4]).strip(), str(hrow[4]).strip()),
             }
+
+        # 庫存數量（加總 INVMC.MC007 現有量）
+        cur.execute("""
+            SELECT CAST(ISNULL(SUM(MC007),0) AS VARCHAR(20))
+            FROM INVMC WHERE RTRIM(MC001) = ?
+        """, (item_no,))
+        srow = cur.fetchone()
+        if header:
+            header['stock_qty'] = str(srow[0] or '0').strip() if srow else '0'
 
         # 最新途程版次
         cur.execute("""
@@ -1819,6 +1867,246 @@ def bom_routing():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/inventory/history')
+def inventory_history():
+    """取得指定品號的庫存異動歷史（INVTB + INVTK + MOCTE + MOCTG UNION）。
+    回傳：日期、單別/單號/序號、單據名稱、庫別、庫別名稱、入出庫、異動數量、製令參考。
+    """
+    item_no = request.args.get('item_no', '').strip()
+    if not item_no:
+        return jsonify({'success': False, 'error': '請提供品號'}), 400
+    months = request.args.get('months', '12').strip()
+    try:
+        months_int = max(1, min(60, int(months)))
+    except ValueError:
+        months_int = 12
+    # 日期下限（CREATE_DATE 為 YYYYMMDD 字串）
+    from datetime import datetime, timedelta
+    start_date = (datetime.now() - timedelta(days=months_int * 31)).strftime('%Y%m%d')
+
+    try:
+        conn = get_erp_conn()
+        cur  = conn.cursor()
+
+        sql = """
+            SELECT date_, doc_type, doc_no, doc_seq, warehouse, qty, src_table
+            FROM (
+                SELECT
+                    CREATE_DATE                       AS date_,
+                    RTRIM(TB001)                      AS doc_type,
+                    RTRIM(TB002)                      AS doc_no,
+                    RTRIM(TB003)                      AS doc_seq,
+                    RTRIM(ISNULL(TB016,''))           AS warehouse,
+                    CAST(ISNULL(TB007,0) AS DECIMAL(18,3)) AS qty,
+                    'INVTB'                           AS src_table
+                FROM INVTB
+                WHERE RTRIM(TB004) = ? AND CREATE_DATE >= ?
+                UNION ALL
+                SELECT
+                    CREATE_DATE,
+                    RTRIM(TK001), RTRIM(TK002), RTRIM(TK003),
+                    RTRIM(ISNULL(TK017,'')),
+                    CAST(ISNULL(TK007,0) AS DECIMAL(18,3)),
+                    'INVTK'
+                FROM INVTK
+                WHERE RTRIM(TK004) = ? AND CREATE_DATE >= ?
+                UNION ALL
+                SELECT
+                    CREATE_DATE,
+                    RTRIM(TE001), RTRIM(TE002), RTRIM(TE003),
+                    RTRIM(ISNULL(TE008,'')),
+                    CAST(ISNULL(TE005,0) AS DECIMAL(18,3)),
+                    'MOCTE'
+                FROM MOCTE
+                WHERE RTRIM(TE004) = ? AND CREATE_DATE >= ?
+                UNION ALL
+                SELECT
+                    CREATE_DATE,
+                    RTRIM(TG001), RTRIM(TG002), RTRIM(TG003),
+                    RTRIM(ISNULL(TG010,'')),
+                    CAST(ISNULL(TG011,0) AS DECIMAL(18,3)),
+                    'MOCTG'
+                FROM MOCTG
+                WHERE RTRIM(TG004) = ? AND CREATE_DATE >= ?
+            ) u
+            ORDER BY date_ DESC, doc_no DESC, doc_seq DESC
+        """
+        cur.execute(sql, (item_no, start_date, item_no, start_date, item_no, start_date, item_no, start_date))
+        rows = cur.fetchall()
+
+        # 一次撈出單別/庫別對照
+        cur.execute("SELECT RTRIM(MQ001), RTRIM(ISNULL(MQ002,'')) FROM CMSMQ")
+        doc_map = {r[0]: r[1] for r in cur.fetchall()}
+        cur.execute("SELECT RTRIM(MC001), RTRIM(ISNULL(MC002,'')) FROM CMSMC")
+        wh_map  = {r[0]: r[1] for r in cur.fetchall()}
+        conn.close()
+
+        # 入出庫判斷：依來源表 + 單別名稱
+        # MOCTE=出庫(領料); MOCTG=入庫(移轉入庫); INVTK=調整(數量通常為0)
+        # INVTB 依名稱關鍵字判斷
+        def in_out(src, doc_type, doc_name, qty):
+            if src == 'MOCTE':
+                return '出庫'
+            if src == 'MOCTG':
+                return '入庫'
+            if src == 'INVTK':
+                return '調整'
+            n = doc_name or ''
+            if '入庫' in n:
+                return '入庫'
+            if '出庫' in n or '領料' in n or '報廢' in n:
+                return '出庫'
+            return '調整'
+
+        history = []
+        for r in rows:
+            date_str = (r[0] or '').strip()
+            if date_str and len(date_str) == 8:
+                date_str = f'{date_str[:4]}/{date_str[4:6]}/{date_str[6:8]}'
+            doc_type = (r[1] or '').strip()
+            doc_no   = (r[2] or '').strip()
+            doc_seq  = (r[3] or '').strip()
+            wh       = (r[4] or '').strip()
+            qty      = float(r[5] or 0)
+            src      = r[6]
+            doc_name = doc_map.get(doc_type, '')
+            history.append({
+                'date':       date_str,
+                'doc_type':   doc_type,
+                'doc_no':     doc_no,
+                'doc_seq':    doc_seq,
+                'doc_name':   doc_name,
+                'warehouse':  wh,
+                'wh_name':    wh_map.get(wh, ''),
+                'in_out':     in_out(src, doc_type, doc_name, qty),
+                'qty':        '{:,.3f}'.format(qty) if qty else '0',
+                'src':        src,
+            })
+
+        return jsonify({'success': True, 'item_no': item_no, 'count': len(history), 'history': history})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/inventory/future')
+def inventory_future():
+    """取得指定品號的未來異動量（未完成製令）。
+    - 預計生產（入庫）：MOCTA WHERE TA006=品號 AND 狀態未完且尚有未完工量
+    - 預計領料（出庫）：MOCTB WHERE TB003=品號（子件）AND 狀態未完且尚有未領量
+    """
+    item_no = request.args.get('item_no', '').strip()
+    if not item_no:
+        return jsonify({'success': False, 'error': '請提供品號'}), 400
+
+    try:
+        from datetime import datetime, timedelta
+        # 過濾掉太舊（>30 天前）的孤兒未結紀錄；保留近期含已逾期但未完成的製令
+        cutoff = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
+
+        conn = get_erp_conn()
+        cur  = conn.cursor()
+
+        # 預計生產 (MOCTA) - 入庫；只顯示預計入庫日 >= 今天的紀錄
+        cur.execute("""
+            SELECT
+                TA010                                       AS date_,
+                RTRIM(TA001)                                AS doc_type,
+                RTRIM(TA002)                                AS doc_no,
+                CAST((TA015 - ISNULL(TA017,0)) AS DECIMAL(18,3)) AS qty,
+                RTRIM(ISNULL(TA020,''))                     AS warehouse,
+                RTRIM(ISNULL(TA019,''))                     AS plant,
+                RTRIM(ISNULL(TA011,''))                     AS status,
+                RTRIM(ISNULL(TA026,''))                     AS so_no,
+                RTRIM(ISNULL(TA027,''))                     AS so_seq,
+                RTRIM(ISNULL(TA028,''))                     AS so_line,
+                RTRIM(ISNULL(TA029,''))                     AS remark
+            FROM MOCTA
+            WHERE RTRIM(TA006) = ?
+              AND ISNULL(TA011,'') NOT IN ('Y','y')
+              AND (TA015 - ISNULL(TA017,0)) > 0
+              AND ISNULL(TA010,'') >= ?
+        """, (item_no, cutoff))
+        produce_rows = cur.fetchall()
+
+        # 預計領料 (MOCTB) - 出庫；只顯示預計領料日 >= 今天的紀錄
+        cur.execute("""
+            SELECT
+                TB015                                       AS date_,
+                RTRIM(TB001)                                AS doc_type,
+                RTRIM(TB002)                                AS doc_no,
+                CAST((TB004 - ISNULL(TB005,0)) AS DECIMAL(18,3)) AS qty,
+                RTRIM(ISNULL(TB009,''))                     AS warehouse,
+                RTRIM(ISNULL(TB011,''))                     AS status,
+                RTRIM(ISNULL(TB014,''))                     AS parent_item,
+                RTRIM(ISNULL(TB006,''))                     AS proc_code
+            FROM MOCTB
+            WHERE RTRIM(TB003) = ?
+              AND ISNULL(TB011,'') NOT IN ('Y','y')
+              AND (TB004 - ISNULL(TB005,0)) > 0
+              AND ISNULL(TB015,'') >= ?
+        """, (item_no, cutoff))
+        require_rows = cur.fetchall()
+
+        # 廠別/庫別名稱對照
+        cur.execute("SELECT RTRIM(MB001), RTRIM(ISNULL(MB002,'')) FROM CMSMB")
+        plant_map = {r[0]: r[1] for r in cur.fetchall()}
+        cur.execute("SELECT RTRIM(MC001), RTRIM(ISNULL(MC002,'')) FROM CMSMC")
+        wh_map = {r[0]: r[1] for r in cur.fetchall()}
+        conn.close()
+
+        def fmt_date(d):
+            s = (d or '').strip() if isinstance(d, str) else str(d or '').strip()
+            return f'{s[:4]}/{s[4:6]}/{s[6:8]}' if len(s) == 8 else s
+
+        future = []
+        for r in produce_rows:
+            qty = float(r[3] or 0)
+            so_no, so_seq, so_line = r[7], r[8], r[9]
+            ref_parts = []
+            if so_no: ref_parts.append(f'{so_no}-{so_seq}' if so_seq else so_no)
+            if so_line: ref_parts.append(so_line)
+            ref = ' '.join(ref_parts).strip()
+            remark = (r[10] or '').strip()
+            future.append({
+                'date':       fmt_date(r[0]),
+                'date_raw':   (r[0] or '').strip(),
+                'type':       '預計生',
+                'doc_type':   r[1],
+                'doc_no':     r[2],
+                'in_qty':     '{:,.3f}'.format(qty).rstrip('0').rstrip('.') if qty else '',
+                'out_qty':    '',
+                'warehouse':  r[4],
+                'wh_name':    wh_map.get(r[4], ''),
+                'plant':      r[5],
+                'plant_name': plant_map.get(r[5], ''),
+                'status':     r[6],
+                'remark':     f'{r[1]}-{r[2]}' + (f' {ref}' if ref else '') + (f' {remark}' if remark else ''),
+            })
+        for r in require_rows:
+            qty = float(r[3] or 0)
+            future.append({
+                'date':       fmt_date(r[0]),
+                'date_raw':   (r[0] or '').strip(),
+                'type':       '預計領',
+                'doc_type':   r[1],
+                'doc_no':     r[2],
+                'in_qty':     '',
+                'out_qty':    '{:,.3f}'.format(qty).rstrip('0').rstrip('.') if qty else '',
+                'warehouse':  r[4],
+                'wh_name':    wh_map.get(r[4], ''),
+                'plant':      '',
+                'plant_name': '',
+                'status':     r[5],
+                'remark':     f'{r[1]}-{r[2]} {r[6]}-{item_no}-{r[7]}'.strip(),
+            })
+
+        future.sort(key=lambda x: (x['date_raw'] or '99999999', x['doc_no']))
+        return jsonify({'success': True, 'item_no': item_no, 'count': len(future), 'future': future})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/cache/refresh', methods=['POST'])
 def refresh_cache():
@@ -1879,6 +2167,21 @@ _FORM_TYPES = {
             {'key': 'method',   'label': '懲戒方式',   'type': 'text',     'required': False},
         ],
     },
+    'hr029': {
+        'name': '人事獎勵核定書',
+        'template': 'hr029.docx',
+        'fields': [
+            {'key': 'date',     'label': '通知日期',   'type': 'date',     'required': True},
+            {'key': 'emp_no',   'label': '員工編號',   'type': 'text',     'required': False},
+            {'key': 'name',     'label': '姓名',       'type': 'text',     'required': True},
+            {'key': 'title',    'label': '職稱',       'type': 'text',     'required': False},
+            {'key': 'award',     'label': '獎勵分類',   'type': 'select',   'required': True, 'options': ['職位晉昇', '大功', '小功', '嘉獎', '優點']},
+            {'key': 'award_count', 'label': '獎勵次數', 'type': 'select',   'required': False, 'options': ['1', '2', '3']},
+            {'key': 'reason',   'label': '獎勵事由',   'type': 'textarea', 'required': True},
+            {'key': 'evidence', 'label': '檢附之證據', 'type': 'textarea', 'required': False},
+            {'key': 'method',   'label': '獎勵方式',   'type': 'text',     'required': False},
+        ],
+    },
     'pp017': {
         'name': 'PP-M-017 報廢申請單',
         'template': 'pp017.docx',
@@ -1911,6 +2214,8 @@ def _application_filename_base(form_type, ctx):
         return f'{ctx.get("item", "")}_報廢單'.strip('_')
     if form_type == 'hr028':
         return f'人事懲處({ctx.get("name", "")})'
+    if form_type == 'hr029':
+        return f'人事獎勵({ctx.get("name", "")})'
     if form_type == 'gcd':
         return f'{ctx.get("name", "")}_公出單'.strip('_')
     return ctx.get('subject', '') or '內部業務聯絡單'
@@ -2068,6 +2373,19 @@ def application_create():
         context['cnt_e'] = cnt if pun == '小過' else ''
         context['cnt_f'] = cnt if pun == '申誡' else ''
         context['cnt_g'] = cnt if pun == '警告' else ''
+    elif form_type == 'hr029':
+        awd = context.get('award', '')
+        cnt = context.get('award_count', '')
+        context['award_a'] = _mark(awd, '職位晉昇')
+        context['award_b'] = _mark(awd, '大功')
+        context['award_c'] = _mark(awd, '小功')
+        context['award_d'] = _mark(awd, '嘉獎')
+        context['award_e'] = _mark(awd, '優點')
+        # 次數欄位（只填入對應獎勵分類的次數）
+        context['award_b_cnt'] = cnt if awd == '大功' else ''
+        context['award_c_cnt'] = cnt if awd == '小功' else ''
+        context['award_d_cnt'] = cnt if awd == '嘉獎' else ''
+        context['award_e_cnt'] = cnt if awd == '優點' else ''
     elif form_type == 'pp017':
         cat = context.get('category', '')
         context['cat_a'] = _mark(cat, '機器')
@@ -2257,6 +2575,100 @@ def application_open():
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/management')
+def management_page():
+    """管理頁主頁"""
+    return render_template('management.html', form_types=_FORM_TYPES)
+
+
+@app.route('/api/leave/list')
+def leave_list():
+    """讀取 Google 試算表『請假單』資料"""
+    cache_key = 'leave_list'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
+    try:
+        rows = fetch_google_sheet_csv(config.LEAVE_SHEET_ID, config.LEAVE_SHEET_NAME)
+    except Exception:
+        return jsonify({'success': False, 'error': '無法連線至 Google 試算表，請確認網路狀態'}), 502
+
+    try:
+        name_map = fetch_employee_name_map()
+    except Exception:
+        name_map = {}
+
+    leaves = []
+    for r in rows:
+        emp_id = (r.get('請假人員') or '').strip()
+        leaves.append({
+            'date':   (r.get('請假日期') or '').strip(),
+            'employee': emp_id,
+            'name':   name_map.get(emp_id, ''),
+            'type':   (r.get('假別') or '').strip(),
+            'start':  (r.get('起始時間') or '').strip(),
+            'end':    (r.get('結束時間') or '').strip(),
+            'remark': (r.get('備註說明') or '').strip(),
+        })
+
+    def _sort_key(item):
+        try:
+            y, m, d = item['date'].split('/')
+            return (int(y), int(m), int(d))
+        except Exception:
+            return (0, 0, 0)
+
+    leaves.sort(key=_sort_key, reverse=True)
+
+    result = {'success': True, 'count': len(leaves), 'leaves': leaves}
+    cache_set(cache_key, result)
+    return jsonify(result)
+
+
+@app.route('/api/overtime/list')
+def overtime_list():
+    """讀取 Google 試算表『加班統計』資料"""
+    cache_key = 'overtime_list'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
+    try:
+        rows = fetch_google_sheet_csv(config.OVERTIME_SHEET_ID, config.OVERTIME_SHEET_NAME)
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'無法連線至 Google 試算表：{str(e)}'}), 502
+
+    try:
+        name_map = fetch_employee_name_map()
+    except Exception:
+        name_map = {}
+
+    overtimes = []
+    for r in rows:
+        emp_id = (r.get('加班人員ID') or r.get('加班人員') or '').strip()
+        overtimes.append({
+            'date':   (r.get('加班日期') or '').strip(),
+            'employee': emp_id,
+            'name':   name_map.get(emp_id, ''),
+            'hours':  (r.get('加班時數') or '').strip(),
+            'remark': (r.get('備註') or '').strip(),
+        })
+
+    def _sort_key(item):
+        try:
+            y, m, d = item['date'].split('/')
+            return (int(y), int(m), int(d))
+        except Exception:
+            return (0, 0, 0)
+
+    overtimes.sort(key=_sort_key, reverse=True)
+
+    result = {'success': True, 'count': len(overtimes), 'overtimes': overtimes}
+    cache_set(cache_key, result)
+    return jsonify(result)
 
 
 def _preload_cache():

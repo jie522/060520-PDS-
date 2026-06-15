@@ -1,0 +1,2338 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>加工部查詢系統PDS</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='4' fill='%230f62fe'/><polygon fill='white' points='8.5,5.94 10.44,3.13 13.56,3.13 15.5,5.94 18.89,6.21 20.46,8.92 19,12 20.46,15.08 18.89,17.79 15.5,18.06 13.56,20.87 10.44,20.87 8.5,18.06 5.11,17.79 3.54,15.08 5,12 3.54,8.92 5.11,6.21'/><circle cx='12' cy='12' r='4' fill='%230f62fe'/></svg>">
+  <style>
+    /* ══════════════════════════════════════════════
+       管理 Design System
+    ══════════════════════════════════════════════ */
+    :root {
+      --blue:        #1565C0;
+      --blue-d:      #0D47A1;
+      --blue-mid:    #1976D2;
+      --blue-light:  #42A5F5;
+      --blue-pale:   #E3F2FD;
+      --blue-xpale:  #F0F8FF;
+      /* Claude-style 暖色主題 */
+      --bg:          #F5F4ED;
+      --surface:     #FFFFFF;
+      --surface-2:   #FAF9F5;
+      --border:      #E5E4DF;
+      --border-d:    #D8D5CC;
+      --text:        #3D3D3A;
+      --text-2:      #5C5950;
+      --muted:       #8A8778;
+      --muted-light: #BDB9AC;
+      --row-even:    #FAF9F5;
+      --row-hover:   #FBEFE6;
+      --success:     #2E7D32;
+      --success-bg:  #E8F5E9;
+      --warn:        #E65100;
+      --warn-bg:     #FFF3E0;
+      --accent:      #D97757;
+      --accent-d:    #C5613F;
+      --accent-bg:   #FBEFE6;
+      /* 日曆耐看配色（藍灰調） */
+      --cal-head:    #6E8CA0;
+      --cal-head-d:  #56738A;
+      --cal-bg:      #EAF1F5;
+      --cal-text:    #4A6B82;
+      --shadow-sm:   0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-md:   0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06);
+      --radius:      8px;
+      --radius-sm:   5px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif;
+      font-size: 0.85rem;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      line-height: 1.5;
+    }
+
+    /* ══ Top Navigation Header ══ */
+    .header {
+      background: #1565C0;
+      color: #fff;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(21,101,192,.4);
+      z-index: 100;
+    }
+    .header-inner { display:flex; align-items:flex-end; padding:.4rem 1rem 0; }
+    .header-title { font-size:1.1rem; font-weight:700; padding-bottom:.45rem; white-space:nowrap; margin-right:.5rem; }
+    .header-tabs { display:flex; align-items:flex-end; gap:2px; }
+    .header-tab {
+      display: inline-block; padding:.3rem 1rem; font-size:1rem; font-weight:600;
+      color:rgba(255,255,255,.85); text-decoration:none; border-radius:0;
+      background:rgba(255,255,255,.15); cursor:pointer; transition:background .15s;
+    }
+    .header-tab.active,.header-tab:hover { background:#fff; color:#1565C0; }
+
+    /* ══ Sub Navigation（管理 第二層導覽） ══ */
+    .page-sub-nav {
+      display: flex; align-items: center; gap: .4rem;
+      padding: .5rem 1rem; background: var(--surface);
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .page-sub-tab {
+      display: inline-block; padding: .35rem 1rem; font-size: 1rem; font-weight: 600;
+      color: var(--text-2); text-decoration: none; border-radius: var(--radius-sm);
+      background: var(--surface-2); border: 1px solid var(--border); transition: all .15s;
+    }
+    .page-sub-tab.active { background: #1565C0; color: #fff; border-color: #1565C0; }
+    .page-sub-tab:not(.active):hover { background: #E3F2FD; color: #1565C0; }
+
+    /* ══ Page Body ══ */
+    .page-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 0.75rem;
+      gap: 0.6rem;
+      overflow: hidden;
+    }
+    .sub-page-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      overflow: hidden;
+      min-height: 0;
+    }
+    /* 頂部藍色 accent stripe */
+    .accent-stripe {
+      height: 4px;
+      flex-shrink: 0;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #1565C0 0%, #42A5F5 60%, #E3F2FD 100%);
+    }
+
+    /* ══ Card ══ */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 0.55rem 0.9rem;
+      border-bottom: 1px solid var(--border);
+      border-left: 4px solid #1565C0;
+      background: var(--surface-2);
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--text-2);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* ══ 今日請假摘要 ══ */
+    .today-leave-header {
+      background: linear-gradient(90deg, var(--blue-mid) 0%, var(--blue-d) 100%);
+      border-left: 4px solid var(--blue-d);
+      color: #FFFFFF;
+      font-size: 0.95rem;
+      font-weight: 800;
+      padding: 0.7rem 1rem;
+      letter-spacing: 0.02em;
+    }
+    #today-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      padding: 0.85rem 1rem;
+    }
+    .leave-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--blue-pale);
+      color: var(--blue-d);
+      border: 2px solid var(--blue-mid);
+      border-radius: 18px;
+      padding: 0.35rem 1rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      box-shadow: 0 1px 4px rgba(21,101,192,.18);
+    }
+    .leave-chip .tname { color: var(--text); font-weight: 800; font-size: 1rem; }
+    .leave-chip .ttype {
+      color: #FFFFFF;
+      background: var(--blue-d);
+      border-radius: 10px;
+      padding: 0.05rem 0.55rem;
+      font-size: 0.8rem;
+      font-weight: 800;
+    }
+    .leave-chip .ttime { color: var(--muted); font-weight: 600; }
+    #today-empty { padding: 0.6rem 0.9rem; color: var(--muted-light); font-size: 0.83rem; }
+
+    /* ══ 個人請假摘要 ══ */
+    .person-summary {
+      display: none;
+      padding: 0.6rem 0.9rem;
+      gap: 0.5rem;
+      flex-direction: column;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+    .person-summary.show { display: flex; }
+    .person-summary .ps-head {
+      display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+    }
+    .person-summary .ps-name { font-size: 0.95rem; font-weight: 700; color: var(--accent-d); }
+    .person-summary .ps-id { font-family: 'Consolas','Courier New',monospace; font-weight: 700; color: var(--muted); font-size: 0.8rem; }
+    .person-summary .ps-total {
+      margin-left: auto; font-size: 0.8rem; color: var(--text-2);
+    }
+    .person-summary .ps-total strong { color: var(--accent-d); font-size: 1rem; }
+    .person-summary .ps-types { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .person-summary .ps-type-chip {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 0.1rem 0.55rem; font-size: 0.76rem; font-weight: 600; color: var(--text-2);
+    }
+    .person-summary .ps-dates { display: flex; flex-wrap: wrap; gap: 0.3rem; max-height: 70px; overflow-y: auto; }
+    .person-summary .ps-date-chip {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      background: var(--surface); border: 1px solid var(--border-d);
+      border-radius: 10px; padding: 0.08rem 0.5rem; font-size: 0.74rem; color: var(--text-2);
+    }
+
+    /* ══ Filter Bar ══ */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.5rem 0.9rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+      flex-wrap: wrap;
+    }
+    .filter-bar label { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+    .filter-bar select, .filter-bar input {
+      padding: 0.3rem 0.5rem;
+      border: 1px solid var(--border-d);
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+      font-family: inherit;
+      background: var(--surface);
+      color: var(--text);
+    }
+    .filter-bar input:focus, .filter-bar select:focus { outline: 2px solid var(--accent-bg); border-color: var(--accent); }
+    .filter-count { margin-left: auto; font-size: 0.8rem; color: var(--muted); }
+    .filter-count strong { color: var(--accent-d); font-size: 0.9rem; }
+
+    /* ══ Table ══ */
+    .table-wrap { flex: 1; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--border-d) transparent; }
+    .table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+    .table-wrap::-webkit-scrollbar-thumb { background: var(--border-d); border-radius: 3px; }
+
+    table.pro-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    table.pro-table thead th {
+      background: linear-gradient(180deg, var(--accent), var(--accent-d));
+      color: rgba(255,255,255,.95);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      font-weight: 600;
+      font-size: 0.78rem;
+      letter-spacing: 0.02em;
+      border-right: 1px solid rgba(255,255,255,.12);
+    }
+    table.pro-table thead th:last-child { border-right: none; }
+    table.pro-table thead th.center { text-align: center; }
+    table.pro-table tbody td {
+      padding: 0.45rem 0.75rem;
+      border-bottom: 1px solid #EDF1F5;
+      vertical-align: middle;
+      color: var(--text-2);
+    }
+    table.pro-table tbody tr:nth-child(even) td { background: var(--row-even); }
+    table.pro-table tbody tr:hover td { background: var(--row-hover) !important; color: var(--text); }
+    table.pro-table tbody tr.is-today td { background: var(--warn-bg) !important; }
+    table.pro-table td.td-center { text-align: center; }
+    table.pro-table td.td-code { font-family: 'Consolas','Courier New',monospace; font-weight: 700; color: var(--accent-d); font-size: 0.81rem; }
+
+    .leave-type-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.1rem 0.55rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      white-space: nowrap;
+      background: var(--accent-bg);
+      color: var(--accent-d);
+    }
+    .leave-type-tag:empty { background: transparent; }
+
+    /* ══ Empty / Error / Loading ══ */
+    .msg-empty {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 3.5rem 1rem; color: var(--muted-light); gap: 0.65rem; text-align: center;
+    }
+    .msg-empty span { font-size: 0.83rem; }
+    .msg-error {
+      margin: 0.75rem; padding: 0.75rem 1rem; color: #c62828;
+      background: #fff5f5; border: 1px solid #ffcdd2; border-left: 4px solid #ef5350;
+      border-radius: var(--radius-sm); font-size: 0.81rem;
+    }
+    .spinner {
+      display: inline-block; width: 22px; height: 22px;
+      border: 2.5px solid rgba(217,119,87,.2); border-top-color: var(--accent);
+      border-radius: 50%; animation: mgSpin .65s linear infinite; flex-shrink: 0;
+    }
+    @keyframes mgSpin { to { transform: rotate(360deg); } }
+
+    /* ══ View Switch ══ */
+    .view-switch { display: flex; gap: 4px; }
+    .view-btn {
+      padding: 0.3rem 0.7rem; font-size: 0.78rem; font-weight: 600;
+      border: 1px solid var(--border-d); border-radius: var(--radius-sm);
+      background: var(--surface); color: var(--text-2); cursor: pointer; transition: all .15s;
+    }
+    .view-btn:hover { background: var(--accent-bg); }
+    .view-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ══ Calendar View ══ */
+    .cal-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0.6rem 0.9rem; }
+    .cal-header { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 0.5rem; flex-shrink: 0; }
+    .cal-title { font-size: 0.95rem; font-weight: 700; color: var(--cal-text); min-width: 110px; text-align: center; }
+    .cal-nav-btn {
+      width: 28px; height: 28px; border: 1px solid var(--border-d); background: var(--surface);
+      border-radius: 50%; cursor: pointer; font-size: 0.9rem; color: var(--cal-text);
+      display: flex; align-items: center; justify-content: center; line-height: 1;
+    }
+    .cal-nav-btn:hover { background: var(--cal-bg); }
+    .cal-today-btn {
+      padding: 0.25rem 0.6rem; border: 1px solid var(--border-d); border-radius: var(--radius-sm);
+      background: var(--surface); font-size: 0.78rem; cursor: pointer; color: var(--text-2);
+    }
+    .cal-today-btn:hover { background: var(--cal-bg); }
+    .cal-weekdays { display: grid; grid-template-columns: repeat(7,1fr); gap: 1px; margin-bottom: 1px; flex-shrink: 0; }
+    .cal-weekday {
+      background: linear-gradient(180deg, var(--cal-head), var(--cal-head-d)); color: #fff; text-align: center; padding: 0.3rem;
+      font-size: 0.78rem; font-weight: 700;
+    }
+    .cal-grid {
+      flex: 1; display: grid; grid-template-columns: repeat(7,1fr); grid-auto-rows: 1fr;
+      gap: 1px; background: var(--border); border: 1px solid var(--border); overflow: auto;
+    }
+    .cal-cell { background: var(--surface); padding: 0.25rem; min-height: 68px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+    .cal-cell.outside { background: var(--surface-2); }
+    .cal-cell.is-today { background: #FFE5B4; border: 2px solid #FF8C00; box-shadow: inset 0 0 8px rgba(255,140,0,.2); }
+    .cal-date { font-size: 0.75rem; font-weight: 700; color: var(--muted); }
+    .cal-cell.is-today .cal-date { color: #FF6B00; font-weight: 800; }
+    .cal-event {
+      font-size: 0.68rem; padding: 1px 4px; border-radius: 6px; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; font-weight: 700; cursor: pointer; transition: opacity .15s;
+    }
+    .cal-event:hover { opacity: 0.8; }
+
+    /* ══ 日曆事件詳情彈窗 ══ */
+    #event-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.4); z-index: 200; align-items: center; justify-content: center; cursor: pointer; }
+    #event-modal.show { display: flex; }
+    #event-modal .event-modal-content { cursor: default; }
+    .event-modal-content { background: var(--surface); border-radius: var(--radius); padding: 1.5rem; box-shadow: var(--shadow-md); min-width: 300px; max-width: 450px; }
+    .event-modal-close { position: absolute; top: 1rem; right: 1rem; cursor: pointer; color: var(--muted); font-size: 1.5rem; }
+    .event-modal-close:hover { color: var(--text); }
+    .event-detail-row { display: flex; gap: 0.5rem; margin-bottom: 0.8rem; }
+    .event-detail-label { font-weight: 700; min-width: 60px; color: var(--text-2); }
+    .event-detail-value { color: var(--text); flex: 1; }
+    .event-detail-value.time { font-family: 'Consolas','Courier New',monospace; }
+    .event-segment-icon { font-size: 1.2rem; }
+
+
+    /* ══ Chart View ══ */
+    .chart-wrap { flex: 1; overflow: auto; padding: 1rem; display: flex; flex-direction: column; gap: 1.5rem; }
+    .chart-section-title { font-size: 0.85rem; font-weight: 700; color: var(--text-2); margin-bottom: 0.6rem; }
+    .bar-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
+    .bar-label { width: 100px; font-size: 0.78rem; color: var(--text-2); flex-shrink: 0; text-align: right; }
+    .bar-track { flex: 1; background: var(--surface-2); border-radius: 4px; height: 16px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; transition: width .3s; }
+    .bar-value { width: 42px; font-size: 0.78rem; font-weight: 700; color: var(--text); text-align: left; flex-shrink: 0; }
+    /* ══════════════════════════════════════════════
+       申請單 Design System
+    ══════════════════════════════════════════════ */
+
+    /* ══ 申請單 Sub-page ══ */
+    #sub-page-application .app-layout {
+      display: flex;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ══ Left Panel ══ */
+    #sub-page-application .panel-left {
+      width: 640px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-d) transparent;
+    }
+    #sub-page-application .panel-left::-webkit-scrollbar { width: 4px; }
+    #sub-page-application .panel-left::-webkit-scrollbar-thumb { background: var(--border-d); border-radius: 2px; }
+
+    /* ══ Right Panel ══ */
+    #sub-page-application .panel-right {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ══ Card ══ */
+    #sub-page-application .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    #sub-page-application .card-header {
+      background: linear-gradient(135deg, var(--blue-mid) 0%, var(--blue-d) 100%);
+      color: white;
+      padding: 0.48rem 0.85rem;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    #sub-page-application .card-header .ml-auto { margin-left: auto; }
+    #sub-page-application .card-body { padding: 0.65rem 0.8rem; }
+
+    /* ══ Form Controls ══ */
+    #sub-page-application .form-group { margin-bottom: 0.55rem; }
+    #sub-page-application .form-label {
+      display: block;
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: var(--text-2);
+      margin-bottom: 0.22rem;
+    }
+    #sub-page-application .form-label .req { color: #e53935; margin-left: 2px; }
+    #sub-page-application .form-control {
+      width: 100%;
+      padding: 0.38rem 0.6rem;
+      border: 1.5px solid var(--border-d);
+      border-radius: var(--radius-sm);
+      font-size: 0.94rem;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--surface);
+      transition: border-color .15s, box-shadow .15s;
+    }
+    #sub-page-application .form-control:focus {
+      outline: none;
+      border-color: var(--blue-mid);
+      box-shadow: 0 0 0 3px rgba(25,118,210,.12);
+    }
+    #sub-page-application textarea.form-control { resize: vertical; min-height: 64px; }
+
+
+    /* ══ Buttons ══ */
+    #sub-page-application .btn {
+      padding: 0.38rem 0.8rem;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      font-family: inherit;
+      cursor: pointer;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all .15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.28rem;
+    }
+    #sub-page-application .btn-primary {
+      background: linear-gradient(135deg, var(--blue-mid) 0%, var(--blue) 100%);
+      color: white;
+      box-shadow: 0 2px 5px rgba(21,101,192,.28);
+    }
+    #sub-page-application .btn-primary:hover { background: linear-gradient(135deg, var(--blue-light) 0%, var(--blue-mid) 100%); transform: translateY(-1px); }
+    #sub-page-application .btn-primary:disabled { background: #B0BEC5; box-shadow: none; cursor: default; transform: none; }
+    #sub-page-application .btn-success {
+      background: linear-gradient(135deg, #43A047 0%, #2E7D32 100%);
+      color: white;
+      box-shadow: 0 2px 5px rgba(46,125,50,.28);
+    }
+    #sub-page-application .btn-success:hover { background: linear-gradient(135deg, #66BB6A 0%, #388E3C 100%); transform: translateY(-1px); }
+    #sub-page-application .btn-success:disabled { background: #B0BEC5; box-shadow: none; cursor: default; transform: none; }
+    #sub-page-application .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1.5px solid var(--border-d);
+    }
+    #sub-page-application .btn-ghost:hover { background: var(--bg); color: var(--text-2); }
+    #sub-page-application .btn-sm { padding: 0.24rem 0.6rem; font-size: 0.84rem; }
+    #sub-page-application .btn-row { display: flex; gap: 0.45rem; justify-content: flex-end; margin-top: 0.6rem; }
+
+    /* ══ Photo Upload ══ */
+    #sub-page-application .photo-upload-zone {
+      border: 2px dashed var(--border-d);
+      border-radius: var(--radius-sm);
+      padding: 0.6rem 0.75rem;
+      text-align: center;
+      cursor: pointer;
+      background: var(--surface-2);
+      transition: all .15s;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+    #sub-page-application .photo-upload-zone:hover { border-color: var(--blue-mid); background: var(--blue-xpale); color: var(--blue); }
+    #sub-page-application .photo-upload-zone.dragover { border-color: #D97757; background: rgba(217,119,87,.10); color: #B05E3E; }
+    #sub-page-application .photo-thumbs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
+    #sub-page-application .photo-thumb { position: relative; width: 60px; height: 60px; }
+    #sub-page-application .photo-thumb img { width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1.5px solid var(--border-d); }
+    #sub-page-application .photo-thumb .rm { position:absolute; top:-5px; right:-5px; width:16px; height:16px; border-radius:50%; background:#e53935; color:#fff; border:none; cursor:pointer; font-size:9px; display:flex; align-items:center; justify-content:center; }
+
+    /* ══ Form Section ══ */
+    #sub-page-application .form-section { display: none; }
+    #sub-page-application .form-section.active { display: block; }
+    #sub-page-application .form-hint { text-align:center; color:var(--muted); padding:1.2rem 0; font-size:0.9rem; }
+    #sub-page-application .divider { border:none; border-top:1px solid var(--border); margin:0.55rem 0; }
+
+    /* ══ Search Accordion ══ */
+    #sub-page-application .search-toggle {
+      cursor: pointer;
+      user-select: none;
+    }
+    #sub-page-application .search-toggle:hover { filter: brightness(1.1); }
+    #sub-page-application .search-arrow {
+      margin-left: auto;
+      font-size: 0.7rem;
+      transition: transform .2s;
+    }
+    #sub-page-application .search-arrow.open { transform: rotate(90deg); }
+    #sub-page-application .search-body { overflow: hidden; }
+    #sub-page-application .search-inner { padding: 0.6rem 0.75rem; }
+    #sub-page-application .search-row { display: flex; gap: 0.35rem; align-items: center; margin-bottom: 0.45rem; }
+    #sub-page-application .search-input {
+      flex: 1;
+      padding: 0.38rem 0.6rem;
+      border: 1.5px solid var(--border-d);
+      border-radius: var(--radius-sm);
+      font-size: 0.92rem;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--surface);
+    }
+    #sub-page-application .search-input:focus { outline:none; border-color:var(--blue-mid); box-shadow:0 0 0 3px rgba(25,118,210,.1); }
+    #sub-page-application .search-input::placeholder { color:var(--muted-light); }
+    #sub-page-application .filter-select {
+      padding: 0.36rem 0.5rem;
+      border: 1.5px solid var(--border-d);
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      font-family: inherit;
+      font-weight: 600;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      width: 78px;
+    }
+    #sub-page-application .filter-select:focus { outline:none; border-color:var(--blue-mid); }
+
+    /* ══ File List (in search accordion) ══ */
+    #sub-page-application .file-list {
+      max-height: 260px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-d) transparent;
+    }
+    #sub-page-application .file-list::-webkit-scrollbar { width: 4px; }
+    #sub-page-application .file-list::-webkit-scrollbar-thumb { background: var(--border-d); border-radius: 2px; }
+    #sub-page-application .file-row {
+      display: flex;
+      align-items: center;
+      padding: 0.32rem 0.6rem;
+      border-bottom: 1px solid var(--row-even);
+      gap: 0.4rem;
+      transition: background .1s;
+    }
+    #sub-page-application .file-row:last-child { border-bottom: none; }
+    #sub-page-application .file-row:hover { background: var(--row-hover); }
+    #sub-page-application .file-name { flex:1; font-size:0.86rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-weight:600; }
+    #sub-page-application .file-meta { font-size:0.78rem; color:var(--muted); white-space:nowrap; }
+    #sub-page-application .list-empty { padding:1.2rem; text-align:center; color:var(--muted); font-size:0.88rem; }
+
+    /* ══ Preview Panel ══ */
+    #sub-page-application .preview-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-radius: var(--radius);
+      border: 1px solid #E5E1D8;
+      box-shadow: 0 4px 20px rgba(61,57,41,.10), 0 1px 4px rgba(61,57,41,.06);
+    }
+    #sub-page-application .preview-toolbar {
+      background: linear-gradient(90deg, #FAF9F5 0%, #F4F1E8 100%);
+      color: #3D3929;
+      padding: .52rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      font-size: .9rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      letter-spacing: .02em;
+      border-bottom: 1px solid #EBE7DC;
+    }
+    #sub-page-application .preview-toolbar-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #D97757;
+      flex-shrink: 0;
+    }
+    #sub-page-application .preview-form-badge {
+      margin-left: auto;
+      font-weight: 400;
+      font-size: .8rem;
+      color: #B05E3E;
+      background: rgba(217,119,87,.12);
+      padding: .12rem .6rem;
+      border-radius: 12px;
+      letter-spacing: .01em;
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #sub-page-application .preview-bg {
+      flex: 1;
+      overflow-y: auto;
+      background: linear-gradient(160deg, #F5F4ED 0%, #ECE9DE 100%);
+      padding: 1.2rem 1.2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      scrollbar-width: thin;
+      scrollbar-color: #D9D4C7 transparent;
+    }
+    #sub-page-application .preview-bg::-webkit-scrollbar { width: 5px; }
+    #sub-page-application .preview-bg::-webkit-scrollbar-thumb { background: #D9D4C7; border-radius: 3px; }
+    #sub-page-application .preview-hint {
+      margin: auto;
+      text-align: center;
+      color: #A39E8E;
+      font-size: 0.95rem;
+      padding: 2rem 1rem;
+    }
+    #sub-page-application .preview-hint .hint-icon { font-size: 3rem; display: block; margin-bottom: 0.7rem; opacity: .35; }
+
+    /* ══ Document Paper Styles ══ */
+    #sub-page-application .doc-paper {
+      background: #fff;
+      width: 100%;
+      max-width: 820px;
+      min-height: 300px;
+      box-shadow:
+        0 0 0 1px rgba(61,57,41,.04),
+        0 16px 56px rgba(61,57,41,.16),
+        0 4px 16px rgba(61,57,41,.10);
+      border-radius: 3px;
+      padding: 0 2.2rem 2rem;
+      font-family: 'Microsoft JhengHei', 'Noto Sans TC', sans-serif;
+      font-size: 1.04rem;
+      color: #111;
+      line-height: 1.6;
+      animation: paperIn .22s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    @keyframes paperIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+
+    /* 頂部藍色 accent stripe */
+    #sub-page-application .doc-paper::before {
+      content: '';
+      display: block;
+      height: 4px;
+      background: linear-gradient(90deg, #D97757 0%, #E8A37C 60%, #F2CBAE 100%);
+      margin: 0 -2.2rem 1.8rem;
+    }
+
+    #sub-page-application .doc-letterhead {
+      text-align: center;
+      padding-bottom: 0.8rem;
+      margin-bottom: 1rem;
+      position: relative;
+    }
+    #sub-page-application .doc-letterhead::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: -2.2rem; right: -2.2rem;
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, #D97757 12%, #EBE5D8 88%, transparent 100%);
+    }
+    #sub-page-application .doc-co-name {
+      font-size: 1.32rem;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      color: #3D3929;
+    }
+    #sub-page-application .doc-form-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      margin-top: 0.18rem;
+      color: #3D3929;
+      letter-spacing: 0.06em;
+    }
+    #sub-page-application .doc-form-no {
+      font-size: 0.84rem;
+      color: #B05E3E;
+      margin-top: 0.1rem;
+      letter-spacing: 0.04em;
+    }
+
+    /* Document table */
+    #sub-page-application .doc-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 0;
+      font-size: 0.96rem;
+    }
+    #sub-page-application .doc-table th {
+      background: linear-gradient(180deg, #FAF6EE 0%, #F2EBDC 100%);
+      padding: 0.4rem 0.75rem;
+      border: 1px solid #E5DFD0;
+      font-weight: 700;
+      text-align: center;
+      white-space: nowrap;
+      color: #6B4226;
+      font-size: 0.94rem;
+      width: 72px;
+    }
+    #sub-page-application .doc-table td {
+      padding: 0.42rem 0.8rem;
+      border: 1px solid #E5DFD0;
+      vertical-align: top;
+      color: #3D3929;
+      font-size: 0.96rem;
+    }
+    #sub-page-application .doc-table td.tall { min-height: 72px; white-space: pre-wrap; }
+    #sub-page-application .doc-table td.center { text-align: center; }
+    #sub-page-application .doc-placeholder { color: #C4BCA9; font-style: italic; font-size: 0.9rem; }
+
+    /* Photos in preview */
+    #sub-page-application .doc-photos-wrap { border: 1px solid #E5DFD0; border-top: none; padding: 0.5rem 0.8rem; }
+    #sub-page-application .doc-photos-label { font-size: 0.88rem; font-weight: 700; color: #B05E3E; margin-bottom: 0.4rem; }
+    #sub-page-application .doc-photo-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    #sub-page-application .doc-photo { width: 90px; height: 90px; object-fit: cover; border: 1px solid #E5DFD0; border-radius: 3px; }
+
+    /* Signature row */
+    #sub-page-application .doc-sig-row {
+      display: flex;
+      border: 1px solid #E5DFD0;
+      border-top: none;
+      background: #FAF8F2;
+    }
+    #sub-page-application .doc-sig-cell {
+      flex: 1;
+      padding: 0.45rem 0.8rem;
+      border-right: 1px solid #E5DFD0;
+      min-height: 50px;
+    }
+    #sub-page-application .doc-sig-cell:last-child { border-right: none; }
+    #sub-page-application .doc-sig-label { font-size: 0.82rem; color: #8A7B5C; font-weight: 700; letter-spacing: .02em; }
+    #sub-page-application .doc-sig-value { font-size: 0.96rem; color: #3D3929; margin-top: 0.15rem; min-height: 1.3rem; }
+
+    /* ══ Department Checkbox Group ══ */
+    #sub-page-application .dept-checkboxes {
+      display: flex;
+      flex-direction: column;
+      gap: 0.22rem;
+      padding: 0.2rem 0;
+    }
+    #sub-page-application .dept-row {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0.2rem 0.55rem;
+    }
+    #sub-page-application .dept-cb-label {
+      display: flex;
+      align-items: center;
+      gap: 0.28rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      white-space: nowrap;
+      user-select: none;
+    }
+    #sub-page-application .dept-cb-label input[type=checkbox] {
+      width: 15px; height: 15px;
+      accent-color: var(--blue);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    /* 子部門（生技/採購/財會…）字色較淡 */
+    #sub-page-application .dept-cb-label.dept-sub {
+      font-size: 0.86rem;
+      color: var(--text-2);
+    }
+    #sub-page-application .dept-cb-label.dept-sub input[type=checkbox] {
+      width: 13px; height: 13px;
+      accent-color: var(--blue-mid);
+    }
+
+    /* ══ Save Confirm Modal ══ */
+    #saveModal {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 9998;
+      align-items: center;
+      justify-content: center;
+    }
+    #saveModal.open { display: flex; }
+    #sub-page-application .save-modal-box {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1.5rem 1.75rem;
+      max-width: 400px; width: 92%;
+      box-shadow: 0 10px 36px rgba(0,0,0,.28);
+    }
+    #sub-page-application .save-modal-title {
+      font-size: 1.1rem; font-weight: 700;
+      color: #2e7d32; margin-bottom: .65rem;
+    }
+    #sub-page-application .save-modal-file {
+      font-size: .92rem; color: #333;
+      background: #f5f7fa; border-radius: 5px;
+      padding: .45rem .65rem;
+      margin-bottom: 1.1rem;
+      word-break: break-all;
+    }
+    #sub-page-application .save-modal-btns {
+      display: flex; gap: .6rem; justify-content: flex-end;
+    }
+
+    /* ══ Toast ══ */
+    #toast {
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      padding: 0.55rem 1rem; border-radius: var(--radius);
+      font-size: 0.92rem; font-weight: 600; color: #fff;
+      box-shadow: var(--shadow-md); z-index: 9999;
+      opacity: 0; transform: translateY(8px);
+      transition: all .28s ease; pointer-events: none;
+    }
+    #toast.show { opacity:1; transform:translateY(0); }
+    #toast.success { background:#2e7d32; }
+    #toast.error { background:#c62828; }
+    #toast.info { background:var(--blue); }
+  </style>
+</head>
+<body>
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">加工部查詢系統PDS</div>
+    <div class="header-tabs">
+      <a href="/"           class="header-tab">製令查詢</a>
+      <a href="/production" class="header-tab">生產中製令</a>
+      <a href="/equipment"  class="header-tab">設備稼動</a>
+      <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
+      <a href="/routing"    class="header-tab">產品途程查詢</a>
+      <span                 class="header-tab active">管理</span>
+    </div>
+  </div>
+</div>
+
+<div class="page-sub-nav">
+  <span class="page-sub-tab active" onclick="switchSubPage('leave')">1. 請假統計</span>
+  <span class="page-sub-tab" onclick="switchSubPage('application')">2. 申請單</span>
+  <span class="page-sub-tab" onclick="switchSubPage('overtime')">3. 加班統計</span>
+</div>
+
+<div class="page-body">
+  <div class="accent-stripe"></div>
+  <div id="sub-page-leave" class="sub-page-container">
+    <div class="card">
+      <div class="card-header today-leave-header">📅 今日請假人員</div>
+      <div id="today-summary"></div>
+      <div id="today-empty" style="display:none">今日無人請假</div>
+    </div>
+
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+      <div class="filter-bar">
+        <label>假別</label>
+        <select id="f-type"><option value="">全部</option></select>
+        <label>員工編號</label>
+        <input type="text" id="f-employee" placeholder="輸入工號或姓名搜尋…">
+        <div class="view-switch">
+          <button class="view-btn active" data-view="table" onclick="switchView('table')">📋 列表</button>
+          <button class="view-btn" data-view="calendar" onclick="switchView('calendar')">📅 日曆</button>
+          <button class="view-btn" data-view="chart" onclick="switchView('chart')">📊 統計</button>
+        </div>
+        <span class="filter-count"><strong id="f-count">0</strong> 筆</span>
+      </div>
+      <div id="person-summary" class="person-summary"></div>
+      <div class="table-wrap" id="view-table">
+        <div id="leave-content">
+          <div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>
+        </div>
+      </div>
+      <div class="cal-wrap" id="view-calendar" style="display:none">
+      <div class="cal-header">
+        <button class="cal-nav-btn" onclick="calPrev()">‹</button>
+        <div class="cal-title" id="cal-title"></div>
+        <button class="cal-nav-btn" onclick="calNext()">›</button>
+        <button class="cal-today-btn" onclick="calTodayFn()">今天</button>
+      </div>
+      <div class="cal-weekdays">
+        <div class="cal-weekday">日</div>
+        <div class="cal-weekday">一</div>
+        <div class="cal-weekday">二</div>
+        <div class="cal-weekday">三</div>
+        <div class="cal-weekday">四</div>
+        <div class="cal-weekday">五</div>
+        <div class="cal-weekday">六</div>
+      </div>
+      <div class="cal-grid" id="cal-grid-body"></div>
+    </div>
+    <div class="chart-wrap" id="view-chart" style="display:none">
+      <div>
+        <div class="chart-section-title">📊 假別統計</div>
+        <div id="chart-type"></div>
+      </div>
+      <div>
+        <div class="chart-section-title">👤 請假人員 Top 10</div>
+        <div id="chart-emp"></div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <div id="sub-page-overtime" class="sub-page-container" style="display:none">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+      <div class="filter-bar">
+        <label>月份</label>
+        <select id="ot-f-month"><option value="">全部</option></select>
+        <label>員工編號</label>
+        <input type="text" id="ot-f-employee" placeholder="輸入工號或姓名搜尋…">
+        <div class="view-switch">
+          <button class="view-btn active" data-view="table" onclick="switchOtView('table')">📋 列表</button>
+          <button class="view-btn" data-view="chart" onclick="switchOtView('chart')">📊 統計</button>
+        </div>
+        <span class="filter-count"><strong id="ot-f-count">0</strong> 筆</span>
+      </div>
+      <div id="ot-person-summary" class="person-summary"></div>
+      <div class="table-wrap" id="ot-view-table">
+        <div id="overtime-content">
+          <div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>
+        </div>
+      </div>
+      <div class="chart-wrap" id="ot-view-chart" style="display:none">
+        <div>
+          <div class="chart-section-title">📊 每月加班時數統計</div>
+          <div id="ot-chart-month"></div>
+        </div>
+        <div>
+          <div class="chart-section-title">👤 加班人員 Top 10（時數）</div>
+          <div id="ot-chart-emp"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="sub-page-application" class="sub-page-container" style="display:none">
+    <div class="app-layout">
+
+      <!-- ════ LEFT: 填寫 + 搜尋 ════ -->
+      <div class="panel-left">
+
+        <!-- 新增申請單（可摺疊） -->
+        <div class="card">
+          <div class="card-header search-toggle" onclick="toggleSection('addBody','addArrow')">
+            📝 新增申請單
+            <span id="addArrow" class="search-arrow ml-auto open">▶</span>
+          </div>
+          <div id="addBody" class="search-body">
+          <div class="card-body">
+
+            <!-- 表單類型選擇 -->
+            <div style="margin-bottom:.55rem;">
+              <div class="form-label">選擇表單類型</div>
+              <select class="form-control" id="typeSelect" onchange="selectType(this.value)">
+                <option value="" disabled selected>請選擇表單類型...</option>
+                {% for key, fd in form_types.items() %}
+                <option value="{{ key }}">{{ fd.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- 提交按鈕 -->
+            <div id="formSubmitArea" style="display:none;">
+              <div class="btn-row">
+                <button class="btn btn-ghost btn-sm" onclick="clearForm()">清空</button>
+                <button class="btn btn-success" id="submitBtn" onclick="submitForm()">💾 存檔到 NAS</button>
+              </div>
+            </div>
+
+            <hr class="divider">
+
+            <!-- 動態表單欄位 -->
+            <div id="formSections">
+              {% for key, fd in form_types.items() %}
+              <div class="form-section" id="section-{{ key }}">
+                {% for f in fd.fields %}
+                <div class="form-group">
+                  <label class="form-label"{% if f.type != 'checkbox_group' %} for="{{ key }}_{{ f.key }}"{% endif %}>
+                    {{ f.label }}{% if f.required %}<span class="req">*</span>{% endif %}
+                  </label>
+                  {% if f.type == 'textarea' %}
+                  <textarea class="form-control" id="{{ key }}_{{ f.key }}" name="{{ f.key }}"
+                    rows="3" placeholder="{{ f.label }}" oninput="debouncePreview()"></textarea>
+                  {% elif f.type == 'date' %}
+                  <input type="date" class="form-control" id="{{ key }}_{{ f.key }}" name="{{ f.key }}"
+                    oninput="debouncePreview()">
+                  {% elif f.type == 'select' %}
+                  <select class="form-control" id="{{ key }}_{{ f.key }}" name="{{ f.key }}" onchange="updatePreview()">
+                    {% for opt in f.options %}
+                    <option value="{{ opt }}">{{ opt }}</option>
+                    {% endfor %}
+                  </select>
+                  {% elif f.type == 'checkbox_group' %}
+                  {% set sub_opts = f.get('sub_opts', []) %}
+                  {% set groups   = f.get('groups', []) %}
+                  {% set defaults = f.get('defaults', []) %}
+                  <div class="dept-checkboxes" id="{{ key }}_{{ f.key }}_group">
+                    {% if groups %}
+                      {% set ns = namespace(idx=0) %}
+                      {% for group in groups %}
+                      <div class="dept-row">
+                        {% for opt in group %}
+                        {% set ns.idx = ns.idx + 1 %}
+                        <label class="dept-cb-label{% if opt in sub_opts %} dept-sub{% endif %}">
+                          <input type="checkbox" class="dept-cb"
+                            id="{{ key }}_{{ f.key }}_{{ ns.idx }}"
+                            name="{{ f.key }}[]" value="{{ opt }}"
+                            {% if opt in defaults %}checked{% endif %}
+                            onchange="updatePreview()">
+                          {{ opt }}
+                        </label>
+                        {% endfor %}
+                      </div>
+                      {% endfor %}
+                    {% else %}
+                      {% for opt in f.options %}
+                      <label class="dept-cb-label{% if opt in sub_opts %} dept-sub{% endif %}">
+                        <input type="checkbox" class="dept-cb"
+                          id="{{ key }}_{{ f.key }}_{{ loop.index }}"
+                          name="{{ f.key }}[]" value="{{ opt }}"
+                          {% if opt in defaults %}checked{% endif %}
+                          onchange="updatePreview()">
+                        {{ opt }}
+                      </label>
+                      {% endfor %}
+                    {% endif %}
+                  </div>
+                  {% else %}
+                  <input type="text" class="form-control" id="{{ key }}_{{ f.key }}" name="{{ f.key }}"
+                    placeholder="{{ f.label }}" oninput="debouncePreview()">
+                  {% endif %}
+                </div>
+                {% endfor %}
+
+                {% if key == 'pp015' %}
+                <!-- 照片上傳 -->
+                <div class="form-group">
+                  <div class="form-label">附件照片（最多 5 張）</div>
+                  <div class="photo-upload-zone" onclick="document.getElementById('photo-{{ key }}').click()"
+                       ondragover="event.preventDefault(); this.classList.add('dragover')"
+                       ondragleave="this.classList.remove('dragover')"
+                       ondrop="handlePhotoDrop(event,'{{ key }}')">
+                    📷 點擊或拖曳照片至此
+                  </div>
+                  <input type="file" id="photo-{{ key }}" accept="image/*" multiple style="display:none"
+                         onchange="handlePhotos(this,'{{ key }}')">
+                  <div class="photo-thumbs" id="thumbs-{{ key }}"></div>
+                </div>
+                {% endif %}
+
+                {% if key not in ('hr028', 'hr029', 'pp015', 'pp017', 'gcd') %}
+                <!-- 附件檔案（呈現於 Word 第2頁） -->
+                <div class="form-group">
+                  <div class="form-label">附件檔案（將附加於文件第2頁）</div>
+                  <div class="photo-upload-zone" onclick="document.getElementById('attach-{{ key }}').click()"
+                       ondragover="event.preventDefault(); this.classList.add('dragover')"
+                       ondragleave="this.classList.remove('dragover')"
+                       ondrop="handleAttachDrop(event,'{{ key }}')">
+                    📎 點擊或拖曳檔案至此
+                  </div>
+                  <input type="file" id="attach-{{ key }}" multiple style="display:none"
+                         onchange="handleAttachments(this,'{{ key }}')">
+                  <div class="photo-thumbs" id="attach-thumbs-{{ key }}"></div>
+                </div>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+
+            <!-- 無選擇提示 -->
+            <div id="noTypeHint" class="form-hint">↑ 請先選擇表單類型</div>
+
+          </div>
+          </div>
+        </div>
+
+        <!-- 搜尋申請單（可摺疊） -->
+        <div class="card">
+          <div class="card-header search-toggle" onclick="toggleSection('searchBody','searchArrow')">
+            🔍 搜尋申請單
+            <span id="searchArrow" class="search-arrow ml-auto">▶</span>
+          </div>
+          <div id="searchBody" class="search-body" style="display:none;">
+            <div class="search-inner">
+              <div class="search-row">
+                <select class="filter-select" id="yearSelect">
+                  {% set cur_year = 2026 %}
+                  {% for y in range(cur_year, 2013, -1) %}
+                  <option value="{{ y }}" {% if y == cur_year %}selected{% endif %}>{{ y }}</option>
+                  {% endfor %}
+                </select>
+                <input class="search-input" id="keywordInput" type="text" placeholder="關鍵字…"
+                       onkeydown="if(event.key==='Enter') searchFiles()">
+                <button class="btn btn-primary btn-sm" onclick="searchFiles()">搜尋</button>
+              </div>
+              <div class="file-list" id="fileList">
+                <div class="list-empty">按搜尋載入清單</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end panel-left -->
+
+
+      <!-- ════ RIGHT: 預覽（固定） ════ -->
+      <div class="panel-right">
+        <div class="preview-wrap">
+          <div class="preview-toolbar">
+            <span class="preview-toolbar-dot"></span>
+            表單預覽
+            <span id="previewFormLabel" class="preview-form-badge"></span>
+          </div>
+          <div class="preview-bg" id="previewBg">
+            <div class="preview-hint">
+              <span class="hint-icon">📋</span>
+              選擇左側表單類型後，即時預覽會顯示在這裡
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end page-body -->
+
+    <div id="toast"></div>
+
+    <!-- ── 存檔成功確認對話框 ── -->
+    <div id="saveModal">
+      <div class="save-modal-box">
+        <div class="save-modal-title">✅ 存檔成功</div>
+        <div class="save-modal-file" id="saveModalFile"></div>
+        <div id="saveModalWarn" style="display:none;margin:.5rem 0 .2rem;padding:.45rem .7rem;background:#fff8e1;border:1px solid #f9a825;border-radius:6px;color:#795548;font-size:.85rem;line-height:1.5;word-break:break-all;"></div>
+        <div class="save-modal-btns">
+          <button class="btn btn-ghost" onclick="hideSaveModal()">關閉</button>
+          <button class="btn btn-success" onclick="openSavedFile()">📂 開啟檔案</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _leaves = [];
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function parseDateKey(s) {
+  const parts = String(s || '').split('/').map(p => parseInt(p, 10));
+  if (parts.length !== 3 || parts.some(isNaN)) return null;
+  return `${parts[0]}-${parts[1]}-${parts[2]}`;
+}
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+}
+
+function renderTodaySummary() {
+  const today = todayKey();
+  const todays = _leaves.filter(l => l._dateKey === today);
+  const summaryEl = document.getElementById('today-summary');
+  const emptyEl = document.getElementById('today-empty');
+  if (!todays.length) {
+    summaryEl.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  summaryEl.innerHTML = todays.map(l => `
+    <span class="leave-chip">
+      <span class="tname">${esc(l.name || l.employee)}</span>
+      <span class="ttype">${esc(l.type)}</span>
+      <span class="ttime">${esc(l.start)}–${esc(l.end)}</span>
+    </span>`).join('');
+}
+
+function populateTypeFilter() {
+  const types = [...new Set(_leaves.map(l => l.type).filter(Boolean))].sort();
+  const sel = document.getElementById('f-type');
+  sel.innerHTML = '<option value="">全部</option>' +
+    types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+}
+
+const TYPE_COLORS = ['#3B7DD8','#2FA876','#E0574A','#7B6FA8','#57A639','#D98C3D','#1C9EBD','#C2477D'];
+function getTimeSegment(start, end) {
+  const startHour = parseInt((start || '').split(':')[0], 10);
+  const endHour = parseInt((end || '').split(':')[0], 10);
+  if ((startHour >= 7 && startHour <= 8) && (endHour >= 17)) return '☀️';
+  if (startHour >= 12) return '🌇';
+  if (endHour <= 12) return '🌅';
+  return '';
+}
+
+let _typeColorMap = {};
+function buildTypeColors() {
+  const types = [...new Set(_leaves.map(l => l.type).filter(Boolean))].sort();
+  _typeColorMap = {};
+  types.forEach((t, i) => { _typeColorMap[t] = TYPE_COLORS[i % TYPE_COLORS.length]; });
+}
+
+function getFilteredLeaves() {
+  const typeFilter = document.getElementById('f-type').value;
+  const empFilter = document.getElementById('f-employee').value.trim().toLowerCase();
+  return _leaves.filter(l => {
+    if (typeFilter && l.type !== typeFilter) return false;
+    if (empFilter && !l.employee.toLowerCase().includes(empFilter) && !(l.name || '').toLowerCase().includes(empFilter)) return false;
+    return true;
+  });
+}
+
+function renderTable() {
+  const rows = getFilteredLeaves();
+  const today = todayKey();
+
+  document.getElementById('f-count').textContent = rows.length;
+
+  const content = document.getElementById('leave-content');
+  if (!rows.length) {
+    content.innerHTML = '<div class="msg-empty"><span>查無符合條件的請假紀錄</span></div>';
+    return;
+  }
+
+  const trs = rows.map(l => {
+    const color = _typeColorMap[l.type];
+    const tagStyle = color ? ` style="background:${color}1A;color:${color}"` : '';
+    return `
+    <tr class="${l._dateKey === today ? 'is-today' : ''}">
+      <td class="td-center">${esc(l.dateDisp)}</td>
+      <td class="td-code">${esc(l.employee)}</td>
+      <td>${esc(l.name)}</td>
+      <td class="td-center"><span class="leave-type-tag"${tagStyle}>${esc(l.type)}</span></td>
+      <td class="td-center">${esc(l.start)}</td>
+      <td class="td-center">${esc(l.end)}</td>
+      <td>${esc(l.remark)}</td>
+    </tr>`;
+  }).join('');
+
+  content.innerHTML = `
+    <table class="pro-table">
+      <thead>
+        <tr>
+          <th style="width:110px" class="center">請假日期</th>
+          <th style="width:90px">員工編號</th>
+          <th style="width:90px">姓名</th>
+          <th style="width:90px" class="center">假別</th>
+          <th style="width:90px" class="center">起始時間</th>
+          <th style="width:90px" class="center">結束時間</th>
+          <th>備註說明</th>
+        </tr>
+      </thead>
+      <tbody>${trs}</tbody>
+    </table>`;
+}
+
+/* ══ 日曆檢視 ══ */
+let calYear, calMonth; // calMonth 為 0-based
+
+function calInit() {
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+}
+
+function calPrev() { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); }
+function calNext() { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } renderCalendar(); }
+function calTodayFn() { calInit(); renderCalendar(); }
+
+function renderCalendar() {
+  const rows = getFilteredLeaves();
+  const byDate = {};
+  rows.forEach(l => { (byDate[l._dateKey] = byDate[l._dateKey] || []).push(l); });
+
+  document.getElementById('cal-title').textContent = `${calYear}年${calMonth + 1}月`;
+
+  const startWeekday = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const today = todayKey();
+
+  let cells = '';
+  for (let i = 0; i < startWeekday; i++) cells += '<div class="cal-cell outside"></div>';
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateKey = `${calYear}-${calMonth + 1}-${d}`;
+    const events = byDate[dateKey] || [];
+    const isToday = dateKey === today;
+    const evHtml = events.map(l => {
+      const color = _typeColorMap[l.type] || '#4A6B82';
+      const label = l.name || l.employee;
+      const segment = getTimeSegment(l.start, l.end);
+      const data = JSON.stringify({ name: l.name, employee: l.employee, type: l.type, date: l.dateDisp, start: l.start, end: l.end, remark: l.remark });
+      return `<div class="cal-event" style="background:${color}22;color:${color}" onclick="showEventDetail('${esc(data)}')">${segment}${esc(label)}</div>`;
+    }).join('');
+    cells += `<div class="cal-cell ${isToday ? 'is-today' : ''}"><div class="cal-date">${d}</div>${evHtml}</div>`;
+  }
+
+  const trailing = (7 - ((startWeekday + daysInMonth) % 7)) % 7;
+  for (let i = 0; i < trailing; i++) cells += '<div class="cal-cell outside"></div>';
+
+  document.getElementById('cal-grid-body').innerHTML = cells;
+  document.getElementById('f-count').textContent = rows.length;
+}
+
+/* ══ 統計圖表檢視 ══ */
+function renderChart() {
+  const rows = getFilteredLeaves();
+  const typeCounts = {};
+  const empCounts = {};
+  const empNames = {};
+  rows.forEach(l => {
+    if (l.type) typeCounts[l.type] = (typeCounts[l.type] || 0) + 1;
+    if (l.employee) {
+      empCounts[l.employee] = (empCounts[l.employee] || 0) + 1;
+      if (l.name) empNames[l.employee] = l.name;
+    }
+  });
+
+  const typeEntries = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
+  const maxType = Math.max(...typeEntries.map(e => e[1]), 1);
+  document.getElementById('chart-type').innerHTML = typeEntries.map(([t, c]) => `
+    <div class="bar-row">
+      <div class="bar-label">${esc(t)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${c / maxType * 100}%;background:${_typeColorMap[t] || '#1565C0'}"></div></div>
+      <div class="bar-value">${c}</div>
+    </div>`).join('');
+
+  const empEntries = Object.entries(empCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const maxEmp = Math.max(...empEntries.map(e => e[1]), 1);
+  document.getElementById('chart-emp').innerHTML = empEntries.map(([e, c]) => `
+    <div class="bar-row">
+      <div class="bar-label">${esc(empNames[e] || e)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${c / maxEmp * 100}%;background:#1976D2"></div></div>
+      <div class="bar-value">${c}</div>
+    </div>`).join('');
+
+  document.getElementById('f-count').textContent = rows.length;
+}
+
+/* ══ 個人請假摘要（搜尋單一員工時顯示） ══ */
+function renderPersonSummary() {
+  const empFilter = document.getElementById('f-employee').value.trim().toLowerCase();
+  const panel = document.getElementById('person-summary');
+
+  if (!empFilter) { panel.classList.remove('show'); panel.innerHTML = ''; return; }
+
+  const matches = _leaves.filter(l =>
+    l.employee.toLowerCase().includes(empFilter) || (l.name || '').toLowerCase().includes(empFilter));
+  const uniqueIds = [...new Set(matches.map(l => l.employee))];
+
+  if (!matches.length || uniqueIds.length !== 1) { panel.classList.remove('show'); panel.innerHTML = ''; return; }
+
+  const empId = uniqueIds[0];
+  const name = matches.find(l => l.name)?.name || empId;
+
+  const typeCounts = {};
+  matches.forEach(l => { if (l.type) typeCounts[l.type] = (typeCounts[l.type] || 0) + 1; });
+
+  panel.classList.add('show');
+  panel.innerHTML = `
+    <div class="ps-head">
+      <span class="ps-name">👤 ${esc(name)}</span>
+      <span class="ps-id">${esc(empId)}</span>
+      <span class="ps-total">累計請假 <strong>${matches.length}</strong> 筆</span>
+    </div>
+    <div class="ps-types">${Object.entries(typeCounts).map(([t, c]) => `<span class="ps-type-chip">${esc(t)} × ${c}</span>`).join('')}</div>
+    <div class="ps-dates">${matches.map(l => `<span class="ps-date-chip">${esc(l.date)}${l.type ? ' · ' + esc(l.type) : ''}</span>`).join('')}</div>
+  `;
+}
+
+/* ══ 檢視切換 ══ */
+let currentView = 'table';
+
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.getElementById('view-table').style.display = view === 'table' ? '' : 'none';
+  document.getElementById('view-calendar').style.display = view === 'calendar' ? 'flex' : 'none';
+  document.getElementById('view-chart').style.display = view === 'chart' ? 'flex' : 'none';
+  renderCurrentView();
+}
+
+function renderCurrentView() {
+  renderPersonSummary();
+  if (currentView === 'table') renderTable();
+  else if (currentView === 'calendar') renderCalendar();
+  else if (currentView === 'chart') renderChart();
+}
+
+const LEAVE_CACHE_KEY = 'pds_leave_cache_v1';
+
+function applyLeaves(leaves) {
+  _leaves = leaves;
+  _leaves.forEach(l => {
+    const key = parseDateKey(l.date);
+    if (key) {
+      const [y, m, d] = key.split('-');
+      l._dateKey = key;
+      l.dateDisp = `${y}/${pad2(m)}/${pad2(d)}`;
+    } else {
+      l._dateKey = '';
+      l.dateDisp = l.date;
+    }
+  });
+  buildTypeColors();
+  renderTodaySummary();
+  populateTypeFilter();
+  renderCurrentView();
+}
+
+function showEventDetail(jsonStr) {
+  try {
+    const data = JSON.parse(jsonStr);
+    const modal = document.getElementById('event-modal');
+    const content = document.querySelector('.event-modal-content');
+    const segment = getTimeSegment(data.start, data.end);
+    content.innerHTML = `
+      <span class="event-modal-close" onclick="closeEventModal()">✕</span>
+      <h3 style="margin-bottom: 1rem; color: var(--text);">${esc(data.name || data.employee)}</h3>
+      <div class="event-detail-row">
+        <div class="event-detail-label">日期</div>
+        <div class="event-detail-value">${esc(data.date)}</div>
+      </div>
+      <div class="event-detail-row">
+        <div class="event-detail-label">時段</div>
+        <div class="event-detail-value"><span class="event-segment-icon">${segment}</span> ${segment === '☀️' ? '整天' : segment === '🌅' ? '上午' : '下午'}</div>
+      </div>
+      <div class="event-detail-row">
+        <div class="event-detail-label">時間</div>
+        <div class="event-detail-value time">${esc(data.start)} - ${esc(data.end)}</div>
+      </div>
+      <div class="event-detail-row">
+        <div class="event-detail-label">假別</div>
+        <div class="event-detail-value">${esc(data.type)}</div>
+      </div>
+      ${data.remark ? `<div class="event-detail-row">
+        <div class="event-detail-label">備註</div>
+        <div class="event-detail-value">${esc(data.remark)}</div>
+      </div>` : ''}
+    `;
+    modal.classList.add('show');
+  } catch (e) {
+    console.error('Error showing event detail:', e);
+  }
+}
+
+function closeEventModal() {
+  document.getElementById('event-modal').classList.remove('show');
+}
+
+function switchSubPage(page) {
+  const leavePage = document.getElementById('sub-page-leave');
+  const overtimePage = document.getElementById('sub-page-overtime');
+  const applicationPage = document.getElementById('sub-page-application');
+  const tabs = document.querySelectorAll('.page-sub-tab');
+
+  tabs.forEach(t => t.classList.remove('active'));
+
+  if (page === 'leave') {
+    leavePage.style.display = '';
+    overtimePage.style.display = 'none';
+    applicationPage.style.display = 'none';
+    tabs[0].classList.add('active');
+  } else if (page === 'application') {
+    leavePage.style.display = 'none';
+    overtimePage.style.display = 'none';
+    applicationPage.style.display = '';
+    tabs[1].classList.add('active');
+  } else if (page === 'overtime') {
+    leavePage.style.display = 'none';
+    overtimePage.style.display = '';
+    applicationPage.style.display = 'none';
+    tabs[2].classList.add('active');
+    loadOvertimeData();
+  }
+}
+
+let _overtimes = [];
+let _overtimesLoaded = false;
+
+async function loadOvertimeData() {
+  if (_overtimesLoaded) return;
+  try {
+    const res = await fetch('/api/overtime/list');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    _overtimesLoaded = true;
+    applyOvertimes(data.overtimes);
+  } catch (e) {
+    document.getElementById('overtime-content').innerHTML = `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+
+function applyOvertimes(overtimes) {
+  _overtimes = overtimes;
+  _overtimes.forEach(o => {
+    const key = parseDateKey(o.date);
+    if (key) {
+      const [y, m, d] = key.split('-');
+      o._dateKey = key;
+      o.dateDisp = `${y}/${pad2(m)}/${pad2(d)}`;
+      o._monthKey = `${y}-${pad2(m)}`;
+    } else {
+      o._dateKey = '';
+      o.dateDisp = o.date;
+      o._monthKey = '';
+    }
+    o._hoursNum = parseFloat(o.hours) || 0;
+  });
+  populateOtMonthFilter();
+  renderOtCurrentView();
+}
+
+function populateOtMonthFilter() {
+  const months = [...new Set(_overtimes.map(o => o._monthKey).filter(Boolean))].sort().reverse();
+  const sel = document.getElementById('ot-f-month');
+  sel.innerHTML = '<option value="">全部</option>' + months.map(m => {
+    const [y, mm] = m.split('-');
+    return `<option value="${m}">${y}年${mm}月</option>`;
+  }).join('');
+}
+
+function getFilteredOvertimes() {
+  const monthFilter = document.getElementById('ot-f-month').value;
+  const empFilter = document.getElementById('ot-f-employee').value.trim().toLowerCase();
+  return _overtimes.filter(o => {
+    if (monthFilter && o._monthKey !== monthFilter) return false;
+    if (empFilter && !o.employee.toLowerCase().includes(empFilter) && !(o.name || '').toLowerCase().includes(empFilter)) return false;
+    return true;
+  });
+}
+
+function renderOtTable() {
+  const rows = getFilteredOvertimes();
+  document.getElementById('ot-f-count').textContent = rows.length;
+
+  const content = document.getElementById('overtime-content');
+  if (!rows.length) {
+    content.innerHTML = '<div class="msg-empty"><span>查無符合條件的加班紀錄</span></div>';
+    return;
+  }
+
+  const trs = rows.map(o => `
+    <tr>
+      <td class="td-center">${esc(o.dateDisp)}</td>
+      <td class="td-code">${esc(o.employee)}</td>
+      <td>${esc(o.name)}</td>
+      <td class="td-center">${esc(o.hours)}</td>
+      <td>${esc(o.remark)}</td>
+    </tr>`).join('');
+
+  content.innerHTML = `
+    <table class="pro-table">
+      <thead>
+        <tr>
+          <th style="width:110px" class="center">加班日期</th>
+          <th style="width:90px">員工編號</th>
+          <th style="width:90px">姓名</th>
+          <th style="width:90px" class="center">加班時數</th>
+          <th>備註</th>
+        </tr>
+      </thead>
+      <tbody>${trs}</tbody>
+    </table>`;
+}
+
+function renderOtChart() {
+  const rows = getFilteredOvertimes();
+  const monthTotals = {};
+  const empTotals = {};
+  const empNames = {};
+  rows.forEach(o => {
+    if (o._monthKey) monthTotals[o._monthKey] = (monthTotals[o._monthKey] || 0) + o._hoursNum;
+    if (o.employee) {
+      empTotals[o.employee] = (empTotals[o.employee] || 0) + o._hoursNum;
+      if (o.name) empNames[o.employee] = o.name;
+    }
+  });
+
+  const monthEntries = Object.entries(monthTotals).sort((a, b) => a[0].localeCompare(b[0]));
+  const maxMonth = Math.max(...monthEntries.map(e => e[1]), 1);
+  document.getElementById('ot-chart-month').innerHTML = monthEntries.map(([m, v]) => {
+    const [y, mm] = m.split('-');
+    return `
+    <div class="bar-row">
+      <div class="bar-label">${y}年${mm}月</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${v / maxMonth * 100}%;background:#1976D2"></div></div>
+      <div class="bar-value">${v.toFixed(1)}</div>
+    </div>`;
+  }).join('');
+
+  const empEntries = Object.entries(empTotals).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const maxEmp = Math.max(...empEntries.map(e => e[1]), 1);
+  document.getElementById('ot-chart-emp').innerHTML = empEntries.map(([e, v]) => `
+    <div class="bar-row">
+      <div class="bar-label">${esc(empNames[e] || e)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${v / maxEmp * 100}%;background:#2FA876"></div></div>
+      <div class="bar-value">${v.toFixed(1)}</div>
+    </div>`).join('');
+
+  document.getElementById('ot-f-count').textContent = rows.length;
+}
+
+function renderOtPersonSummary() {
+  const empFilter = document.getElementById('ot-f-employee').value.trim().toLowerCase();
+  const panel = document.getElementById('ot-person-summary');
+
+  if (!empFilter) { panel.classList.remove('show'); panel.innerHTML = ''; return; }
+
+  const matches = _overtimes.filter(o =>
+    o.employee.toLowerCase().includes(empFilter) || (o.name || '').toLowerCase().includes(empFilter));
+  const uniqueIds = [...new Set(matches.map(o => o.employee))];
+
+  if (!matches.length || uniqueIds.length !== 1) { panel.classList.remove('show'); panel.innerHTML = ''; return; }
+
+  const empId = uniqueIds[0];
+  const name = matches.find(o => o.name)?.name || empId;
+  const totalHours = matches.reduce((s, o) => s + o._hoursNum, 0);
+
+  const monthTotals = {};
+  matches.forEach(o => { if (o._monthKey) monthTotals[o._monthKey] = (monthTotals[o._monthKey] || 0) + o._hoursNum; });
+  const monthChips = Object.entries(monthTotals).sort((a, b) => a[0].localeCompare(b[0])).map(([m, v]) => {
+    const [y, mm] = m.split('-');
+    return `<span class="ps-type-chip">${y}年${mm}月 × ${v.toFixed(1)}h</span>`;
+  }).join('');
+
+  panel.classList.add('show');
+  panel.innerHTML = `
+    <div class="ps-head">
+      <span class="ps-name">👤 ${esc(name)}</span>
+      <span class="ps-id">${esc(empId)}</span>
+      <span class="ps-total">累計加班 <strong>${totalHours.toFixed(1)}</strong> 小時 / ${matches.length} 筆</span>
+    </div>
+    <div class="ps-types">${monthChips}</div>
+  `;
+}
+
+let currentOtView = 'table';
+
+function switchOtView(view) {
+  currentOtView = view;
+  document.querySelectorAll('#sub-page-overtime .view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.getElementById('ot-view-table').style.display = view === 'table' ? '' : 'none';
+  document.getElementById('ot-view-chart').style.display = view === 'chart' ? 'flex' : 'none';
+  renderOtCurrentView();
+}
+
+function renderOtCurrentView() {
+  renderOtPersonSummary();
+  if (currentOtView === 'table') renderOtTable();
+  else renderOtChart();
+}
+
+document.getElementById('ot-f-month').addEventListener('change', renderOtCurrentView);
+document.getElementById('ot-f-employee').addEventListener('input', renderOtCurrentView);
+
+if (new URLSearchParams(window.location.search).get('tab') === 'overtime') {
+  switchSubPage('overtime');
+}
+
+async function loadLeaves() {
+  calInit();
+  const cached = sessionStorage.getItem(LEAVE_CACHE_KEY);
+  if (cached) {
+    try { applyLeaves(JSON.parse(cached)); } catch (e) { /* 快取損毀，忽略 */ }
+  } else {
+    document.getElementById('leave-content').innerHTML =
+      '<div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>';
+  }
+
+  try {
+    const res = await fetch('/api/leave/list');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    sessionStorage.setItem(LEAVE_CACHE_KEY, JSON.stringify(data.leaves));
+    applyLeaves(data.leaves);
+  } catch (e) {
+    if (!cached) {
+      document.getElementById('leave-content').innerHTML =
+        `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
+    }
+  }
+}
+
+document.getElementById('f-type').addEventListener('change', renderCurrentView);
+document.getElementById('f-employee').addEventListener('input', renderCurrentView);
+
+loadLeaves();
+
+// ── 狀態 ──────────────────────────────────────────────────────────
+let _type = null;
+const _photos = {};    // key -> File[]
+const _photoUrls = {}; // key -> ObjectURL[]
+const _attachments = {};    // key -> File[]
+const _attachmentUrls = {}; // key -> ObjectURL[] (僅供顯示縮圖用，非圖片則為 '')
+
+// ── 表單類型選擇 ─────────────────────────────────────────────────
+function selectType(key) {
+  _type = key;
+  const sel = document.getElementById('typeSelect');
+  if (sel && sel.value !== key) sel.value = key;
+  document.querySelectorAll('.form-section').forEach(s => s.classList.remove('active'));
+  const sec = document.getElementById('section-' + key);
+  if (sec) sec.classList.add('active');
+  document.getElementById('formSubmitArea').style.display = '';
+  document.getElementById('noTypeHint').style.display = 'none';
+  // 自動填今天日期
+  const di = document.getElementById(key + '_date');
+  if (di && !di.value) di.value = todayStr();
+  updatePreview();
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// ── 照片 ─────────────────────────────────────────────────────────
+function handlePhotos(input, key) {
+  if (!_photos[key]) _photos[key] = [];
+  const files = Array.from(input.files);
+  const room  = 5 - _photos[key].length;
+  if (room <= 0) { showToast('最多 5 張照片', 'error'); input.value=''; return; }
+  const add = files.slice(0, room);
+  if (files.length > room) showToast(`最多 5 張，已略過多餘的 ${files.length-room} 張`, 'info');
+  add.forEach(f => _photos[key].push(f));
+  // 更新 ObjectURL 清單
+  if (!_photoUrls[key]) _photoUrls[key] = [];
+  add.forEach(f => _photoUrls[key].push(URL.createObjectURL(f)));
+  renderThumbs(key);
+  updatePreview();
+  input.value = '';
+}
+
+function renderThumbs(key) {
+  const wrap = document.getElementById('thumbs-' + key);
+  if (!wrap) return;
+  wrap.innerHTML = (_photos[key] || []).map((f, i) =>
+    `<div class="photo-thumb">
+       <img src="${_photoUrls[key][i]}" alt="">
+       <button class="rm" onclick="removePhoto('${key}',${i})" title="移除">✕</button>
+     </div>`
+  ).join('');
+}
+
+function removePhoto(key, idx) {
+  if (!_photos[key]) return;
+  URL.revokeObjectURL(_photoUrls[key][idx]);
+  _photos[key].splice(idx, 1);
+  _photoUrls[key].splice(idx, 1);
+  renderThumbs(key);
+  updatePreview();
+}
+
+function handlePhotoDrop(e, key) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  const input = document.getElementById('photo-' + key);
+  input.files = e.dataTransfer.files;
+  handlePhotos(input, key);
+}
+
+// ── 附件檔案（呈現於 Word 第2頁） ──────────────────────────────────
+function handleAttachments(input, key) {
+  if (!_attachments[key]) _attachments[key] = [];
+  if (!_attachmentUrls[key]) _attachmentUrls[key] = [];
+  Array.from(input.files).forEach(f => {
+    _attachments[key].push(f);
+    _attachmentUrls[key].push(f.type.startsWith('image/') ? URL.createObjectURL(f) : '');
+  });
+  renderAttachThumbs(key);
+  input.value = '';
+}
+
+function handleAttachDrop(e, key) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  const input = document.getElementById('attach-' + key);
+  input.files = e.dataTransfer.files;
+  handleAttachments(input, key);
+}
+
+function renderAttachThumbs(key) {
+  const wrap = document.getElementById('attach-thumbs-' + key);
+  if (!wrap) return;
+  wrap.innerHTML = (_attachments[key] || []).map((f, i) => {
+    const url = _attachmentUrls[key][i];
+    const inner = url
+      ? `<img src="${url}" alt="">`
+      : `<div style="width:60px;height:60px;display:flex;align-items:center;justify-content:center;
+                background:var(--surface-2);border:1.5px solid var(--border-d);border-radius:4px;
+                font-size:0.7rem;text-align:center;padding:2px;overflow:hidden;word-break:break-all;">${f.name}</div>`;
+    return `<div class="photo-thumb">
+       ${inner}
+       <button class="rm" onclick="removeAttachment('${key}',${i})" title="移除">✕</button>
+     </div>`;
+  }).join('');
+}
+
+function removeAttachment(key, idx) {
+  if (!_attachments[key]) return;
+  if (_attachmentUrls[key][idx]) URL.revokeObjectURL(_attachmentUrls[key][idx]);
+  _attachments[key].splice(idx, 1);
+  _attachmentUrls[key].splice(idx, 1);
+  renderAttachThumbs(key);
+}
+
+// ── 送出 ─────────────────────────────────────────────────────────
+function submitForm() {
+  if (!_type) return;
+  const sec = document.getElementById('section-' + _type);
+  const fd  = new FormData();
+  fd.append('form_type', _type);
+  sec.querySelectorAll('[name]').forEach(el => {
+    if (el.type === 'checkbox' && !el.checked) return; // 略過未勾選的 checkbox
+    fd.append(el.name, el.value);
+  });
+  (_photos[_type] || []).forEach(f => fd.append('photos[]', f));
+  (_attachments[_type] || []).forEach(f => fd.append('attachments[]', f));
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = '存檔中…';
+  fetch('/api/application/create', { method:'POST', body:fd })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        clearForm();
+        // 若搜尋面板是開啟的就重新搜尋
+        if (document.getElementById('searchBody').style.display !== 'none') searchFiles();
+        showSaveModal(d.filename, d.path, d.warning || '');  // 詢問是否開啟
+      } else {
+        showToast('❌ ' + (d.error || '存檔失敗'), 'error');
+      }
+    })
+    .catch(e => showToast('❌ 網路錯誤：' + e.message, 'error'))
+    .finally(() => { btn.disabled=false; btn.innerHTML='💾 存檔到 NAS'; });
+}
+
+// pp015 受文單位預設勾選值
+const _DEPT_DEFAULTS = { pp015: ['總經理', '加工部'] };
+
+function clearForm() {
+  if (!_type) return;
+  document.getElementById('section-' + _type)
+    .querySelectorAll('input:not([type=file]),textarea').forEach(el => {
+      if (el.type === 'checkbox') {
+        // 還原預設勾選狀態
+        const defs = _DEPT_DEFAULTS[_type] || [];
+        el.checked = defs.includes(el.value);
+      } else {
+        el.value = '';
+      }
+    });
+  const di = document.getElementById(_type + '_date');
+  if (di) di.value = todayStr();
+  (_photoUrls[_type] || []).forEach(u => URL.revokeObjectURL(u));
+  _photos[_type]    = [];
+  _photoUrls[_type] = [];
+  renderThumbs(_type);
+  (_attachmentUrls[_type] || []).forEach(u => { if (u) URL.revokeObjectURL(u); });
+  _attachments[_type]    = [];
+  _attachmentUrls[_type] = [];
+  renderAttachThumbs(_type);
+  updatePreview();
+}
+
+// ── 摺疊區塊（新增申請單 / 搜尋申請單）共用 ─────────────────────────
+function toggleSection(bodyId, arrowId) {
+  const body  = document.getElementById(bodyId);
+  const arrow = document.getElementById(arrowId);
+  const open  = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  arrow.classList.toggle('open', open);
+  if (bodyId === 'searchBody' && open && document.getElementById('fileList').innerHTML.includes('按搜尋')) searchFiles();
+}
+
+function searchFiles() {
+  const year    = document.getElementById('yearSelect').value;
+  const keyword = document.getElementById('keywordInput').value.trim();
+  const list    = document.getElementById('fileList');
+  list.innerHTML = '<div class="list-empty">搜尋中…</div>';
+  fetch(`/api/application/list?year=${encodeURIComponent(year)}&keyword=${encodeURIComponent(keyword)}`)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.files || !d.files.length) {
+        list.innerHTML = '<div class="list-empty">查無資料' + (d.error ? '（'+d.error+'）' : '') + '</div>';
+        return;
+      }
+      _searchResults = d.files;
+      list.innerHTML = d.files.map((f, i) => `
+        <div class="file-row">
+          <span style="font-size:1rem;flex-shrink:0;">📄</span>
+          <span class="file-name" title="${esc(f.filename)}">${esc(f.filename)}</span>
+          <span class="file-meta">${f.mtime.slice(0,10)}</span>
+          <button class="btn btn-ghost btn-sm" onclick="viewSavedFile(${i})">預覽</button>
+          <button class="btn btn-ghost btn-sm" onclick="openFile(${i})">開啟</button>
+        </div>`).join('');
+    })
+    .catch(e => { list.innerHTML = '<div class="list-empty">錯誤：' + e.message + '</div>'; });
+}
+
+function openFile(idx) {
+  openFileByPath(_searchResults[idx].path);
+}
+
+function openFileByPath(path) {
+  fetch('/api/application/open', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({path})
+  }).then(r => r.json()).then(d => { if (!d.ok) showToast('開啟失敗：'+(d.error||''), 'error'); });
+}
+
+// ── 檢視既有申請單檔案 ─────────────────────────────────────────────
+let _viewMode = false;
+let _searchResults = [];
+
+function viewSavedFile(idx) {
+  const { path, filename } = _searchResults[idx];
+  const bg = document.getElementById('previewBg');
+  bg.innerHTML = '<div class="preview-hint">載入中…</div>';
+  document.getElementById('previewFormLabel').textContent = filename;
+  fetch(`/api/application/view?path=${encodeURIComponent(path)}`)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) {
+        bg.innerHTML = `<div class="preview-hint"><span class="hint-icon">⚠️</span>${esc(d.error || '預覽失敗')}</div>`;
+        return;
+      }
+      _viewMode = true;
+      bg.innerHTML = `
+        <div class="doc-paper" style="max-width:820px;">
+          <div style="margin:0 -2.2rem 1rem;">
+            <button class="btn btn-ghost btn-sm" onclick="backToFormPreview()">← 返回表單預覽</button>
+          </div>
+          ${d.html}
+        </div>`;
+    })
+    .catch(e => { bg.innerHTML = `<div class="preview-hint"><span class="hint-icon">⚠️</span>${esc(e.message)}</div>`; });
+}
+
+function backToFormPreview() {
+  _viewMode = false;
+  updatePreview();
+}
+
+// ── 預覽防抖（打字時防閃）── 180ms 無操作才觸發更新 ──────────────
+let _pvTimer = null;
+function debouncePreview() {
+  clearTimeout(_pvTimer);
+  _pvTimer = setTimeout(updatePreview, 180);
+}
+
+// ── 即時預覽 ─────────────────────────────────────────────────────
+function val(id) {
+  const el = document.getElementById(id);
+  return el ? (el.value || '') : '';
+}
+function ph(v, placeholder) {
+  if (v) return esc(v).replace(/\n/g, '<br>');
+  return `<span class="doc-placeholder">${placeholder}</span>`;
+}
+// 勾選框輔助：選中顯示 ■，未選顯示 □
+function chk(current, target) {
+  return (current === target ? '■' : '□') + target;
+}
+// 複選框陣列輔助（checkbox_group）
+function chkArr(arr, target) {
+  return (arr.includes(target) ? '■' : '□') + target;
+}
+
+const PREVIEW = {
+  // ── PP-M-015 內部業務聯絡單 ──
+  pp015(photos) {
+    const date      = val('pp015_date');
+    const priority  = val('pp015_priority');
+    const depts     = Array.from(document.querySelectorAll('#section-pp015 input[name="depts[]"]:checked')).map(el => el.value);
+    const author    = val('pp015_author');
+    const subject   = val('pp015_subject');
+    const content   = val('pp015_content');
+    return `
+    <div class="doc-paper">
+      <div class="doc-letterhead">
+        <div class="doc-co-name">詠 基 工 業 股 份 有 限 公 司</div>
+        <div class="doc-form-title">內部業務聯絡單</div>
+        <div class="doc-form-no">【PP-M-015】</div>
+      </div>
+      <table class="doc-table">
+        <tr>
+          <th>速&emsp;別</th>
+          <td>
+            <span style="margin-right:1rem;">${chk(priority,'最速件')}</span>
+            <span style="margin-right:1rem;">${chk(priority,'速件')}</span>
+            <span>${chk(priority,'普通件')}</span>
+          </td>
+        </tr>
+        <tr>
+          <th>承辦人</th>
+          <td>${ph(author,'填寫承辦人')}</td>
+        </tr>
+        <tr>
+          <th>主&emsp;旨</th>
+          <td>${ph(subject,'填寫主旨')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">說&emsp;明</th>
+          <td class="tall" style="min-height:120px;">${ph(content,'填寫說明內容…')}</td>
+        </tr>
+      </table>
+      ${photosHtml(photos)}
+      <div class="doc-sig-row">
+        <div class="doc-sig-cell"><div class="doc-sig-label">承辦人</div><div class="doc-sig-value">${esc(author)}</div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">部門主管</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">單位主管</div><div class="doc-sig-value"></div></div>
+      </div>
+    </div>`;
+  },
+
+  // ── P-HR-028-01A 人事懲戒核定書 ──
+  hr028(photos) {
+    const date     = val('hr028_date');
+    const empNo    = val('hr028_emp_no');
+    const name     = val('hr028_name');
+    const title    = val('hr028_title');
+    const punish   = val('hr028_punish');
+    const punCnt   = val('hr028_pun_count');
+    const reason   = val('hr028_reason');
+    const evidence = val('hr028_evidence');
+    const method   = val('hr028_method');
+    // 懲戒分類 4 種
+    const punishOpts = ['大過','小過','申誡','警告'];
+    return `
+    <div class="doc-paper">
+      <div class="doc-letterhead">
+        <div class="doc-co-name">詠基工業股份有限公司</div>
+        <div class="doc-form-title">人事懲戒核定書</div>
+        <div class="doc-form-no">【P-HR-028-01A】</div>
+      </div>
+      <table class="doc-table">
+        <tr>
+          <th>員工編號</th><td>${ph(empNo,'')}</td>
+          <th>單&emsp;位</th><td>加工課</td>
+        </tr>
+        <tr>
+          <th>姓&emsp;名</th><td>${ph(name,'填寫姓名')}</td>
+          <th>職&emsp;稱</th><td>${ph(title,'')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.4rem;">懲戒分類</th>
+          <td colspan="3">
+            ${punishOpts.map(o => {
+              const mark = chk(punish, o);
+              const cntStr = (punish === o && punCnt) ? `<span style="margin-left:.3rem;color:#c00;font-weight:600;">${esc(punCnt)}次</span>` : '';
+              return `<span style="margin-right:1.4rem;">${mark}${cntStr}</span>`;
+            }).join('')}
+          </td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">懲戒事由</th>
+          <td colspan="3" class="tall" style="min-height:80px;">${ph(reason,'填寫懲戒事由…')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">檢附之證據</th>
+          <td colspan="3" class="tall" style="min-height:60px;">${ph(evidence,'填寫檢附之證據…')}</td>
+        </tr>
+        <tr>
+          <th>懲戒方式</th>
+          <td colspan="3">${ph(method,'填寫懲戒方式')}</td>
+        </tr>
+      </table>
+      ${photosHtml(photos)}
+      <div class="doc-sig-row">
+        <div class="doc-sig-cell"><div class="doc-sig-label">管理部建議</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">部門主管建議</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">總經理核定意見</div><div class="doc-sig-value"></div></div>
+      </div>
+    </div>`;
+  },
+
+  // ── 人事獎勵核定書 ──
+  hr029(photos) {
+    const date     = val('hr029_date');
+    const empNo    = val('hr029_emp_no');
+    const name     = val('hr029_name');
+    const title    = val('hr029_title');
+    const award    = val('hr029_award');
+    const awardCnt = val('hr029_award_count');
+    const reason   = val('hr029_reason');
+    const evidence = val('hr029_evidence');
+    const method   = val('hr029_method');
+    // 獎勵分類 5 種
+    const awardOpts = ['職位晉昇','大功','小功','嘉獎','優點'];
+    return `
+    <div class="doc-paper">
+      <div class="doc-letterhead">
+        <div class="doc-co-name">詠基工業股份有限公司</div>
+        <div class="doc-form-title">人事獎勵核定書</div>
+      </div>
+      <table class="doc-table">
+        <tr>
+          <th>員工編號</th><td>${ph(empNo,'')}</td>
+          <th>單&emsp;位</th><td>加工課</td>
+        </tr>
+        <tr>
+          <th>姓&emsp;名</th><td>${ph(name,'填寫姓名')}</td>
+          <th>職&emsp;稱</th><td>${ph(title,'')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.4rem;">獎勵分類</th>
+          <td colspan="3">
+            ${awardOpts.map(o => {
+              const mark = chk(award, o);
+              const cntStr = (award === o && awardCnt && o !== '職位晉昇') ? `<span style="margin-left:.3rem;color:#c00;font-weight:600;">${esc(awardCnt)}次</span>` : '';
+              return `<span style="margin-right:1.4rem;">${mark}${cntStr}</span>`;
+            }).join('')}
+          </td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">獎勵事由</th>
+          <td colspan="3" class="tall" style="min-height:80px;">${ph(reason,'填寫獎勵事由…')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">檢附之證據</th>
+          <td colspan="3" class="tall" style="min-height:60px;">${ph(evidence,'填寫檢附之證據…')}</td>
+        </tr>
+        <tr>
+          <th>獎勵方式</th>
+          <td colspan="3">${ph(method,'填寫獎勵方式')}</td>
+        </tr>
+      </table>
+      ${photosHtml(photos)}
+      <div class="doc-sig-row">
+        <div class="doc-sig-cell"><div class="doc-sig-label">管理部建議</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">部門主管建議</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">總經理核定意見</div><div class="doc-sig-value"></div></div>
+      </div>
+    </div>`;
+  },
+
+  // ── PP-M-017 報廢申請單 ──
+  pp017(photos) {
+    const date      = val('pp017_date');
+    const category  = val('pp017_category');
+    const applicant = val('pp017_applicant');
+    const item      = val('pp017_item');
+    const itemNo    = val('pp017_item_no');
+    const qty       = val('pp017_qty');
+    const reason    = val('pp017_reason');
+    const cats = ['機器','模治具','量規儀器','其他'];
+    return `
+    <div class="doc-paper">
+      <div class="doc-letterhead">
+        <div class="doc-co-name">詠基工業股份有限公司</div>
+        <div class="doc-form-title">報廢申請單</div>
+        <div class="doc-form-no">【PP-M-017】</div>
+      </div>
+      <table class="doc-table">
+        <tr>
+          <th style="width:auto;">類別</th>
+          <td colspan="3">
+            ${cats.map(o => `<span style="margin-right:1.2rem;">${chk(category,o)}</span>`).join('')}
+          </td>
+        </tr>
+        <tr>
+          <th>申請人</th><td>${ph(applicant,'填寫申請人')}</td>
+          <th>申請日期</th><td>${date ? rocDate(date) : '<span class="doc-placeholder">填寫日期</span>'}</td>
+        </tr>
+        <tr>
+          <th>品名/規格</th><td>${ph(item,'填寫品名/規格')}</td>
+          <th>部門主管</th><td></td>
+        </tr>
+        <tr>
+          <th>編號/品號</th><td>${ph(itemNo,'')}</td>
+          <th>數&emsp;量</th><td>${ph(qty,'')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">報廢理由</th>
+          <td colspan="3" class="tall" style="min-height:110px;">${ph(reason,'填寫報廢理由…')}</td>
+        </tr>
+      </table>
+      ${photosHtml(photos)}
+      <div class="doc-sig-row">
+        <div class="doc-sig-cell" style="flex:2;"><div class="doc-sig-label">總經理裁示說明</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">申請人</div><div class="doc-sig-value">${esc(applicant)}</div></div>
+      </div>
+    </div>`;
+  },
+
+  // ── 公出單 ──
+  gcd(photos) {
+    const date     = val('gcd_date');
+    const name     = val('gcd_name');
+    const location = val('gcd_location');
+    const reason   = val('gcd_reason');
+    return `
+    <div class="doc-paper">
+      <div class="doc-letterhead">
+        <div class="doc-co-name">詠基工業股份有限公司</div>
+        <div class="doc-form-title">公出單</div>
+      </div>
+      <table class="doc-table">
+        <tr>
+          <th>姓&emsp;名</th><td>${ph(name,'填寫姓名')}</td>
+          <th>日&emsp;期</th><td>${date ? westernDate(date) : '<span class="doc-placeholder">填寫日期</span>'}</td>
+        </tr>
+        <tr>
+          <th>地&emsp;點</th><td colspan="3">${ph(location,'填寫地點')}</td>
+        </tr>
+        <tr>
+          <th style="vertical-align:top;padding-top:.5rem;">外出原因</th>
+          <td colspan="3" class="tall" style="min-height:80px;">${ph(reason,'填寫外出原因…')}</td>
+        </tr>
+      </table>
+      ${photosHtml(photos)}
+      <div class="doc-sig-row">
+        <div class="doc-sig-cell"><div class="doc-sig-label">核准</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">出廠</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">入廠</div><div class="doc-sig-value"></div></div>
+        <div class="doc-sig-cell"><div class="doc-sig-label">守衛</div><div class="doc-sig-value"></div></div>
+      </div>
+    </div>`;
+  }
+};
+
+// 西元日期 → 民國日期字串（YYYY-MM-DD → 民國XXX年XX月XX日）
+function rocDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return esc(iso);
+  return `民國${parseInt(m[1],10)-1911}年${parseInt(m[2],10)}月${parseInt(m[3],10)}日`;
+}
+// 西元日期 → 西元格式（YYYY-MM-DD → YYYY 年 MM 月 DD 日）
+function westernDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return esc(iso);
+  return `${m[1]} 年 ${parseInt(m[2],10).toString().padStart(2,'0')} 月 ${parseInt(m[3],10).toString().padStart(2,'0')} 日`;
+}
+
+function photosHtml(urls) {
+  if (!urls || !urls.length) return '';
+  return `
+    <div class="doc-photos-wrap">
+      <div class="doc-photos-label">附件照片</div>
+      <div class="doc-photo-grid">
+        ${urls.map(u => `<img class="doc-photo" src="${u}" alt="">`).join('')}
+      </div>
+    </div>`;
+}
+
+const FORM_NAMES = {
+  pp015: 'PP-M-015 內部業務聯絡單',
+  hr028: 'P-HR-028-01A 人事懲戒核定書',
+  hr029: '人事獎勵核定書',
+  pp017: 'PP-M-017 報廢申請單',
+  gcd: '公出單',
+};
+
+function updatePreview() {
+  if (_viewMode) return;
+  const bg = document.getElementById('previewBg');
+  if (!_type || !PREVIEW[_type]) {
+    bg.innerHTML = `<div class="preview-hint"><span class="hint-icon">📋</span>選擇左側表單類型後，即時預覽會顯示在這裡</div>`;
+    document.getElementById('previewFormLabel').textContent = '';
+    return;
+  }
+  const urls = _photoUrls[_type] || [];
+  bg.innerHTML = PREVIEW[_type](urls);
+  document.getElementById('previewFormLabel').textContent = FORM_NAMES[_type] || '';
+}
+
+// ── Toast ──────────────────────────────────────────────────────────
+let _tt;
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show ' + type;
+  clearTimeout(_tt); _tt = setTimeout(() => t.className='', 3500);
+}
+
+// ── 存檔成功確認對話框 ───────────────────────────────────────────────
+let _savedPath = '';
+function showSaveModal(filename, path, warning) {
+  _savedPath = path || '';
+  document.getElementById('saveModalFile').textContent = filename;
+  // NAS 警告（存到桌面的提示）
+  const warnEl = document.getElementById('saveModalWarn');
+  if (warning && warnEl) {
+    warnEl.textContent = '⚠️ ' + warning;
+    warnEl.style.display = 'block';
+  } else if (warnEl) {
+    warnEl.style.display = 'none';
+  }
+  document.getElementById('saveModal').classList.add('open');
+}
+function hideSaveModal() {
+  document.getElementById('saveModal').classList.remove('open');
+}
+function openSavedFile() {
+  hideSaveModal();
+  if (_savedPath) openFileByPath(_savedPath);
+}
+
+// 點遮罩也可關閉
+document.getElementById('saveModal').addEventListener('click', function(e) {
+  if (e.target === this) hideSaveModal();
+});
+</script>
+
+<div id="event-modal" onclick="if(event.target===this) closeEventModal()">
+  <div class="event-modal-content"></div>
+</div>
+
+</body>
+</html>

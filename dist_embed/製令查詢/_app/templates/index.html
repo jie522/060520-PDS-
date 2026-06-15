@@ -43,15 +43,15 @@
         }
 
         /* ── Header ── */
-        .header{background:linear-gradient(180deg,#1976D2,#0D47A1);color:#fff;
+        .header{background:#1565C0;color:#fff;
           position:sticky;top:0;z-index:200;box-shadow:0 2px 6px rgba(0,0,0,.3)}
         .header-inner{display:flex;align-items:flex-end;padding:.4rem 1rem 0}
         .header-title{font-size:1.1rem;font-weight:700;padding-bottom:.45rem;white-space:nowrap;margin-right:.5rem}
         .header-tabs{display:flex;align-items:flex-end;gap:2px}
-        .header-tab{display:inline-block;padding:.3rem 1rem;font-size:.82rem;font-weight:600;
-          color:rgba(255,255,255,.85);text-decoration:none;border-radius:6px 6px 0 0;
+        .header-tab{display:inline-block;padding:.3rem 1rem;font-size:1rem;font-weight:600;
+          color:rgba(255,255,255,.85);text-decoration:none;border-radius:0;
           background:rgba(255,255,255,.15);cursor:pointer;transition:background .15s}
-        .header-tab.active,.header-tab:hover{background:#fff;color:var(--erp-blue-dark)}
+        .header-tab.active,.header-tab:hover{background:#fff;color:#1565C0}
         .header-tab.active{color:var(--erp-blue-dark)}
 
         /* ── Page body wrapper ── */
@@ -272,6 +272,105 @@
 
         /* ── Spinner ── */
         .spinner-border { color: var(--erp-blue) !important; }
+
+        /* ── 庫存歷史/未來異動 Modal ── */
+        .modal-overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(10,20,40,0.5);
+            backdrop-filter: blur(2px);
+            z-index: 1060;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .modal-box {
+            background: var(--surface);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            width: min(1200px, 95vw);
+            max-height: 88vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: ixModalIn .2s ease;
+        }
+        @keyframes ixModalIn { from { opacity:0; transform:scale(.97) translateY(6px); } to { opacity:1; transform:none; } }
+        .modal-overlay .modal-header {
+            background: linear-gradient(135deg, var(--blue-mid) 0%, var(--blue-d) 100%);
+            color: white;
+            padding: 0.7rem 1.1rem;
+            font-weight: 700;
+            font-size: 0.88rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .modal-close {
+            background: rgba(255,255,255,.15); border: none; color: white;
+            font-size: 0.88rem; cursor: pointer; padding: 0.2rem 0.5rem;
+            border-radius: 4px; transition: background .15s;
+        }
+        .modal-close:hover { background: rgba(255,255,255,.28); }
+        .modal-info {
+            padding: 0.55rem 1.1rem;
+            background: var(--blue-xpale);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.81rem;
+            flex-shrink: 0;
+        }
+        .modal-overlay .modal-body { overflow: auto; flex: 1; }
+        .info-chip { display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; }
+        .info-chip .lbl { color: var(--muted); font-weight: 500; }
+        .info-chip .val { color: var(--text); font-weight: 700; }
+        table.pro-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        table.pro-table thead th {
+            background: var(--blue-d);
+            color: rgba(255,255,255,.92);
+            padding: 0.45rem 0.65rem;
+            text-align: left;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            font-weight: 600;
+            font-size: 0.77rem;
+            letter-spacing: 0.02em;
+            border-right: 1px solid rgba(255,255,255,.08);
+        }
+        table.pro-table thead th:last-child { border-right: none; }
+        table.pro-table thead th.center { text-align: center; }
+        table.pro-table tbody td {
+            padding: 0.38rem 0.65rem;
+            border-bottom: 1px solid #EDF1F5;
+            vertical-align: middle;
+            color: var(--text-2);
+        }
+        table.pro-table tbody tr:nth-child(even) td { background: var(--row-even); }
+        table.pro-table tbody tr:hover td { background: var(--row-hover) !important; color: var(--text); }
+        table.pro-table td.td-code { font-family: 'Consolas','Courier New',monospace; font-weight: 700; color: var(--blue-d); font-size: 0.79rem; }
+        table.pro-table td.td-num { font-weight: 700; text-align: right; color: var(--success); }
+        table.pro-table td.td-center { text-align: center; }
+        .msg-empty {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 3.5rem 1rem; color: var(--muted-light); gap: 0.65rem; text-align: center;
+        }
+        .msg-empty span { font-size: 0.83rem; }
+        .msg-error {
+            margin: 0.75rem; padding: 0.75rem 1rem; color: #c62828;
+            background: #fff5f5; border: 1px solid #ffcdd2; border-left: 4px solid #ef5350;
+            border-radius: var(--radius-sm); font-size: 0.81rem;
+        }
+        .spinner {
+            display: inline-block; width: 22px; height: 22px;
+            border: 2.5px solid rgba(25,118,210,.2); border-top-color: var(--blue-mid);
+            border-radius: 50%; animation: ixSpin .65s linear infinite; flex-shrink: 0;
+        }
+        @keyframes ixSpin { to { transform: rotate(360deg); } }
     </style>
     <link rel="stylesheet" href="/static/pds-ibm.css">
 </head>
@@ -286,7 +385,7 @@
                 <a href="/equipment" class="header-tab">設備稼動</a>
                 <a href="/drawing" class="header-tab">PDM圖面查詢</a>
                 <a href="/routing"      class="header-tab">產品途程查詢</a>
-                <a href="/application" class="header-tab">申請單</a>
+                <a href="/management" class="header-tab">管理</a>
             </div>
         </div>
     </div>
@@ -409,7 +508,17 @@
             <div class="modal-content">
                 <div class="modal-header modal-header-teal">
                     <h5 class="modal-title" id="detailTitle">📋 製令詳細資訊</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-sm" id="ix-btn-future" onclick="ixShowFuture()" style="background:#2E7D32;color:#fff;border:none;padding:.25rem .75rem;border-radius:4px;cursor:pointer;font-size:0.8rem;display:inline-flex;align-items:center;gap:.3rem">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 22V2M5 9l7-7 7 7"/></svg>
+                            查未來異動量
+                        </button>
+                        <button class="btn btn-sm" id="ix-btn-history" onclick="ixShowHistory()" style="background:#1565C0;color:#fff;border:none;padding:.25rem .75rem;border-radius:4px;cursor:pointer;font-size:0.8rem;display:inline-flex;align-items:center;gap:.3rem">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            查歷史異動
+                        </button>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
                 </div>
                 <div class="modal-body">
                     <div id="detail-loading" class="text-center py-4">
@@ -420,6 +529,59 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-erp" data-bs-dismiss="modal">關閉</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════ 未來異動量 Modal ══════════ -->
+    <div class="modal-overlay" id="ix-future-modal" onclick="if(event.target===this)ixCloseFutureModal()">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span style="display:flex;align-items:center;gap:.5rem">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 22V2M5 9l7-7 7 7"/></svg>
+                    未來異動量（預計生產 / 預計領料）
+                </span>
+                <button class="modal-close" onclick="ixCloseFutureModal()">✕</button>
+            </div>
+            <div class="modal-info" id="ix-fm-info"></div>
+            <div class="modal-body">
+                <div style="padding:.4rem .6rem;border-bottom:1px solid #E5E4DF;background:#FAF9F5;display:flex;align-items:center;gap:.6rem;font-size:0.82rem">
+                    <span id="ix-fm-summary" style="color:#3D3D3A"></span>
+                    <span id="ix-fm-count" style="margin-left:auto;color:#8A8778"></span>
+                </div>
+                <div id="ix-fm-content" style="max-height:65vh;overflow:auto">
+                    <div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════ 歷史異動 Modal ══════════ -->
+    <div class="modal-overlay" id="ix-history-modal" onclick="if(event.target===this)ixCloseHistoryModal()">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span style="display:flex;align-items:center;gap:.5rem">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    庫存歷史異動
+                </span>
+                <button class="modal-close" onclick="ixCloseHistoryModal()">✕</button>
+            </div>
+            <div class="modal-info" id="ix-hm-info"></div>
+            <div class="modal-body">
+                <div style="padding:.4rem .6rem;border-bottom:1px solid #E5E4DF;background:#FAF9F5;display:flex;align-items:center;gap:.6rem;font-size:0.82rem">
+                    <span>查詢期間：</span>
+                    <select id="ix-hm-months" onchange="ixShowHistory()" style="padding:.2rem .4rem;border:1px solid #B0BEC5;border-radius:3px">
+                        <option value="3">近 3 個月</option>
+                        <option value="6">近 6 個月</option>
+                        <option value="12" selected>近 12 個月</option>
+                        <option value="24">近 24 個月</option>
+                        <option value="60">全部</option>
+                    </select>
+                    <span id="ix-hm-count" style="margin-left:auto;color:#8A8778"></span>
+                </div>
+                <div id="ix-hm-content" style="max-height:65vh;overflow:auto">
+                    <div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>
                 </div>
             </div>
         </div>
@@ -510,7 +672,7 @@
                         tr.innerHTML =
                             '<td class="text-center"><input type="checkbox" class="row-check" data-index="' + idx + '"></td>' +
                             '<td><span class="order-id">' + esc(oid) + '</span></td>' +
-                            '<td><span class="clickable" onclick="showDetail(\'' + escAttr(oid) + '\')">' + esc(row['品號']) + '</span></td>' +
+                            '<td><span class="clickable" onclick="showDetail(\'' + escAttr(oid) + '\',\'' + escAttr(row['品號']) + '\',\'' + escAttr(row['品名']) + '\')">' + esc(row['品號']) + '</span></td>' +
                             '<td class="wrap-cell">' + esc(row['品名']) + '</td>' +
                             '<td class="text-center std-time">' + esc(row['加工順序']) + '</td>' +
                             '<td class="text-center"><span class="proc-code">' + esc(row['製程代號']) + '</span></td>' +
@@ -711,11 +873,14 @@
         });
 
         // ========== 詳細資訊 ==========
-        async function showDetail(orderId) {
+        let ixCurrentItem = null;
+        async function showDetail(orderId, itemNo, itemName) {
             const modal = new bootstrap.Modal(document.getElementById('detailModal'));
             const detailTitle = document.getElementById('detailTitle');
             const detailLoading = document.getElementById('detail-loading');
             const detailContent = document.getElementById('detail-content');
+
+            ixCurrentItem = { item_no: (itemNo || '').trim(), item_name: itemName || '' };
 
             detailTitle.textContent = '📋 製令詳細資訊 — ' + orderId;
             detailContent.innerHTML = '';
@@ -810,6 +975,145 @@
                 detailLoading.style.display = 'none';
                 detailContent.innerHTML = '<div class="alert alert-danger">載入失敗: ' + esc(e.message) + '</div>';
             }
+        }
+
+        // ========== 庫存歷史異動 / 未來異動量 ==========
+        async function ixShowHistory() {
+            const item = ixCurrentItem;
+            if (!item || !item.item_no) { alert('無法取得品號'); return; }
+            const months = document.getElementById('ix-hm-months').value || '12';
+            const modal = document.getElementById('ix-history-modal');
+            modal.style.display = 'flex';
+            document.getElementById('ix-hm-info').innerHTML =
+                '<div class="info-chip"><span class="lbl">品號</span><strong style="font-family:Consolas">' + esc(item.item_no) + '</strong></div>' +
+                '<div class="info-chip"><span class="lbl">品名</span>' + esc(item.item_name || '') + '</div>';
+            document.getElementById('ix-hm-count').textContent = '';
+            document.getElementById('ix-hm-content').innerHTML =
+                '<div class="msg-empty"><span class="spinner"></span><span>查詢中…</span></div>';
+
+            try {
+                const res  = await fetch('/api/inventory/history?item_no=' + encodeURIComponent(item.item_no) + '&months=' + encodeURIComponent(months));
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error);
+
+                document.getElementById('ix-hm-count').textContent = '共 ' + data.count + ' 筆';
+
+                if (!data.history.length) {
+                    document.getElementById('ix-hm-content').innerHTML =
+                        '<div class="msg-empty"><span>此期間無異動資料</span></div>';
+                    return;
+                }
+
+                const rows = data.history.map(h => {
+                    const inOutCls = h.in_out === '入庫' ? 'color:#2E7D32;font-weight:700'
+                                : h.in_out === '出庫' ? 'color:#C62828;font-weight:700'
+                                : 'color:#8A8778';
+                    const qtyTxt = (h.qty === '0' || h.qty === '0.000') ? '<span style="color:#B8B5A8">0</span>' : esc(h.qty);
+                    return '<tr>' +
+                        '<td class="td-center">' + esc(h.date) + '</td>' +
+                        '<td class="td-code">' + esc(h.doc_type) + '-' + esc(h.doc_no) + '-' + esc(h.doc_seq) + '</td>' +
+                        '<td>' + esc(h.doc_name) + '</td>' +
+                        '<td class="td-center">' + esc(h.warehouse) + '</td>' +
+                        '<td>' + esc(h.wh_name) + '</td>' +
+                        '<td class="td-center" style="' + inOutCls + '">' + esc(h.in_out) + '</td>' +
+                        '<td class="td-num">' + qtyTxt + '</td>' +
+                        '</tr>';
+                }).join('');
+
+                document.getElementById('ix-hm-content').innerHTML =
+                    '<table class="pro-table" style="width:100%">' +
+                    '<thead><tr>' +
+                    '<th style="width:90px" class="center">日期</th>' +
+                    '<th style="width:180px">單別-單號-序號</th>' +
+                    '<th style="width:160px">單據名稱</th>' +
+                    '<th style="width:60px" class="center">庫別</th>' +
+                    '<th>庫別名稱</th>' +
+                    '<th style="width:60px" class="center">入出庫</th>' +
+                    '<th style="width:100px;text-align:right">異動數量</th>' +
+                    '</tr></thead>' +
+                    '<tbody>' + rows + '</tbody></table>';
+            } catch(e) {
+                document.getElementById('ix-hm-content').innerHTML =
+                    '<div class="msg-error">載入失敗：' + esc(e.message) + '</div>';
+            }
+        }
+        function ixCloseHistoryModal() {
+            document.getElementById('ix-history-modal').style.display = 'none';
+        }
+
+        async function ixShowFuture() {
+            const item = ixCurrentItem;
+            if (!item || !item.item_no) { alert('無法取得品號'); return; }
+            const modal = document.getElementById('ix-future-modal');
+            modal.style.display = 'flex';
+            document.getElementById('ix-fm-info').innerHTML =
+                '<div class="info-chip"><span class="lbl">品號</span><strong style="font-family:Consolas">' + esc(item.item_no) + '</strong></div>' +
+                '<div class="info-chip"><span class="lbl">品名</span>' + esc(item.item_name || '') + '</div>';
+            document.getElementById('ix-fm-summary').textContent = '';
+            document.getElementById('ix-fm-count').textContent = '';
+            document.getElementById('ix-fm-content').innerHTML =
+                '<div class="msg-empty"><span class="spinner"></span><span>查詢中…</span></div>';
+
+            try {
+                const res  = await fetch('/api/inventory/future?item_no=' + encodeURIComponent(item.item_no));
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error);
+
+                let totalIn = 0, totalOut = 0;
+                data.future.forEach(f => {
+                    if (f.in_qty)  totalIn  += parseFloat(f.in_qty.replace(/,/g,''))  || 0;
+                    if (f.out_qty) totalOut += parseFloat(f.out_qty.replace(/,/g,'')) || 0;
+                });
+                document.getElementById('ix-fm-summary').innerHTML =
+                    '預計入庫：<strong style="color:#2E7D32">' + totalIn.toLocaleString() + '</strong>　│　' +
+                    '預計出庫：<strong style="color:#C62828">' + totalOut.toLocaleString() + '</strong>　│　' +
+                    '淨增減：<strong style="color:' + ((totalIn-totalOut)>=0?'#2E7D32':'#C62828') + '">' + (totalIn-totalOut).toLocaleString() + '</strong>';
+                document.getElementById('ix-fm-count').textContent = '共 ' + data.count + ' 筆';
+
+                if (!data.future.length) {
+                    document.getElementById('ix-fm-content').innerHTML =
+                        '<div class="msg-empty"><span>無未完成製令</span></div>';
+                    return;
+                }
+
+                const rows = data.future.map(f => {
+                    const typeCls = f.type === '預計生'
+                        ? 'background:#E7F0E3;color:#2E7D32;font-weight:700'
+                        : 'background:#FBE8D2;color:#B5651D;font-weight:700';
+                    return '<tr>' +
+                        '<td class="td-center">' + esc(f.date) + '</td>' +
+                        '<td class="td-center"><span style="' + typeCls + ';padding:.1rem .35rem;border-radius:3px;font-size:0.78rem">' + esc(f.type) + '</span></td>' +
+                        '<td class="td-num" style="color:#2E7D32;font-weight:600">' + esc(f.in_qty) + '</td>' +
+                        '<td class="td-num" style="color:#C62828;font-weight:600">' + esc(f.out_qty) + '</td>' +
+                        '<td class="td-center">' + esc(f.warehouse) + '</td>' +
+                        '<td>' + esc(f.wh_name) + '</td>' +
+                        '<td class="td-center">' + esc(f.plant) + '</td>' +
+                        '<td>' + esc(f.plant_name) + '</td>' +
+                        '<td style="font-family:Consolas;font-size:0.8rem;color:#555">' + esc(f.remark) + '</td>' +
+                        '</tr>';
+                }).join('');
+
+                document.getElementById('ix-fm-content').innerHTML =
+                    '<table class="pro-table" style="width:100%">' +
+                    '<thead><tr>' +
+                    '<th style="width:90px" class="center">日期</th>' +
+                    '<th style="width:70px" class="center">異動別</th>' +
+                    '<th style="width:90px;text-align:right">入庫數量</th>' +
+                    '<th style="width:90px;text-align:right">出庫數量</th>' +
+                    '<th style="width:60px" class="center">庫別</th>' +
+                    '<th style="width:130px">庫別名稱</th>' +
+                    '<th style="width:70px" class="center">廠別代號</th>' +
+                    '<th style="width:130px">廠別名稱</th>' +
+                    '<th>備註</th>' +
+                    '</tr></thead>' +
+                    '<tbody>' + rows + '</tbody></table>';
+            } catch(e) {
+                document.getElementById('ix-fm-content').innerHTML =
+                    '<div class="msg-error">載入失敗：' + esc(e.message) + '</div>';
+            }
+        }
+        function ixCloseFutureModal() {
+            document.getElementById('ix-future-modal').style.display = 'none';
         }
 
         // ========== 讀取圖面 ==========
@@ -963,7 +1267,7 @@
                 tr.innerHTML =
                   '<td class="text-center"><input type="checkbox" class="row-check" data-index="' + idx + '"></td>' +
                   '<td><span class="order-id">' + esc(oid) + '</span></td>' +
-                  '<td><span class="clickable" onclick="showDetail(\'' + escAttr(oid) + '\')">' + esc(row['品號']) + '</span></td>' +
+                  '<td><span class="clickable" onclick="showDetail(\'' + escAttr(oid) + '\',\'' + escAttr(row['品號']) + '\',\'' + escAttr(row['品名']) + '\')">' + esc(row['品號']) + '</span></td>' +
                   '<td class="wrap-cell">' + esc(row['品名']) + '</td>' +
                   '<td class="text-center std-time">' + esc(row['加工順序']) + '</td>' +
                   '<td class="text-center"><span class="proc-code">' + esc(row['製程代號']) + '</span></td>' +

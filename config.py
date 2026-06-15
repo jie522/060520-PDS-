@@ -36,6 +36,18 @@ APPLICATION_STORE_PATH = r'\\192.168.1.99\加工部-資料夾\部門別日常管
 # Word 範本資料夾（None = 自動使用 app.py 旁邊的 static/form_templates/，無需修改）
 FORM_TEMPLATES_DIR = None
 
+# ── 管理頁面：Google 試算表（請假單）設定 ────────────────────────
+LEAVE_SHEET_ID   = '1hH2bbU3jNtQ_ddG8D9cr5qJc1qolf30gT9YjqhpORno'
+LEAVE_SHEET_NAME = 'M3.請假單'
+
+# ── 管理頁面：Google 試算表（員工登錄系統，工號對應姓名）設定 ────
+EMPLOYEE_SHEET_ID  = '12LuQyBhebmzr0WyTL4Uk36i1osVU9d2J17YCxSL6A5k'
+EMPLOYEE_SHEET_GID = '884596320'
+
+# ── 管理頁面：Google 試算表（加班統計）設定 ────
+OVERTIME_SHEET_ID  = '1hH2bbU3jNtQ_ddG8D9cr5qJc1qolf30gT9YjqhpORno'
+OVERTIME_SHEET_NAME = 'M2.加班人員'
+
 # ── ERP SQL Server 連線設定（BOM查詢用）──────────────────────────
 # 連線至 192.168.1.140 的 Computech ERP YC01 資料庫
 ERP_SQL_SERVER   = '192.168.1.140'      # SFT/ERP SQL Server 位址
