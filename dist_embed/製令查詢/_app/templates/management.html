@@ -148,34 +148,36 @@
       letter-spacing: 0.02em;
     }
     #today-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 0.7rem;
+      padding: 0.9rem 1rem;
+    }
+    .leave-card {
       display: flex;
-      flex-wrap: wrap;
-      gap: 0.55rem;
-      padding: 0.85rem 1rem;
+      flex-direction: column;
+      gap: 0.4rem;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--blue-mid);
+      border-radius: 14px;
+      padding: 0.75rem 0.95rem;
+      box-shadow: 0 2px 8px rgba(21,101,192,.12);
+      transition: transform .15s, box-shadow .15s;
     }
-    .leave-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: var(--blue-pale);
+    .leave-card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(21,101,192,.22); }
+    .leave-card .lc-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+    .leave-card .lc-name { font-size: 1.1rem; font-weight: 800; color: var(--text); }
+    .leave-card .lc-type {
       color: var(--blue-d);
-      border: 2px solid var(--blue-mid);
-      border-radius: 18px;
-      padding: 0.35rem 1rem;
-      font-size: 0.95rem;
-      font-weight: 700;
-      box-shadow: 0 1px 4px rgba(21,101,192,.18);
-    }
-    .leave-chip .tname { color: var(--text); font-weight: 800; font-size: 1rem; }
-    .leave-chip .ttype {
-      color: #FFFFFF;
-      background: var(--blue-d);
-      border-radius: 10px;
-      padding: 0.05rem 0.55rem;
+      background: var(--blue-pale);
+      border-radius: 999px;
+      padding: 0.15rem 0.65rem;
       font-size: 0.8rem;
       font-weight: 800;
+      white-space: nowrap;
     }
-    .leave-chip .ttime { color: var(--muted); font-weight: 600; }
+    .leave-card .lc-time { color: var(--muted); font-weight: 600; font-size: 0.88rem; }
     #today-empty { padding: 0.6rem 0.9rem; color: var(--muted-light); font-size: 0.83rem; }
 
     /* ══ 個人請假摘要 ══ */
@@ -1187,6 +1189,12 @@ function todayKey() {
   return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
 }
 
+const LEAVE_EMOJI = {
+  '特休': '🏖️', '事假': '📋', '病假': '🏥', '公假': '📜',
+  '公傷假': '🚑', '喪假': '🕯️', '婚假': '💍', '產假': '👶',
+  '陪產假': '👶', '生理假': '🩹', '安胎假': '🤰'
+};
+
 function renderTodaySummary() {
   const today = todayKey();
   const todays = _leaves.filter(l => l._dateKey === today);
@@ -1198,12 +1206,18 @@ function renderTodaySummary() {
     return;
   }
   emptyEl.style.display = 'none';
-  summaryEl.innerHTML = todays.map(l => `
-    <span class="leave-chip">
-      <span class="tname">${esc(l.name || l.employee)}</span>
-      <span class="ttype">${esc(l.type)}</span>
-      <span class="ttime">${esc(l.start)}–${esc(l.end)}</span>
-    </span>`).join('');
+  summaryEl.innerHTML = todays.map(l => {
+    const type = l.type || '請假';
+    const emoji = LEAVE_EMOJI[l.type] || '📌';
+    return `
+    <div class="leave-card">
+      <div class="lc-top">
+        <span class="lc-name">${esc(l.name || l.employee)}</span>
+        <span class="lc-type">${emoji} ${esc(type)}</span>
+      </div>
+      <div class="lc-time">⏰ ${esc(l.start)}–${esc(l.end)}</div>
+    </div>`;
+  }).join('');
 }
 
 function populateTypeFilter() {
