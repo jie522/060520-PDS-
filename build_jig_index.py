@@ -128,6 +128,20 @@ def rebuild(deploy=False):
     subfolders = get_subfolders(vault, config.JIG_VAULT_PATH)
     print(f'  找到 {len(subfolders)} 個子資料夾')
 
+    # ── 診斷：印出第 1 個資料夾物件可用的介面/方法 ──
+    print('\n--- 診斷：folder 物件介面探查 ---')
+    probe = subfolders[0]
+    print(f'  原始 dir(): {[m for m in dir(probe) if not m.startswith("_")]}')
+    for iface in ['IEdmFolder5', 'IEdmFolder6', 'IEdmFolder7', 'IEdmFolder8',
+                   'IEdmFolder9', 'IEdmFolder10', 'IEdmFolder11', 'IEdmFolder12', 'IEdmFolder13']:
+        try:
+            cast = win32com.client.CastTo(probe, iface)
+            methods = [m for m in dir(cast) if not m.startswith("_")]
+            has_var = [m for m in methods if 'Var' in m or 'Enum' in m]
+            print(f'  {iface}: OK, Var/Enum 相關方法: {has_var}')
+        except Exception as e:
+            print(f'  {iface}: 不支援 ({e})')
+
     # ── 診斷：印出前 3 個資料夾的讀取結果 ──
     print('\n--- 診斷（前 3 個資料夾）---')
     for sub in subfolders[:3]:
