@@ -2671,6 +2671,50 @@ def overtime_list():
     return jsonify(result)
 
 
+@app.route('/api/jig/list')
+def jig_list():
+    """讀取治檢具清單索引（PDM 資料夾資料卡，build_jig_index.py 建立）"""
+    conn = get_pdm_db()
+    if not conn:
+        return jsonify({'success': False, 'error': 'PDM 索引資料庫不存在'}), 500
+
+    try:
+        cur = conn.execute(
+            'SELECT folder_name, folder_path, product_model, item_name, '
+            '       drawing_model, handler, submitter, status, taken_by '
+            'FROM jig_index ORDER BY folder_name DESC'
+        )
+        jigs = [dict(r) for r in cur.fetchall()]
+    except sqlite3.OperationalError:
+        jigs = []
+    finally:
+        conn.close()
+
+    return jsonify({'success': True, 'count': len(jigs), 'jigs': jigs})
+
+
+@app.route('/api/jig/open-folder', methods=['POST'])
+def jig_open_folder():
+    """用 Shell 開啟治檢具資料夾"""
+    data = request.get_json(silent=True) or {}
+    path = data.get('path', '')
+    if not path:
+        return jsonify({'ok': False, 'error': '缺少 path 參數'}), 400
+
+    jig_root = os.path.normpath(config.JIG_VAULT_PATH)
+    norm_path = os.path.normpath(path)
+    if not norm_path.lower().startswith(jig_root.lower()):
+        return jsonify({'ok': False, 'error': '無效的路徑'}), 400
+    if not os.path.isdir(norm_path):
+        return jsonify({'ok': False, 'error': '資料夾不存在'}), 404
+
+    try:
+        os.startfile(norm_path)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 def _preload_cache():
     """背景預載 SSRS 資料到快取（加速首次搜尋）"""
     try:

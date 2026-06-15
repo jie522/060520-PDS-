@@ -48,6 +48,10 @@ EMPLOYEE_SHEET_GID = '884596320'
 OVERTIME_SHEET_ID  = '1hH2bbU3jNtQ_ddG8D9cr5qJc1qolf30gT9YjqhpORno'
 OVERTIME_SHEET_NAME = 'M2.加班人員'
 
+# ── 管理頁面：治檢具清單（PDM 資料夾）設定 ────────────────────────
+JIG_VAULT_PATH = r'C:\MAXCLAW\06-生技課\01-模檢治具(2026後)'
+JIG_SUBMITTERS = ['楊良捷', '陳銘仁', '林昭佑']
+
 # ── ERP SQL Server 連線設定（BOM查詢用）──────────────────────────
 # 連線至 192.168.1.140 的 Computech ERP YC01 資料庫
 ERP_SQL_SERVER   = '192.168.1.140'      # SFT/ERP SQL Server 位址

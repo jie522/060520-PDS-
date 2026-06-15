@@ -887,6 +887,7 @@
   <span class="page-sub-tab active" onclick="switchSubPage('leave')">📋 請假統計</span>
   <span class="page-sub-tab" onclick="switchSubPage('application')">📝 申請單</span>
   <span class="page-sub-tab" onclick="switchSubPage('overtime')">⏱️ 加班統計</span>
+  <span class="page-sub-tab" onclick="switchSubPage('jig')">🗂️ 治檢具清單</span>
 </div>
 
 <div class="page-body">
@@ -979,6 +980,18 @@
       </div>
     </div>
   </div>
+
+  <div id="sub-page-jig" class="sub-page-container" style="display:none">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+      <div class="card-header today-leave-header">🗂️ 治檢具清單（PDM）</div>
+      <div class="table-wrap" id="jig-view-table">
+        <div id="jig-content">
+          <div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="sub-page-application" class="sub-page-container" style="display:none">
     <div class="app-layout">
 
@@ -1513,26 +1526,29 @@ function switchSubPage(page) {
   const leavePage = document.getElementById('sub-page-leave');
   const overtimePage = document.getElementById('sub-page-overtime');
   const applicationPage = document.getElementById('sub-page-application');
+  const jigPage = document.getElementById('sub-page-jig');
   const tabs = document.querySelectorAll('.page-sub-tab');
 
   tabs.forEach(t => t.classList.remove('active'));
+  leavePage.style.display = 'none';
+  overtimePage.style.display = 'none';
+  applicationPage.style.display = 'none';
+  jigPage.style.display = 'none';
 
   if (page === 'leave') {
     leavePage.style.display = '';
-    overtimePage.style.display = 'none';
-    applicationPage.style.display = 'none';
     tabs[0].classList.add('active');
   } else if (page === 'application') {
-    leavePage.style.display = 'none';
-    overtimePage.style.display = 'none';
     applicationPage.style.display = '';
     tabs[1].classList.add('active');
   } else if (page === 'overtime') {
-    leavePage.style.display = 'none';
     overtimePage.style.display = '';
-    applicationPage.style.display = 'none';
     tabs[2].classList.add('active');
     loadOvertimeData();
+  } else if (page === 'jig') {
+    jigPage.style.display = '';
+    tabs[3].classList.add('active');
+    loadJigData();
   }
 }
 
@@ -2360,6 +2376,66 @@ function openSavedFile() {
 document.getElementById('saveModal').addEventListener('click', function(e) {
   if (e.target === this) hideSaveModal();
 });
+
+let _jigLoaded = false;
+
+async function loadJigData() {
+  if (_jigLoaded) return;
+  try {
+    const res = await fetch('/api/jig/list');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    _jigLoaded = true;
+    renderJigTable(data.jigs);
+  } catch (e) {
+    document.getElementById('jig-content').innerHTML = `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+
+function renderJigTable(jigs) {
+  const content = document.getElementById('jig-content');
+  if (!jigs.length) {
+    content.innerHTML = '<div class="msg-empty"><span>查無治檢具資料</span></div>';
+    return;
+  }
+
+  const trs = jigs.map(j => `
+    <tr>
+      <td>${esc(j.product_model)}</td>
+      <td>${esc(j.item_name)}</td>
+      <td class="td-center">${esc(j.handler)}</td>
+      <td class="td-center">${esc(j.status)}</td>
+      <td class="td-code"><a href="javascript:void(0)" onclick="openJigFolder('${esc(j.folder_path).replace(/'/g, "\\'")}')">${esc(j.folder_name)}</a></td>
+    </tr>`).join('');
+
+  content.innerHTML = `
+    <table class="pro-table">
+      <thead>
+        <tr>
+          <th>產品機型</th>
+          <th>品名</th>
+          <th style="width:90px" class="center">經辦</th>
+          <th style="width:110px" class="center">狀態</th>
+          <th style="width:120px">名稱</th>
+        </tr>
+      </thead>
+      <tbody>${trs}</tbody>
+    </table>`;
+}
+
+async function openJigFolder(path) {
+  try {
+    const res = await fetch('/api/jig/open-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+  } catch (e) {
+    showToast('開啟資料夾失敗：' + e.message);
+  }
+}
 </script>
 
 <div id="event-modal" onclick="if(event.target===this) closeEventModal()">
