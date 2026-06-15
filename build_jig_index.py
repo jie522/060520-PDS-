@@ -50,13 +50,23 @@ def get_subfolders(vault, root_path):
     return subs
 
 
-def read_folder_vars(folder):
-    """讀取單一資料夾的資料卡變數，回傳 {變數名: 值}"""
+def read_folder_vars(folder, debug=None):
+    """讀取單一資料夾的資料卡變數，回傳 {變數名: 值}。debug 為 list 時會附加診斷字串"""
+    def _dbg(msg):
+        if debug is not None:
+            debug.append(msg)
+
     values = {}
     try:
         ev_early = folder.GetEnumeratorVariable()
+    except Exception as e:
+        _dbg(f'GetEnumeratorVariable 失敗: {e}')
+        return values
+
+    try:
         ev10 = win32com.client.CastTo(ev_early, 'IEdmEnumeratorVariable10')
-    except Exception:
+    except Exception as e:
+        _dbg(f'CastTo IEdmEnumeratorVariable10 失敗: {e}')
         return values
 
     folder_id = folder.ID
@@ -65,10 +75,11 @@ def read_folder_vars(folder):
     for vn in TARGET_VARS:
         try:
             r = ev10.GetVarFromDb(vn, '@')
+            _dbg(f'A:{vn}={r!r}')
             if r and r[0] is True and r[1]:
                 values[vn] = str(r[1]).strip()
-        except Exception:
-            pass
+        except Exception as e:
+            _dbg(f'A:{vn} ERR={e}')
 
     if values:
         return values
@@ -79,12 +90,13 @@ def read_folder_vars(folder):
         for vn in TARGET_VARS:
             try:
                 r = ev10.GetVar(vn, '@')
+                _dbg(f'B:{vn}={r!r}')
                 if r and r[0] is True and r[1]:
                     values[vn] = str(r[1]).strip()
-            except Exception:
-                pass
-    except Exception:
-        pass
+            except Exception as e:
+                _dbg(f'B:{vn} ERR={e}')
+    except Exception as e:
+        _dbg(f'B:StoreValuesFromDatabase ERR={e}')
 
     if values:
         return values
@@ -93,10 +105,24 @@ def read_folder_vars(folder):
     for vn in TARGET_VARS:
         try:
             r = ev10.GetVar2(vn, '@', folder_id)
+            _dbg(f'C:{vn}={r!r}')
             if r and r[0] is True and r[1]:
                 values[vn] = str(r[1]).strip()
-        except Exception:
-            pass
+        except Exception as e:
+            _dbg(f'C:{vn} ERR={e}')
+
+    if values:
+        return values
+
+    # 策略 D：GetVarAsText with folder ID
+    for vn in TARGET_VARS:
+        try:
+            r = ev10.GetVarAsText(vn, '@', folder_id)
+            _dbg(f'D:{vn}={r!r}')
+            if r and r[0] is True and r[1]:
+                values[vn] = str(r[1]).strip()
+        except Exception as e:
+            _dbg(f'D:{vn} ERR={e}')
 
     return values
 
@@ -111,10 +137,21 @@ def rebuild(deploy=False):
     subfolders = get_subfolders(vault, config.JIG_VAULT_PATH)
     print(f'  找到 {len(subfolders)} 個子資料夾')
 
+    # ── 診斷：印出前 3 個資料夾的讀取結果 ──
+    print('\n--- 診斷（前 3 個資料夾）---')
+    for sub in subfolders[:3]:
+        debug = []
+        vals = read_folder_vars(sub, debug=debug)
+        print(f'  {sub.Name}:')
+        for line in debug:
+            print(f'    {line}')
+        print(f'    => {vals}')
+
     conn = sqlite3.connect(DB_PATH)
     conn.executescript(SCHEMA)
     conn.execute('DELETE FROM jig_index')
 
+    print('\n--- 開始讀取 ---')
     matched = 0
     for sub in subfolders:
         name = str(sub.Name)
