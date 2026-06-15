@@ -77,19 +77,29 @@
     }
     .header-tab.active,.header-tab:hover { background:#fff; color:#1565C0; }
 
-    /* ══ Sub Navigation（管理 第二層導覽） ══ */
+    /* ══ Page Layout（左側選單 + 內容） ══ */
+    .page-layout {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* ══ Sub Navigation（管理 左側選單） ══ */
     .page-sub-nav {
-      display: flex; align-items: center; gap: .4rem;
-      padding: .5rem 1rem; background: var(--surface);
-      border-bottom: 1px solid var(--border); flex-shrink: 0;
+      display: flex; flex-direction: column; gap: .25rem;
+      width: 170px; flex-shrink: 0;
+      padding: .75rem .6rem; background: var(--surface);
+      border-right: 1px solid var(--border); overflow-y: auto;
     }
     .page-sub-tab {
-      display: inline-block; padding: .35rem 1rem; font-size: 1rem; font-weight: 600;
+      display: block; padding: .5rem .75rem; font-size: 0.95rem; font-weight: 600;
       color: var(--text-2); text-decoration: none; border-radius: var(--radius-sm);
-      background: var(--surface-2); border: 1px solid var(--border); transition: all .15s;
+      background: transparent; border: 1px solid transparent; transition: all .15s;
+      text-align: left;
     }
-    .page-sub-tab.active { background: #1565C0; color: #fff; border-color: #1565C0; }
-    .page-sub-tab:not(.active):hover { background: #E3F2FD; color: #1565C0; }
+    .page-sub-tab.active { background: #E3F2FD; color: #1565C0; border-color: #E3F2FD; }
+    .page-sub-tab:not(.active):hover { background: var(--surface-2); color: #1565C0; }
 
     /* ══ Page Body ══ */
     .page-body {
@@ -99,6 +109,7 @@
       padding: 0.75rem;
       gap: 0.6rem;
       overflow: hidden;
+      min-width: 0;
     }
     .sub-page-container {
       flex: 1;
@@ -871,10 +882,11 @@
   </div>
 </div>
 
+<div class="page-layout">
 <div class="page-sub-nav">
-  <span class="page-sub-tab active" onclick="switchSubPage('leave')">1. 請假統計</span>
-  <span class="page-sub-tab" onclick="switchSubPage('application')">2. 申請單</span>
-  <span class="page-sub-tab" onclick="switchSubPage('overtime')">3. 加班統計</span>
+  <span class="page-sub-tab active" onclick="switchSubPage('leave')">📋 請假統計</span>
+  <span class="page-sub-tab" onclick="switchSubPage('application')">📝 申請單</span>
+  <span class="page-sub-tab" onclick="switchSubPage('overtime')">⏱️ 加班統計</span>
 </div>
 
 <div class="page-body">
@@ -1155,6 +1167,7 @@
       </div>
 
     </div><!-- end page-body -->
+</div><!-- end page-layout -->
 
     <div id="toast"></div>
 
