@@ -63,11 +63,17 @@ def read_folder_vars(folder, debug=None):
 
     values = {}
 
-    try:
-        ev_early = folder.GetCard()
-        ev10 = win32com.client.CastTo(ev_early, 'IEdmEnumeratorVariable10')
-    except Exception as e:
-        _dbg(f'GetCard 失敗: {e}')
+    ev10 = None
+    for card_type in (1, 0, 2, 3):
+        try:
+            ev_early = folder.GetCard(card_type)
+            ev10 = win32com.client.CastTo(ev_early, 'IEdmEnumeratorVariable10')
+            _dbg(f'GetCard({card_type}) 成功')
+            break
+        except Exception as e:
+            _dbg(f'GetCard({card_type}) 失敗: {e}')
+
+    if ev10 is None:
         return values
 
     folder_id = folder.ID
