@@ -51,27 +51,45 @@ def get_subfolders(vault, root_path):
 
 
 def read_folder_vars(folder, debug=None):
-    """讀取單一資料夾的資料卡變數，回傳 {變數名: 值}。debug 為 list 時會附加診斷字串"""
+    """讀取單一資料夾的資料卡變數，回傳 {變數名: 值}。debug 為 list 時會附加診斷字串
+
+    IEdmFolder5 沒有 GetEnumeratorVariable，但本身提供 GetVar(VarName, ConfigName)
+    可直接讀取資料夾資料卡欄位值。
+    """
     def _dbg(msg):
         if debug is not None:
             debug.append(msg)
 
     values = {}
+
+    # 策略 1：folder.GetVar(VarName, ConfigName) — 直接讀取資料夾資料卡
+    for cfg in ('@', ''):
+        for vn in TARGET_VARS:
+            if vn in values:
+                continue
+            try:
+                r = folder.GetVar(vn, cfg)
+                _dbg(f'GetVar(cfg={cfg!r}):{vn}={r!r}')
+                if r is not None and str(r).strip():
+                    values[vn] = str(r).strip()
+            except Exception as e:
+                _dbg(f'GetVar(cfg={cfg!r}):{vn} ERR={e}')
+        if values:
+            break
+
+    if values:
+        return values
+
+    # 策略 2：透過 GetEnumeratorVariable（部分 PDM 版本資料夾物件支援）
     try:
         ev_early = folder.GetEnumeratorVariable()
+        ev10 = win32com.client.CastTo(ev_early, 'IEdmEnumeratorVariable10')
     except Exception as e:
         _dbg(f'GetEnumeratorVariable 失敗: {e}')
         return values
 
-    try:
-        ev10 = win32com.client.CastTo(ev_early, 'IEdmEnumeratorVariable10')
-    except Exception as e:
-        _dbg(f'CastTo IEdmEnumeratorVariable10 失敗: {e}')
-        return values
-
     folder_id = folder.ID
 
-    # 策略 A：GetVarFromDb
     for vn in TARGET_VARS:
         try:
             r = ev10.GetVarFromDb(vn, '@')
@@ -84,7 +102,6 @@ def read_folder_vars(folder, debug=None):
     if values:
         return values
 
-    # 策略 B：StoreValuesFromDatabase + GetVar
     try:
         ev10.StoreValuesFromDatabase(folder_id, False, 0)
         for vn in TARGET_VARS:
@@ -97,32 +114,6 @@ def read_folder_vars(folder, debug=None):
                 _dbg(f'B:{vn} ERR={e}')
     except Exception as e:
         _dbg(f'B:StoreValuesFromDatabase ERR={e}')
-
-    if values:
-        return values
-
-    # 策略 C：GetVar2 with folder ID
-    for vn in TARGET_VARS:
-        try:
-            r = ev10.GetVar2(vn, '@', folder_id)
-            _dbg(f'C:{vn}={r!r}')
-            if r and r[0] is True and r[1]:
-                values[vn] = str(r[1]).strip()
-        except Exception as e:
-            _dbg(f'C:{vn} ERR={e}')
-
-    if values:
-        return values
-
-    # 策略 D：GetVarAsText with folder ID
-    for vn in TARGET_VARS:
-        try:
-            r = ev10.GetVarAsText(vn, '@', folder_id)
-            _dbg(f'D:{vn}={r!r}')
-            if r and r[0] is True and r[1]:
-                values[vn] = str(r[1]).strip()
-        except Exception as e:
-            _dbg(f'D:{vn} ERR={e}')
 
     return values
 
