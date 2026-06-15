@@ -149,35 +149,35 @@
     }
     #today-summary {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-      gap: 0.7rem;
-      padding: 0.9rem 1rem;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 0.5rem;
+      padding: 0.6rem 1rem;
     }
     .leave-card {
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
+      gap: 0.2rem;
       background: #fff;
       border: 1px solid var(--border);
-      border-left: 5px solid var(--blue-mid);
-      border-radius: 14px;
-      padding: 0.75rem 0.95rem;
-      box-shadow: 0 2px 8px rgba(21,101,192,.12);
+      border-left: 3px solid var(--blue-mid);
+      border-radius: 10px;
+      padding: 0.45rem 0.65rem;
+      box-shadow: 0 1px 4px rgba(21,101,192,.1);
       transition: transform .15s, box-shadow .15s;
     }
-    .leave-card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(21,101,192,.22); }
-    .leave-card .lc-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-    .leave-card .lc-name { font-size: 1.1rem; font-weight: 800; color: var(--text); }
+    .leave-card:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(21,101,192,.18); }
+    .leave-card .lc-top { display: flex; align-items: center; justify-content: space-between; gap: .4rem; }
+    .leave-card .lc-name { font-size: 0.92rem; font-weight: 800; color: var(--text); }
     .leave-card .lc-type {
       color: var(--blue-d);
       background: var(--blue-pale);
       border-radius: 999px;
-      padding: 0.15rem 0.65rem;
-      font-size: 0.8rem;
+      padding: 0.05rem 0.5rem;
+      font-size: 0.72rem;
       font-weight: 800;
       white-space: nowrap;
     }
-    .leave-card .lc-time { color: var(--muted); font-weight: 600; font-size: 0.88rem; }
+    .leave-card .lc-time { color: var(--muted); font-weight: 600; font-size: 0.78rem; }
     #today-empty { padding: 0.6rem 0.9rem; color: var(--muted-light); font-size: 0.83rem; }
 
     /* ══ 個人請假摘要 ══ */
