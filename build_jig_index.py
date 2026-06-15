@@ -63,60 +63,15 @@ def read_folder_vars(folder, debug=None):
 
     values = {}
 
-    ev10 = None
-    for card_type in (1, 0, 2, 3):
-        try:
-            ev_early = folder.GetCard(card_type)
-            ev10 = win32com.client.CastTo(ev_early, 'IEdmEnumeratorVariable10')
-            _dbg(f'GetCard({card_type}) 成功')
-            break
-        except Exception as e:
-            _dbg(f'GetCard({card_type}) 失敗: {e}')
-
-    if ev10 is None:
-        return values
-
-    folder_id = folder.ID
-
-    # 策略 A：GetVarFromDb
+    # 嘗試 GetCard(VarName) 直接取值
     for vn in TARGET_VARS:
         try:
-            r = ev10.GetVarFromDb(vn, '@')
-            _dbg(f'A:{vn}={r!r}')
-            if r and r[0] is True and r[1]:
-                values[vn] = str(r[1]).strip()
+            r = folder.GetCard(vn)
+            _dbg(f'GetCard({vn!r})={r!r} (type={type(r)})')
+            if r is not None and str(r).strip():
+                values[vn] = str(r).strip()
         except Exception as e:
-            _dbg(f'A:{vn} ERR={e}')
-
-    if values:
-        return values
-
-    # 策略 B：StoreValuesFromDatabase + GetVar
-    try:
-        ev10.StoreValuesFromDatabase(folder_id, False, 0)
-        for vn in TARGET_VARS:
-            try:
-                r = ev10.GetVar(vn, '@')
-                _dbg(f'B:{vn}={r!r}')
-                if r and r[0] is True and r[1]:
-                    values[vn] = str(r[1]).strip()
-            except Exception as e:
-                _dbg(f'B:{vn} ERR={e}')
-    except Exception as e:
-        _dbg(f'B:StoreValuesFromDatabase ERR={e}')
-
-    if values:
-        return values
-
-    # 策略 C：GetVar2 with folder ID
-    for vn in TARGET_VARS:
-        try:
-            r = ev10.GetVar2(vn, '@', folder_id)
-            _dbg(f'C:{vn}={r!r}')
-            if r and r[0] is True and r[1]:
-                values[vn] = str(r[1]).strip()
-        except Exception as e:
-            _dbg(f'C:{vn} ERR={e}')
+            _dbg(f'GetCard({vn!r}) ERR={e}')
 
     return values
 
