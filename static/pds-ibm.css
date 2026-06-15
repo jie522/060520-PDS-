@@ -85,10 +85,10 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* ── Header：移除漸變，改為 IBM 純藍 ──────────────────────────── */
+/* ── Header：統一為 ZUMEN 純藍（參考 CLAUDE.md 導覽列設計規範） ─── */
 .header {
-  background: #0f62fe;
-  box-shadow: 0 1px 4px rgba(0,0,0,.18);
+  background: #1565C0;
+  box-shadow: 0 2px 8px rgba(21,101,192,.4);
 }
 
 /* ── Sub-tabs (routing) ───────────────────────────────────────── */
