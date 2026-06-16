@@ -2707,7 +2707,7 @@ def jig_rebuild():
     try:
         script_dir = os.path.dirname(script)
         result = subprocess.run(
-            ['python', 'build_jig_index.py', '--deploy'],
+            [sys.executable, script, '--deploy'],
             capture_output=True, text=True, timeout=300,
             cwd=script_dir
         )
