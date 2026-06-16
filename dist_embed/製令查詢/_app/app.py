@@ -2705,10 +2705,11 @@ def jig_rebuild():
     if not os.path.exists(script):
         return jsonify({'success': False, 'error': 'build_jig_index.py 不存在'}), 500
     try:
+        script_dir = os.path.dirname(script)
         result = subprocess.run(
-            ['python', script, '--deploy'],
+            ['python', 'build_jig_index.py', '--deploy'],
             capture_output=True, text=True, timeout=300,
-            cwd=os.path.dirname(script)
+            cwd=script_dir
         )
         if result.returncode != 0:
             err = (result.stderr or result.stdout)[-500:]
