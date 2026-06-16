@@ -13,7 +13,7 @@ def sync():
     print('同步源碼到 dist_embed ...')
 
     # 1. 複製 Python 檔案
-    for f in ['app.py', 'main.py', 'config.py']:
+    for f in ['app.py', 'main.py', 'config.py', 'build_jig_index.py', 'build_pdm_index.py']:
         src = os.path.join(SRC, f)
         dst = os.path.join(APP, f)
         if os.path.exists(src):

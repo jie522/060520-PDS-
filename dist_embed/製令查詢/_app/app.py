@@ -2681,16 +2681,45 @@ def jig_list():
     try:
         cur = conn.execute(
             'SELECT folder_name, folder_path, product_model, item_name, '
-            '       drawing_model, handler, submitter, status, taken_by '
+            '       handler, submitter, status, apply_date, unit '
             'FROM jig_index ORDER BY folder_name DESC'
         )
         jigs = [dict(r) for r in cur.fetchall()]
+        row = conn.execute('SELECT MAX(indexed_at) FROM jig_index').fetchone()
+        last_updated = row[0] if row and row[0] else None
     except sqlite3.OperationalError:
         jigs = []
+        last_updated = None
     finally:
         conn.close()
 
-    return jsonify({'success': True, 'count': len(jigs), 'jigs': jigs})
+    return jsonify({'success': True, 'count': len(jigs), 'jigs': jigs,
+                    'last_updated': last_updated})
+
+
+@app.route('/api/jig/rebuild', methods=['POST'])
+def jig_rebuild():
+    """重建治檢具索引（在背景執行 build_jig_index.py --deploy）"""
+    import subprocess, re as _re
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'build_jig_index.py')
+    if not os.path.exists(script):
+        return jsonify({'success': False, 'error': 'build_jig_index.py 不存在'}), 500
+    try:
+        result = subprocess.run(
+            ['python', script, '--deploy'],
+            capture_output=True, text=True, timeout=300,
+            cwd=os.path.dirname(script)
+        )
+        if result.returncode != 0:
+            err = (result.stderr or result.stdout)[-500:]
+            return jsonify({'success': False, 'error': err}), 500
+        m = _re.search(r'寫入：(\d+)', result.stdout)
+        count = int(m.group(1)) if m else 0
+        return jsonify({'success': True, 'count': count})
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'error': '更新逾時（超過 5 分鐘）'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/jig/open-folder', methods=['POST'])

@@ -286,6 +286,14 @@
     #leave-content table.pro-table td.td-code { font-size: 0.89rem; }
 
     /* ══ 治檢具清單 ══ */
+    .jig-rebuild-btn {
+      padding: 0.28rem 0.75rem; border: 1px solid var(--blue-mid); border-radius: var(--radius-sm);
+      background: var(--blue-pale); color: var(--blue-d); font-size: 0.82rem; font-family: inherit;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .jig-rebuild-btn:hover { background: var(--blue-mid); color: #fff; }
+    .jig-rebuild-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .jig-last-updated { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
     #jig-content table.pro-table thead th { background: linear-gradient(180deg, var(--blue-mid), var(--blue-d)); }
     #jig-content table.pro-table td.td-code { color: var(--blue-d); }
     #jig-content .jig-status {
@@ -1004,6 +1012,8 @@
         <select id="jig-f-unit" onchange="renderJigTable()"><option value="">全部</option></select>
         <label>狀態</label>
         <select id="jig-f-status" onchange="renderJigTable()"><option value="">全部</option></select>
+        <button id="jig-rebuild-btn" class="jig-rebuild-btn" onclick="rebuildJigIndex()">⟳ 重新整理</button>
+        <span id="jig-last-updated" class="jig-last-updated"></span>
         <span class="filter-count"><strong id="jig-f-count">0</strong> 筆</span>
       </div>
       <div class="table-wrap" id="jig-view-table">
@@ -2413,8 +2423,35 @@ async function loadJigData() {
     _jigData = data.jigs;
     populateJigFilters(_jigData);
     renderJigTable();
+    if (data.last_updated) {
+      const d = data.last_updated.replace('T', ' ').substring(0, 16);
+      document.getElementById('jig-last-updated').textContent = `上次更新：${d}`;
+    }
   } catch (e) {
     document.getElementById('jig-content').innerHTML = `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+
+async function rebuildJigIndex() {
+  const btn = document.getElementById('jig-rebuild-btn');
+  const upd = document.getElementById('jig-last-updated');
+  btn.disabled = true;
+  btn.textContent = '⟳ 更新中…';
+  upd.textContent = '索引重建中，請稍候…';
+  try {
+    const res = await fetch('/api/jig/rebuild', { method: 'POST' });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    _jigLoaded = false;
+    _jigData = [];
+    await loadJigData();
+    btn.textContent = `✓ 已更新 ${data.count} 筆`;
+    setTimeout(() => { btn.textContent = '⟳ 重新整理'; btn.disabled = false; }, 3000);
+  } catch (e) {
+    upd.textContent = '更新失敗';
+    btn.textContent = '⟳ 重新整理';
+    btn.disabled = false;
+    alert('治檢具索引更新失敗：' + e.message);
   }
 }
 
