@@ -5,9 +5,9 @@
 
 掃描 PDM Vault『06-生技課\\01-模檢治具(2026後)』底下的子資料夾（如 PT2603003），
 下載各子資料夾內的「機器模檢治具申請單」xlsm 檔案，
-讀取其 Excel Defined Names（YC_機型、YC_品名、YC_經辦、YC_提出人員）
+讀取其 Excel Defined Names（YC_機型、YC_品名、YC_經辦、YC_提出人員、YC_申請日期、單位等）
 及檔案的 PDM 工作流程狀態（CurrentState），
-篩選出提出人員為指定名單者，寫入 pdm_search.db 的 jig_index 表。
+寫入 pdm_search.db 的 jig_index 表（不限提出人員，全部索引）。
 
 用法：
   python build_jig_index.py            # 重建治檢具索引
@@ -25,20 +25,23 @@ import config
 from build_pdm_index import connect_vault, DB_DIR, DB_PATH, _deploy
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS jig_index (
+DROP TABLE IF EXISTS jig_index;
+CREATE TABLE jig_index (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     folder_name   TEXT NOT NULL,
     folder_path   TEXT NOT NULL UNIQUE,
     product_model TEXT,
     item_name     TEXT,
-    drawing_model TEXT,
     handler       TEXT,
     submitter     TEXT,
     status        TEXT,
-    taken_by      TEXT,
+    apply_date    TEXT,
+    unit          TEXT,
     indexed_at    TEXT DEFAULT (datetime('now'))
 );
 """
+
+_first_folder_done = False
 
 
 def get_subfolders(vault, root_path):
@@ -51,21 +54,26 @@ def get_subfolders(vault, root_path):
     return subs
 
 
-def get_defined_value(wb, name):
-    """讀取 Excel Defined Name 對應的儲存格值，不存在則回傳 None"""
-    if name not in wb.defined_names:
-        return None
-    dn = wb.defined_names[name]
-    for sheet_name, coord in dn.destinations:
-        try:
-            return wb[sheet_name][coord].value
-        except Exception:
-            return None
+def get_defined_value(wb, *names):
+    """依序嘗試多個 Defined Name，回傳第一個非空的儲存格值"""
+    for name in names:
+        if name not in wb.defined_names:
+            continue
+        dn = wb.defined_names[name]
+        for sheet_name, coord in dn.destinations:
+            try:
+                v = wb[sheet_name][coord].value
+                if v is not None and str(v).strip():
+                    return v
+            except Exception:
+                continue
     return None
 
 
 def read_application_form(folder, f):
     """嘗試將 f 視為「申請單」xlsm 並讀取所需欄位，失敗或非申請單回傳 None"""
+    global _first_folder_done
+
     if not f.Name.lower().endswith('.xlsm'):
         return None
 
@@ -77,6 +85,19 @@ def read_application_form(folder, f):
 
         wb = openpyxl.load_workbook(local_path, data_only=True, keep_vba=False)
 
+        # 第一個成功讀取的 xlsm 印出所有 Defined Names（診斷用）
+        if not _first_folder_done:
+            _first_folder_done = True
+            print(f'  [診斷] {folder.Name}/{f.Name} 的所有 Defined Names:')
+            for dn_name in sorted(wb.defined_names):
+                dn = wb.defined_names[dn_name]
+                for sn, coord in dn.destinations:
+                    try:
+                        val = wb[sn][coord].value
+                        print(f'    {dn_name} = {val!r}')
+                    except Exception:
+                        print(f'    {dn_name} = (讀取失敗)')
+
         submitter = get_defined_value(wb, 'YC_提出人員')
         if not submitter or not str(submitter).strip():
             return None
@@ -84,6 +105,8 @@ def read_application_form(folder, f):
         product_model = get_defined_value(wb, 'YC_機型')
         item_name      = get_defined_value(wb, 'YC_品名')
         handler        = get_defined_value(wb, 'YC_經辦')
+        apply_date     = get_defined_value(wb, 'YC_日期', 'YC_申請日期', '申請日期')
+        unit           = get_defined_value(wb, '單位', 'YC_保管單位', '保管單位')
 
         status = None
         try:
@@ -91,21 +114,29 @@ def read_application_form(folder, f):
         except Exception:
             pass
 
+        # 申請日期格式標準化（datetime/date → 字串 YYYY-MM-DD）
+        if apply_date is not None:
+            if hasattr(apply_date, 'strftime'):
+                apply_date = apply_date.strftime('%Y-%m-%d')
+            else:
+                apply_date = str(apply_date).strip()
+
         return {
             'product_model': (str(product_model).strip() if product_model else ''),
             'item_name':     (str(item_name).strip() if item_name else ''),
             'handler':       (str(handler).strip() if handler else ''),
             'submitter':     str(submitter).strip(),
             'status':        (str(status).strip() if status else ''),
+            'apply_date':    apply_date or '',
+            'unit':          (str(unit).strip() if unit else ''),
         }
-    except Exception:
+    except Exception as e:
         return None
 
 
 def init_db(conn):
     cur = conn.cursor()
     cur.executescript(SCHEMA)
-    cur.execute('DELETE FROM jig_index')
     conn.commit()
 
 
@@ -124,7 +155,7 @@ def rebuild(deploy=False):
     init_db(conn)
     cur = conn.cursor()
 
-    matched = skipped = errors = 0
+    inserted = skipped = errors = 0
 
     for idx, folder in enumerate(subfolders, 1):
         try:
@@ -140,21 +171,20 @@ def rebuild(deploy=False):
                 skipped += 1
                 continue
 
-            if record['submitter'] not in config.JIG_SUBMITTERS:
-                skipped += 1
-                continue
-
             folder_path = os.path.join(config.JIG_VAULT_PATH, folder.Name)
             cur.execute(
                 'INSERT OR REPLACE INTO jig_index '
-                '(folder_name, folder_path, product_model, item_name, handler, submitter, status) '
-                'VALUES (?,?,?,?,?,?,?)',
+                '(folder_name, folder_path, product_model, item_name, '
+                ' handler, submitter, status, apply_date, unit) '
+                'VALUES (?,?,?,?,?,?,?,?,?)',
                 (folder.Name, folder_path, record['product_model'], record['item_name'],
-                 record['handler'], record['submitter'], record['status']))
-            matched += 1
-            print(f'  [{idx}/{total}] {folder.Name}: 機型={record["product_model"]} '
-                  f'品名={record["item_name"]} 經辦={record["handler"]} '
-                  f'提出人員={record["submitter"]} 狀態={record["status"]}')
+                 record['handler'], record['submitter'], record['status'],
+                 record['apply_date'], record['unit']))
+            inserted += 1
+            print(f'  [{idx}/{total}] {folder.Name}: '
+                  f'機型={record["product_model"]} 品名={record["item_name"]} '
+                  f'申請人={record["submitter"]} 日期={record["apply_date"]} '
+                  f'保管={record["unit"]} 狀態={record["status"]}')
 
         except Exception as e:
             errors += 1
@@ -162,18 +192,18 @@ def rebuild(deploy=False):
 
         if idx % 10 == 0:
             conn.commit()
-            print(f'  進度 {idx}/{total}  符合:{matched}  跳過:{skipped}  錯誤:{errors}')
+            print(f'  進度 {idx}/{total}  寫入:{inserted}  跳過:{skipped}  錯誤:{errors}')
 
     conn.commit()
     conn.close()
 
-    print(f'\n完成！符合條件並寫入：{matched} 筆，跳過：{skipped} 筆，錯誤：{errors} 筆')
+    print(f'\n完成！寫入：{inserted} 筆，跳過：{skipped} 筆，錯誤：{errors} 筆')
     print(f'DB -> {DB_PATH}')
 
     if deploy:
         _deploy(DB_PATH)
 
-    return matched
+    return inserted
 
 
 if __name__ == '__main__':

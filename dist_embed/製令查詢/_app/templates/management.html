@@ -285,6 +285,19 @@
     #leave-content table.pro-table thead th { font-size: 0.86rem; }
     #leave-content table.pro-table td.td-code { font-size: 0.89rem; }
 
+    /* ══ 治檢具清單 ══ */
+    #jig-content table.pro-table thead th { background: linear-gradient(180deg, var(--blue-mid), var(--blue-d)); }
+    #jig-content table.pro-table td.td-code { color: var(--blue-d); }
+    #jig-content .jig-status {
+      display: inline-block; padding: 0.15rem 0.6rem; border-radius: 12px;
+      font-size: 0.78rem; font-weight: 700; white-space: nowrap;
+    }
+    #jig-content .jig-status-default { background: var(--blue-pale); color: var(--blue-d); }
+    #jig-content .jig-status-assign  { background: #EDE7F6; color: #5E35B1; }
+    #jig-content .jig-status-review  { background: #FFF3E0; color: #E65100; }
+    #jig-content .jig-status-revise  { background: #FFEBEE; color: #C62828; }
+    #jig-content .jig-status-done    { background: #E8F5E9; color: #2E7D32; }
+
     .leave-type-tag {
       display: inline-flex;
       align-items: center;
@@ -984,6 +997,15 @@
   <div id="sub-page-jig" class="sub-page-container" style="display:none">
     <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
       <div class="card-header today-leave-header">🗂️ 治檢具清單（PDM）</div>
+      <div class="filter-bar">
+        <label>申請人員</label>
+        <select id="jig-f-submitter" onchange="renderJigTable()"><option value="">全部</option></select>
+        <label>保管單位</label>
+        <select id="jig-f-unit" onchange="renderJigTable()"><option value="">全部</option></select>
+        <label>狀態</label>
+        <select id="jig-f-status" onchange="renderJigTable()"><option value="">全部</option></select>
+        <span class="filter-count"><strong id="jig-f-count">0</strong> 筆</span>
+      </div>
       <div class="table-wrap" id="jig-view-table">
         <div id="jig-content">
           <div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>
@@ -2378,6 +2400,8 @@ document.getElementById('saveModal').addEventListener('click', function(e) {
 });
 
 let _jigLoaded = false;
+let _jigData = [];
+let _jigSort = { col: 'apply_date', dir: -1 }; // 預設申請日期新→舊
 
 async function loadJigData() {
   if (_jigLoaded) return;
@@ -2386,37 +2410,102 @@ async function loadJigData() {
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     _jigLoaded = true;
-    renderJigTable(data.jigs);
+    _jigData = data.jigs;
+    populateJigFilters(_jigData);
+    renderJigTable();
   } catch (e) {
     document.getElementById('jig-content').innerHTML = `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
   }
 }
 
-function renderJigTable(jigs) {
-  const content = document.getElementById('jig-content');
+function populateJigFilters(jigs) {
+  function fill(id, vals, def) {
+    const sel = document.getElementById(id);
+    const opts = [...new Set(vals.filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">全部</option>' +
+      opts.map(v => `<option value="${esc(v)}"${v===def?' selected':''}>${esc(v)}</option>`).join('');
+  }
+  fill('jig-f-submitter', jigs.map(j => j.submitter), '楊良捷');
+  fill('jig-f-unit',      jigs.map(j => j.unit),      '加工部');  // 部分資料為「加工課」
+  fill('jig-f-status',    jigs.map(j => j.status),    '');
+}
+
+function jigStatusClass(status) {
+  const s = status || '';
+  if (s.includes('移交')) return 'jig-status-done';
+  if (s.includes('修改')) return 'jig-status-revise';
+  if (s.includes('審核')) return 'jig-status-review';
+  if (s.includes('分派')) return 'jig-status-assign';
+  return 'jig-status-default';
+}
+
+function jigSortBy(col) {
+  if (_jigSort.col === col) {
+    _jigSort.dir *= -1;
+  } else {
+    _jigSort.col = col;
+    _jigSort.dir = 1;
+  }
+  renderJigTable();
+}
+
+function renderJigTable() {
+  const content  = document.getElementById('jig-content');
+  const fSub    = document.getElementById('jig-f-submitter').value;
+  const fUnit   = document.getElementById('jig-f-unit').value;
+  const fStatus = document.getElementById('jig-f-status').value;
+
+  let jigs = _jigData;
+  if (fSub)    jigs = jigs.filter(j => j.submitter === fSub);
+  if (fUnit)   jigs = jigs.filter(j => j.unit === fUnit);
+  if (fStatus) jigs = jigs.filter(j => j.status === fStatus);
+
+  // 排序
+  const col = _jigSort.col, dir = _jigSort.dir;
+  jigs = [...jigs].sort((a, b) => {
+    const av = (a[col] || ''), bv = (b[col] || '');
+    return av < bv ? -dir : av > bv ? dir : 0;
+  });
+
+  document.getElementById('jig-f-count').textContent = jigs.length;
+
   if (!jigs.length) {
     content.innerHTML = '<div class="msg-empty"><span>查無治檢具資料</span></div>';
     return;
   }
 
-  const trs = jigs.map(j => `
+  function thSort(col, label) {
+    const active = _jigSort.col === col;
+    const arrow  = active ? (_jigSort.dir === 1 ? ' ↑' : ' ↓') : '';
+    const style  = active ? 'cursor:pointer;text-decoration:underline;' : 'cursor:pointer;';
+    return `<th onclick="jigSortBy('${col}')" style="${style}">${label}${arrow}</th>`;
+  }
+
+  const trs = jigs.map(j => {
+    const path = j.folder_path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `
     <tr>
+      <td class="td-code"><a href="javascript:void(0)" onclick="openJigFolder('${path}')">${esc(j.folder_name)}</a></td>
+      <td class="td-center">${esc(j.apply_date)}</td>
       <td>${esc(j.product_model)}</td>
       <td>${esc(j.item_name)}</td>
+      <td class="td-center">${esc(j.unit)}</td>
       <td class="td-center">${esc(j.handler)}</td>
-      <td class="td-center">${esc(j.status)}</td>
-      <td class="td-code"><a href="javascript:void(0)" onclick="openJigFolder('${esc(j.folder_path).replace(/'/g, "\\'")}')">${esc(j.folder_name)}</a></td>
-    </tr>`).join('');
+      <td class="td-center"><span class="jig-status ${jigStatusClass(j.status)}">${esc(j.status)}</span></td>
+    </tr>`;
+  }).join('');
 
   content.innerHTML = `
     <table class="pro-table">
       <thead>
         <tr>
-          <th>產品機型</th>
-          <th>品名</th>
-          <th style="width:90px" class="center">經辦</th>
-          <th style="width:110px" class="center">狀態</th>
-          <th style="width:120px">名稱</th>
+          ${thSort('folder_name','名稱')}
+          ${thSort('apply_date','申請日期')}
+          ${thSort('product_model','產品機型')}
+          ${thSort('item_name','品名')}
+          ${thSort('unit','保管單位')}
+          ${thSort('handler','經辦')}
+          <th class="center" style="width:130px;cursor:pointer" onclick="jigSortBy('status')">狀態${_jigSort.col==='status'?(_jigSort.dir===1?' ↑':' ↓'):''}</th>
         </tr>
       </thead>
       <tbody>${trs}</tbody>

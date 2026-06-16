@@ -2681,7 +2681,7 @@ def jig_list():
     try:
         cur = conn.execute(
             'SELECT folder_name, folder_path, product_model, item_name, '
-            '       drawing_model, handler, submitter, status, taken_by '
+            '       handler, submitter, status, apply_date, unit '
             'FROM jig_index ORDER BY folder_name DESC'
         )
         jigs = [dict(r) for r in cur.fetchall()]
