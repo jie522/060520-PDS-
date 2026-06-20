@@ -517,7 +517,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260615'
+APP_VERSION = 'V20260619m'
 
 @app.route('/ver')
 def ver_check():
@@ -2583,6 +2583,33 @@ def management_page():
     return render_template('management.html', form_types=_FORM_TYPES)
 
 
+@app.route('/api/attendance/list')
+def attendance_list():
+    """讀取 Google 試算表『M9出勤表』資料"""
+    cache_key = 'attendance_list'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
+    try:
+        rows = fetch_google_sheet_csv(config.ATTENDANCE_SHEET_ID, gid=config.ATTENDANCE_SHEET_GID)
+    except Exception:
+        return jsonify({'success': False, 'error': '無法連線至 Google 試算表，請確認網路狀態'}), 502
+
+    try:
+        emp_map = fetch_employee_name_map()
+        for r in rows:
+            for k in list(r.keys()):
+                emp_id = r.get(k, '').strip()
+                if emp_id and emp_id in emp_map:
+                    r[k + '_name'] = emp_map[emp_id]
+        result = {'success': True, 'count': len(rows), 'headers': list(rows[0].keys()) if rows else [], 'rows': rows}
+        cache_set(cache_key, result)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/leave/list')
 def leave_list():
     """讀取 Google 試算表『請假單』資料"""
@@ -2671,6 +2698,399 @@ def overtime_list():
     return jsonify(result)
 
 
+@app.route('/api/scrap/list')
+def scrap_list():
+    """讀取 Google 試算表『報廢統計』資料"""
+    cache_key = 'scrap_list'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
+    try:
+        rows = fetch_google_sheet_csv(config.SCRAP_SHEET_ID, gid=config.SCRAP_SHEET_GID)
+    except Exception:
+        return jsonify({'success': False, 'error': '無法連線至 Google 試算表，請確認網路狀態'}), 502
+
+    CATEGORY_MAP = {'A': 'CNC', 'B': '鑽床', 'C': '沖床', 'L': '車床'}
+    scraps = []
+    for r in rows:
+        raw_amount = (r.get('報廢金額') or '').replace(',', '').strip()
+        try:
+            amount = float(raw_amount)
+        except ValueError:
+            amount = 0
+        raw_qty = (r.get('出庫異動數量') or '').replace(',', '').strip()
+        try:
+            qty = float(raw_qty)
+        except ValueError:
+            qty = 0
+        cat = (r.get('分類') or '').strip().upper()
+        scraps.append({
+            'date':     (r.get('異動日期') or '').strip(),
+            'doc_no':   (r.get('單別-單號') or '').strip(),
+            'part_no':  (r.get('品號') or '').strip(),
+            'name':     (r.get('品名') or '').strip(),
+            'spec':     (r.get('規格') or '').strip(),
+            'dept':     (r.get('部門名稱') or '').strip(),
+            'remark':   (r.get('備註') or '').strip(),
+            'qty':      qty,
+            'amount':   amount,
+            'category': cat,
+            'cat_name': CATEGORY_MAP.get(cat, cat),
+        })
+
+    def _sort_key(item):
+        try:
+            parts = item['date'].replace('-', '/').split('/')
+            return tuple(int(p) for p in parts)
+        except Exception:
+            return (0, 0, 0)
+
+    scraps.sort(key=_sort_key, reverse=True)
+
+    result = {'success': True, 'count': len(scraps), 'scraps': scraps}
+    cache_set(cache_key, result)
+    return jsonify(result)
+
+
+def _build_category_map():
+    """讀取 K1_P2.ref 試算表，建立 {品號+製程: A/B/C} 對照表（含 Flask 快取）"""
+    cache_key = 'category_map'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached.get('map', {})
+    try:
+        cat_rows = fetch_google_sheet_csv(config.CATEGORY_SHEET_ID, gid=config.CATEGORY_SHEET_GID)
+        cat_map = {}
+        for r in cat_rows:
+            part_no      = (r.get('品號')   or '').strip()
+            process_code = (r.get('製程')   or '').strip()
+            category     = (r.get('A/B/C分類') or r.get('A/B/C') or '').strip()
+            if part_no and process_code and category:
+                cat_map[part_no + process_code] = category
+        result = {'success': True, 'map': cat_map}
+        cache_set(cache_key, result)
+        return cat_map
+    except Exception:
+        return {}
+
+
+@app.route('/api/prod_report/list')
+def prod_report_list():
+    """讀取 Google 試算表『生產日報表』資料（含 ABC 分類）"""
+    cache_key = 'prod_report_list'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
+    try:
+        rows = fetch_google_sheet_csv(config.PROD_REPORT_SHEET_ID, gid=config.PROD_REPORT_SHEET_GID)
+    except Exception:
+        return jsonify({'success': False, 'error': '無法連線至 Google 試算表，請確認網路狀態'}), 502
+
+    cat_map = _build_category_map()
+
+    records = []
+    for r in rows:
+        raw_qty = (r.get('生產數') or '').replace(',', '').strip()
+        try:    qty = float(raw_qty)
+        except ValueError: qty = 0
+        raw_sec = (r.get('秒數') or '').replace(',', '').strip()
+        try:    seconds = float(raw_sec)
+        except ValueError: seconds = 0
+        part_no      = (r.get('品號') or '').strip()
+        process_code = (r.get('製程代號') or '').strip()
+        machine_name = (r.get('機台名稱') or '').strip()
+        machine_code = (r.get('機台代號') or '').strip()
+
+        # 分類判斷：① 試算表直接欄位 → ② 品號+製程對照表 → ③ 機台名稱/代號關鍵字
+        cat = (r.get('A/B/C') or r.get('類別') or r.get('分類') or '').strip()
+        if cat not in ('A', 'B', 'C', 'L'):
+            cat = cat_map.get(part_no + process_code, '')
+        if cat not in ('A', 'B', 'C', 'L'):
+            kw = (machine_name + machine_code + process_code).upper()
+            if 'CNC' in kw or '加工中心' in kw or '綜合加工' in kw:
+                cat = 'A'
+            elif '鑽' in kw:
+                cat = 'B'
+            elif '沖' in kw or '衝' in kw:
+                cat = 'C'
+            elif '車' in kw:
+                cat = 'L'
+
+        records.append({
+            'std_time':     (r.get('標工') or '').strip(),
+            'date':         (r.get('生產日期') or '').strip(),
+            'operator':     (r.get('生產人員') or '').strip(),
+            'work_order':   (r.get('製令') or '').strip(),
+            'part_no':      part_no,
+            'name':         (r.get('品名') or '').strip(),
+            'process_code': process_code,
+            'qty':          qty,
+            'seconds':      seconds,
+            'machine_code': machine_code,
+            'machine_name': machine_name,
+            'remark':       (r.get('備註') or '').strip(),
+            'category':     cat,
+        })
+
+    def _sort_key(item):
+        try:
+            parts = item['date'].replace('-', '/').split('/')
+            return tuple(int(p) for p in parts)
+        except Exception:
+            return (0, 0, 0)
+
+    records.sort(key=_sort_key, reverse=True)
+    result = {'success': True, 'count': len(records), 'records': records}
+    cache_set(cache_key, result)
+    return jsonify(result)
+
+
+@app.route('/api/prod_report/monthly_stats')
+def prod_report_monthly_stats():
+    """生產日報表圖表資料：讀『P5.3生產日報表data_ref』分頁，
+    依 A/B/C/L 分類 × 年月 彙整生產數（資料來源與『生產報工統計P2』的出站數量不同）"""
+    cache_key = 'prod_report_monthly_stats_v1'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
+    try:
+        rows = fetch_google_sheet_csv(config.PROD_REPORT_SHEET_ID, gid=config.PROD_REPORT_CHART_GID)
+    except Exception:
+        return jsonify({'success': False, 'error': '無法連線至 Google 試算表，請確認網路狀態'}), 502
+
+    cat_map = _build_category_map()
+    from collections import defaultdict
+    month_data = defaultdict(lambda: {
+        'A': 0, 'B': 0, 'C': 0, 'L': 0, 'other': 0,
+        'records': 0, 'uncat': 0,
+    })
+
+    for r in rows:
+        date_str = (r.get('生產日期') or '').strip()
+        if not date_str:
+            continue
+        clean = date_str.split(' ')[0].replace('-', '/')
+        parts = clean.split('/')
+        if len(parts) < 2:
+            continue
+        try:
+            ym = f'{int(parts[0])}-{int(parts[1]):02d}'
+        except Exception:
+            continue
+
+        raw_qty = (r.get('生產數') or '').replace(',', '').strip()
+        try:
+            qty = int(float(raw_qty)) if raw_qty else 0
+        except ValueError:
+            qty = 0
+
+        part_no      = (r.get('品號') or '').strip()
+        process_code = (r.get('製程代號') or '').strip()
+        machine_code = (r.get('機台代號') or '').strip()
+        machine_name = (r.get('機台名稱') or '').strip()
+
+        # 分類：① 品號+製程對照表 → ② 機台名稱/代號/製程關鍵字
+        cat = cat_map.get(part_no + process_code, '')
+        if cat not in ('A', 'B', 'C', 'L'):
+            kw = (machine_name + machine_code + process_code).upper()
+            if 'CNC' in kw or '加工中心' in kw or '綜合加工' in kw:
+                cat = 'A'
+            elif '鑽' in kw:
+                cat = 'B'
+            elif '沖' in kw or '衝' in kw:
+                cat = 'C'
+            elif '車' in kw:
+                cat = 'L'
+
+        d = month_data[ym]
+        if cat in ('A', 'B', 'C', 'L'):
+            if qty > 0:
+                d[cat]       += qty
+                d['records'] += 1
+        else:
+            d['uncat'] += 1
+            if qty > 0:
+                d['other'] += qty
+
+    months = []
+    for ym in sorted(month_data.keys()):
+        d = month_data[ym]
+        classified = d['A'] + d['B'] + d['C'] + d['L']
+        months.append({
+            'month': ym,
+            'A': d['A'], 'B': d['B'], 'C': d['C'], 'L': d['L'],
+            'other': d['other'],
+            'total': classified + d['other'],
+            'records': d['records'],
+            'uncat': d['uncat'],
+        })
+
+    result = {'success': True, 'months': months}
+    cache_set(cache_key, result)
+    return jsonify(result)
+
+
+@app.route('/api/category/map')
+def category_map():
+    """讀取 Google 試算表，回傳 {品號+製程代號: A/B/C分類} 對照表"""
+    cache_key = 'category_map'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
+    try:
+        rows = fetch_google_sheet_csv(config.CATEGORY_SHEET_ID, gid=config.CATEGORY_SHEET_GID)
+    except Exception:
+        return jsonify({'success': False, 'error': '無法連線至 Google 試算表'}), 502
+
+    cat_map = {}
+    for r in rows:
+        # 欄位依序：製令(A)、預計數量(B)、品號(C)、品名(D)...製程代號(F)...A/B/C(Q)
+        # fetch_google_sheet_csv 已用第一列 header 做 key，直接用 index 取值更安全
+        vals = list(r.values())
+        if len(vals) < 17:
+            continue
+        part_no      = vals[2].strip()   # C欄：品號
+        process_code = vals[5].strip()   # F欄：製程代號
+        category     = vals[16].strip()  # Q欄：A/B/C 分類
+        if part_no and process_code and category:
+            cat_map[part_no + process_code] = category
+
+    result = {'success': True, 'map': cat_map}
+    cache_set(cache_key, result)
+    return jsonify(result)
+
+
+@app.route('/api/k1p2/list')
+def k1p2_list():
+    """讀取 K1_P2.ref 全部明細記錄"""
+    cache_key = 'k1p2_list'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+    try:
+        rows = fetch_google_sheet_csv(config.CATEGORY_SHEET_ID, gid=config.CATEGORY_SHEET_GID)
+        records = []
+        for r in rows:
+            out_str = (r.get('欄位格式化') or r.get('出站時間') or '').strip()
+            ym = ''
+            if out_str:
+                parts = out_str.replace('-', '/').split('/')
+                if len(parts) >= 2:
+                    try: ym = f'{int(parts[0])}-{int(parts[1]):02d}'
+                    except: pass
+            records.append({
+                'wo':           (r.get('製令')           or '').strip(),
+                'plan_qty':     (r.get('預計產量')        or '').strip(),
+                'part_no':      (r.get('品號')            or '').strip(),
+                'name':         (r.get('品名')            or '').strip(),
+                'seq':          (r.get('加工順序')        or '').strip(),
+                'process':      (r.get('製程')            or '').strip(),
+                'process_name': (r.get('製程名稱')        or '').strip(),
+                'qty':          (r.get('出站數量')        or '').strip(),
+                'seconds':      (r.get('出站總工時(秒)')  or '').strip(),
+                'in_time':      (r.get('進站時間')        or '').strip(),
+                'out_time':     out_str,
+                'operator':     (r.get('報工人員')        or '').strip(),
+                'category':     (r.get('A/B/C分類') or r.get('A/B/C') or '').strip(),
+                'ym':           ym,
+            })
+        records.sort(key=lambda x: x.get('out_time', ''), reverse=True)
+        result = {'success': True, 'count': len(records), 'records': records}
+        cache_set(cache_key, result)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/k1p2/monthly_stats')
+def k1p2_monthly_stats():
+    """K1_P2.ref 月份分類統計：出站數量 × A/B/C/L × 年月"""
+    cache_key = 'k1p2_monthly_stats_v3'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+    try:
+        rows = fetch_google_sheet_csv(config.CATEGORY_SHEET_ID, gid=config.CATEGORY_SHEET_GID)
+        from collections import defaultdict
+        month_data = defaultdict(lambda: {
+            'A': 0, 'B': 0, 'C': 0, 'L': 0, 'other': 0,
+            'sec_A': 0, 'sec_B': 0, 'sec_C': 0, 'sec_L': 0,
+            'records': 0, 'uncat': 0, 'seconds': 0,
+        })
+        for r in rows:
+            # 優先用欄位格式化（YYYY/MM/DD），備援出站時間（含中文上午/下午）
+            date_str = (r.get('欄位格式化') or r.get('出站時間') or '').strip()
+            qty_str  = (r.get('出站數量') or '').strip()
+            # 相容半型 () 和全型（）括號
+            sec_str  = (r.get('出站總工時(秒)') or r.get('出站總工時（秒）') or '').strip()
+            cat      = (r.get('A/B/C') or r.get('A/B/C分類') or '').strip()
+            try:
+                qty = int(float(qty_str.replace(',', ''))) if qty_str else 0
+            except Exception:
+                qty = 0
+            try:
+                sec = int(float(sec_str.replace(',', ''))) if sec_str else 0
+            except Exception:
+                sec = 0
+            if not date_str:
+                continue
+            # 日期解析 → 年月（先取日期部份再分割，避免時間字串干擾）
+            ym = ''
+            clean_date = date_str.split(' ')[0]
+            if '/' in clean_date:
+                parts = clean_date.split('/')
+                if len(parts) >= 2:
+                    try:
+                        ym = f'{int(parts[0])}-{int(parts[1]):02d}'
+                    except Exception:
+                        pass
+            elif '-' in clean_date:
+                parts = clean_date.split('-')
+                if len(parts) >= 2:
+                    try:
+                        ym = f'{parts[0]}-{int(parts[1]):02d}'
+                    except Exception:
+                        pass
+            if not ym:
+                continue
+            month_data[ym]['seconds'] += sec
+            if cat in ('A', 'B', 'C', 'L'):
+                month_data[ym][f'sec_{cat}'] += sec   # 秒數：不論 qty 是否為 0 都累加
+                if qty > 0:
+                    month_data[ym][cat]       += qty
+                    month_data[ym]['records'] += 1
+            else:
+                month_data[ym]['uncat'] += 1
+                if qty > 0:
+                    month_data[ym]['other'] += qty
+
+        months = []
+        for ym in sorted(month_data.keys()):
+            d = month_data[ym]
+            classified = d['A'] + d['B'] + d['C'] + d['L']
+            months.append({
+                'month': ym,
+                'A': d['A'], 'B': d['B'], 'C': d['C'], 'L': d['L'],
+                'sec_A': d['sec_A'], 'sec_B': d['sec_B'],
+                'sec_C': d['sec_C'], 'sec_L': d['sec_L'],
+                'other': d['other'],
+                'total': classified + d['other'],
+                'records': d['records'],
+                'uncat': d['uncat'],
+                'seconds': d['seconds'],
+            })
+
+        result = {'success': True, 'months': months}
+        cache_set(cache_key, result)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/jig/list')
 def jig_list():
     """讀取治檢具清單索引（PDM 資料夾資料卡，build_jig_index.py 建立）"""
@@ -2681,7 +3101,7 @@ def jig_list():
     try:
         cur = conn.execute(
             'SELECT folder_name, folder_path, product_model, item_name, '
-            '       handler, submitter, status, apply_date, unit '
+            '       handler, submitter, status, apply_date, unit, remarks '
             'FROM jig_index ORDER BY folder_name DESC'
         )
         jigs = [dict(r) for r in cur.fetchall()]
@@ -2734,6 +3154,80 @@ def jig_open_folder():
     jig_root = os.path.normpath(config.JIG_VAULT_PATH)
     norm_path = os.path.normpath(path)
     if not norm_path.lower().startswith(jig_root.lower()):
+        return jsonify({'ok': False, 'error': '無效的路徑'}), 400
+    if not os.path.isdir(norm_path):
+        return jsonify({'ok': False, 'error': '資料夾不存在'}), 404
+
+    try:
+        os.startfile(norm_path)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dcn/list')
+def dcn_list():
+    """讀取設計變更通知單索引（PDM 資料夾，build_dcn_index.py 建立）"""
+    conn = get_pdm_db()
+    if not conn:
+        return jsonify({'success': False, 'error': 'PDM 索引資料庫不存在'}), 500
+
+    try:
+        cur = conn.execute(
+            'SELECT folder_name, folder_path, issue_date, product_model, '
+            '       submitter, handler, reviewer, approver, reason, description, status '
+            'FROM dcn_index ORDER BY folder_name DESC'
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        row = conn.execute('SELECT MAX(indexed_at) FROM dcn_index').fetchone()
+        last_updated = row[0] if row and row[0] else None
+    except sqlite3.OperationalError:
+        rows = []
+        last_updated = None
+    finally:
+        conn.close()
+
+    return jsonify({'success': True, 'count': len(rows), 'dcns': rows,
+                    'last_updated': last_updated})
+
+
+@app.route('/api/dcn/rebuild', methods=['POST'])
+def dcn_rebuild():
+    """重建設計變更通知單索引（背景執行 build_dcn_index.py --deploy）"""
+    import subprocess, re as _re
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'build_dcn_index.py')
+    if not os.path.exists(script):
+        return jsonify({'success': False, 'error': 'build_dcn_index.py 不存在'}), 500
+    try:
+        script_dir = os.path.dirname(script)
+        result = subprocess.run(
+            [sys.executable, script, '--deploy'],
+            capture_output=True, text=True, timeout=600,
+            cwd=script_dir
+        )
+        if result.returncode != 0:
+            err = (result.stderr or result.stdout)[-500:]
+            return jsonify({'success': False, 'error': err}), 500
+        m = _re.search(r'寫入：(\d+)', result.stdout)
+        count = int(m.group(1)) if m else 0
+        return jsonify({'success': True, 'count': count})
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'error': '更新逾時（超過 10 分鐘）'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dcn/open-folder', methods=['POST'])
+def dcn_open_folder():
+    """用 Shell 開啟設計變更通知單資料夾"""
+    data = request.get_json(silent=True) or {}
+    path = data.get('path', '')
+    if not path:
+        return jsonify({'ok': False, 'error': '缺少 path 參數'}), 400
+
+    dcn_root = os.path.normpath(config.DCN_VAULT_PATH)
+    norm_path = os.path.normpath(path)
+    if not norm_path.lower().startswith(dcn_root.lower()):
         return jsonify({'ok': False, 'error': '無效的路徑'}), 400
     if not os.path.isdir(norm_path):
         return jsonify({'ok': False, 'error': '資料夾不存在'}), 404

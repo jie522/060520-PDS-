@@ -42,6 +42,7 @@ CREATE TABLE jig_index (
     status        TEXT,
     apply_date    TEXT,
     unit          TEXT,
+    remarks       TEXT,
     indexed_at    TEXT DEFAULT (datetime('now'))
 );
 """
@@ -72,6 +73,17 @@ def get_defined_value(wb, *names):
                     return v
             except Exception:
                 continue
+    return None
+
+
+def read_cell_after_label(ws, label):
+    """在工作表搜尋標籤儲存格，回傳同列往右第一個有值的儲存格內容（用於非 Defined Name 欄位）"""
+    for row in ws.iter_rows():
+        for i, cell in enumerate(row):
+            if str(cell.value or '').strip() == label:
+                for c2 in row[i + 1:]:
+                    if c2.value is not None and str(c2.value).strip():
+                        return str(c2.value).strip()
     return None
 
 
@@ -112,6 +124,8 @@ def read_application_form(folder, f):
         handler        = get_defined_value(wb, 'YC_經辦')
         apply_date     = get_defined_value(wb, 'YC_日期', 'YC_申請日期', '申請日期')
         unit           = get_defined_value(wb, '單位', 'YC_保管單位', '保管單位')
+        ws             = wb.active
+        remarks        = read_cell_after_label(ws, '其他')
 
         status = None
         try:
@@ -134,6 +148,7 @@ def read_application_form(folder, f):
             'status':        (str(status).strip() if status else ''),
             'apply_date':    apply_date or '',
             'unit':          (str(unit).strip() if unit else ''),
+            'remarks':       (str(remarks).strip() if remarks else ''),
         }
     except Exception as e:
         return None
@@ -180,11 +195,11 @@ def rebuild(deploy=False):
             cur.execute(
                 'INSERT OR REPLACE INTO jig_index '
                 '(folder_name, folder_path, product_model, item_name, '
-                ' handler, submitter, status, apply_date, unit) '
-                'VALUES (?,?,?,?,?,?,?,?,?)',
+                ' handler, submitter, status, apply_date, unit, remarks) '
+                'VALUES (?,?,?,?,?,?,?,?,?,?)',
                 (folder.Name, folder_path, record['product_model'], record['item_name'],
                  record['handler'], record['submitter'], record['status'],
-                 record['apply_date'], record['unit']))
+                 record['apply_date'], record['unit'], record['remarks']))
             inserted += 1
             print(f'  [{idx}/{total}] {folder.Name}: '
                   f'機型={record["product_model"]} 品名={record["item_name"]} '

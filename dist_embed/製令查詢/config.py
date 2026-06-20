@@ -40,6 +40,22 @@ FORM_TEMPLATES_DIR = None
 LEAVE_SHEET_ID   = '1hH2bbU3jNtQ_ddG8D9cr5qJc1qolf30gT9YjqhpORno'
 LEAVE_SHEET_NAME = 'M3.請假單'
 
+# ── 管理頁面：Google 試算表（報廢統計）設定 ─────────────────────
+SCRAP_SHEET_ID  = '1v8mKx0m7RyUSjzOeBJMy576hqvGKyerxyNQo4pfVw04'
+SCRAP_SHEET_GID = '0'
+
+# ── 管理頁面：Google 試算表（生產日報表）設定 ────────────────────
+# 明細與圖表皆使用 P5.3生產日報表data_ref 分頁（gid 567727173，全分類完整歷史）
+# 注意：此分頁無「機台名稱」「備註」欄位
+PROD_REPORT_SHEET_ID  = '1U_fY-DuNyTPa54PrSy2q9c_JGWqHa48R1fUmA6XBzU4'
+PROD_REPORT_SHEET_GID = '567727173'           # 明細分頁：P5.3生產日報表data_ref
+PROD_REPORT_CHART_GID = '567727173'           # 圖表來源分頁：P5.3生產日報表data_ref
+
+# ── 管理頁面：Google 試算表（ABC 分類）設定 ──────────────────────
+# 以品號+製程代號為 key，Q欄 = A/B/C 分類
+CATEGORY_SHEET_ID  = '1gBdHsnEpTb75PUR2LTm3ZSWgVBHSAjDFgtEyzh8dQKs'
+CATEGORY_SHEET_GID = '3658929'
+
 # ── 管理頁面：Google 試算表（員工登錄系統，工號對應姓名）設定 ────
 EMPLOYEE_SHEET_ID  = '12LuQyBhebmzr0WyTL4Uk36i1osVU9d2J17YCxSL6A5k'
 EMPLOYEE_SHEET_GID = '884596320'
@@ -48,9 +64,16 @@ EMPLOYEE_SHEET_GID = '884596320'
 OVERTIME_SHEET_ID  = '1hH2bbU3jNtQ_ddG8D9cr5qJc1qolf30gT9YjqhpORno'
 OVERTIME_SHEET_NAME = 'M2.加班人員'
 
+# ── 管理頁面：Google 試算表（出勤統計）設定 ────
+ATTENDANCE_SHEET_ID  = '1hH2bbU3jNtQ_ddG8D9cr5qJc1qolf30gT9YjqhpORno'
+ATTENDANCE_SHEET_GID = '1760796831'
+
 # ── 管理頁面：治檢具清單（PDM 資料夾）設定 ────────────────────────
 JIG_VAULT_PATH = r'C:\MAXCLAW\06-生技課\01-模檢治具(2026後)'
 JIG_SUBMITTERS = ['楊良捷', '陳銘仁', '林昭佑']
+
+# ── 管理頁面：設計變更通知單（PDM 資料夾）設定 ──────────────────────
+DCN_VAULT_PATH = r'C:\MAXCLAW\00-研發部\02-文件資料\02-設計變更通知單'
 
 # ── ERP SQL Server 連線設定（BOM查詢用）──────────────────────────
 # 連線至 192.168.1.140 的 Computech ERP YC01 資料庫
