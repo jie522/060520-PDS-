@@ -32,12 +32,14 @@
   --off:  #E8E6DF;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Noto Sans TC', 'Source Han Sans TC', sans-serif;font-size:13px;background:var(--bg);color:#212121}
+body,*{font-family:'Noto Sans TC', 'Source Han Sans TC', sans-serif}
+body{font-size:13px;background:var(--bg);color:#212121}
 
 /* ── ERP Header ── */
 .header{background:#1565C0;color:#fff;
   position:sticky;top:0;z-index:200;box-shadow:0 2px 6px rgba(0,0,0,.3)}
 .header-inner{display:flex;align-items:flex-end;padding:.4rem 1rem 0}
+.header-logo{margin-left:auto;align-self:center;font-size:1.15rem;font-weight:800;font-style:italic;letter-spacing:.03em;color:#F5A623}
 .header-title{font-size:1.1rem;font-weight:700;padding-bottom:.45rem;white-space:nowrap;margin-right:.5rem}
 .header-tabs{display:flex;align-items:flex-end;gap:2px}
 .header-tab{display:inline-block;padding:.3rem 1rem;font-size:1rem;font-weight:600;
@@ -140,8 +142,10 @@ body{font-family:'Noto Sans TC', 'Source Han Sans TC', sans-serif;font-size:13px
       <span                 class="header-tab active">設備稼動</span>
       <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
       <a href="/routing"        class="header-tab">產品途程查詢</a>
+      <a href="/batch_cost"     class="header-tab">批成本</a>
       <a href="/management"     class="header-tab">管理</a>
     </div>
+    <span class="header-logo">MAXCLAW</span>
   </div>
 </div>
 

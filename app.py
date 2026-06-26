@@ -66,6 +66,22 @@ if not os.path.exists(PDM_DB_PATH):
 # ── 技術資料清單資料庫（zume-n.com 圖號↔URL 對照表）──────────────────────
 ZUME_DB_PATH = os.path.join(_APP_DIR, 'zume_drawings.db')
 
+# ZUMEN 圖面欄位 → CSV 標題關鍵字對照（依關鍵字動態偵測欄位，缺的留空）
+_ZUME_EXTRA_COLS = ['line', 'prod_group', 'category', 'vendor']
+_ZUME_COL_KEYWORDS = {
+    'line':       ['生產線別', '線別'],
+    'prod_group': ['生產群組', '群組'],
+    'category':   ['分類'],
+    'vendor':     ['廠商', '客戶'],
+}
+
+def _ensure_zume_columns(con):
+    """相容遷移：drawings 表若缺新欄位則補上（line/prod_group/category/vendor）"""
+    existing = {r[1] for r in con.execute('PRAGMA table_info(drawings)')}
+    for col in _ZUME_EXTRA_COLS:
+        if col not in existing:
+            con.execute(f'ALTER TABLE drawings ADD COLUMN {col} TEXT')
+
 def _init_zume_db():
     con = sqlite3.connect(ZUME_DB_PATH)
     con.execute('''
@@ -82,41 +98,92 @@ def _init_zume_db():
             count     INTEGER
         )
     ''')
+    _ensure_zume_columns(con)
     con.commit(); con.close()
 
+def _zume_header_indices(headers):
+    """依標題關鍵字回傳各欄位的索引 dict（找不到的為 None）"""
+    idx = {
+        'part_no':   next((i for i, h in enumerate(headers) if '圖號' in h), None),
+        'url':       next((i for i, h in enumerate(headers) if h.strip().upper() == 'URL'), None),
+        'part_name': next((i for i, h in enumerate(headers) if '品名' in h), 1),
+    }
+    for col, kws in _ZUME_COL_KEYWORDS.items():
+        idx[col] = next((i for i, h in enumerate(headers) if any(k in h for k in kws)), None)
+    return idx
+
+def _zume_row_to_rec(row, idx):
+    """依欄位索引把一列轉成 dict；圖號/URL 缺或無效則回傳 None"""
+    def cell(col):
+        i = idx.get(col)
+        return str(row[i]).strip() if (i is not None and i < len(row) and row[i] is not None) else ''
+    no  = cell('part_no')
+    url = cell('url')
+    if not no or not url.startswith('http'):
+        return None
+    return {
+        'part_no': no, 'part_name': cell('part_name'), 'url': url,
+        'line': cell('line'), 'prod_group': cell('prod_group'),
+        'category': cell('category'), 'vendor': cell('vendor'),
+    }
+
+def _insert_zume_recs(con, recs):
+    """把解析後的 dict 清單寫入 drawings 表"""
+    con.executemany(
+        'INSERT OR REPLACE INTO drawings'
+        '(part_no, part_name, url, line, prod_group, category, vendor) '
+        'VALUES (:part_no, :part_name, :url, :line, :prod_group, :category, :vendor)',
+        recs)
+
 def _parse_zume_csv(filepath):
-    """解析 zume-n_data_list_*.csv，回傳 [(part_no, part_name, url), ...]"""
-    rows = []
+    """解析 zume-n_data_list_*.csv，回傳 [dict, ...]"""
+    recs = []
     try:
         with open(filepath, encoding='utf-8-sig', newline='') as f:
-            reader = csv.reader(f)
+            reader  = csv.reader(f)
             headers = [h.strip() for h in next(reader)]
-            idx_no  = next((i for i,h in enumerate(headers) if '圖號' in h), None)
-            idx_url = next((i for i,h in enumerate(headers) if h.upper() == 'URL'), None)
-            idx_nm  = next((i for i,h in enumerate(headers) if '品名' in h), 1)
-            if idx_no is None or idx_url is None:
+            idx     = _zume_header_indices(headers)
+            if idx['part_no'] is None or idx['url'] is None:
                 return []
             for row in reader:
-                if len(row) > max(idx_no, idx_url):
-                    no  = row[idx_no].strip()
-                    url = row[idx_url].strip()
-                    nm  = row[idx_nm].strip() if idx_nm < len(row) else ''
-                    if no and url.startswith('http'):
-                        rows.append((no, nm, url))
+                rec = _zume_row_to_rec(row, idx)
+                if rec:
+                    recs.append(rec)
     except Exception:
         pass
-    return rows
+    return recs
+
+def _zume_csv_search_dirs():
+    """回傳要掃描 zume-n_data_list_*.csv 的候選資料夾（去重、僅保留存在者）"""
+    home = os.path.expanduser('~')
+    cands = [
+        os.path.join(home, 'Downloads'),
+        os.path.join(home, '下載'),
+        os.path.join(home, 'Desktop'),
+        os.path.join(home, 'OneDrive', 'Downloads'),
+        os.path.join(home, 'OneDrive', '下載'),
+        os.path.join(home, 'OneDrive', 'Desktop'),
+    ]
+    seen, dirs = set(), []
+    for d in cands:
+        key = os.path.normcase(os.path.abspath(d))
+        if key not in seen and os.path.isdir(d):
+            seen.add(key); dirs.append(d)
+    return dirs
+
+
+def _find_zume_csvs():
+    """跨多個常見資料夾搜尋 zume-n_data_list_*.csv，依修改時間新→舊排序"""
+    import glob as _glob
+    files = []
+    for d in _zume_csv_search_dirs():
+        files.extend(_glob.glob(os.path.join(d, 'zume-n_data_list_*.csv')))
+    return sorted(files, key=os.path.getmtime, reverse=True)
+
 
 def _auto_import_zume_csv():
-    """啟動時自動掃描 Downloads 資料夾，匯入最新的 zume-n_data_list_*.csv"""
-    import glob as _glob, getpass as _gp
-    try:
-        user = _gp.getuser()
-    except Exception:
-        user = os.environ.get('USERNAME', 'user')
-    downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
-    pattern = os.path.join(downloads, 'zume-n_data_list_*.csv')
-    files = sorted(_glob.glob(pattern), key=os.path.getmtime, reverse=True)
+    """啟動時自動掃描下載/桌面等資料夾，匯入最新的 zume-n_data_list_*.csv"""
+    files = _find_zume_csvs()
     if not files:
         return
     latest = files[0]
@@ -126,13 +193,13 @@ def _auto_import_zume_csv():
     con.close()
     if already:
         return  # 已匯入過，略過
-    rows = _parse_zume_csv(latest)
-    if not rows:
+    recs = _parse_zume_csv(latest)
+    if not recs:
         return
     con = sqlite3.connect(ZUME_DB_PATH)
-    con.executemany('INSERT OR REPLACE INTO drawings(part_no,part_name,url) VALUES(?,?,?)', rows)
+    _insert_zume_recs(con, recs)
     con.execute('INSERT OR REPLACE INTO import_log(filename,imported_at,count) VALUES(?,datetime("now"),?)',
-                (fname, len(rows)))
+                (fname, len(recs)))
     con.commit(); con.close()
 
 _init_zume_db()
@@ -196,6 +263,13 @@ def cache_set(key, data):
     """設定快取資料"""
     with _cache_lock:
         _cache[key] = {'data': data, 'ts': time.time()}
+
+
+def cache_clear(*keys):
+    """清除指定的快取 key（用於「重新整理」強制重抓最新資料）"""
+    with _cache_lock:
+        for k in keys:
+            _cache.pop(k, None)
 
 
 def match_and_not(query, text):
@@ -295,6 +369,36 @@ def fetch_employee_name_map():
 
     cache_set(cache_key, name_map)
     return name_map
+
+
+def fetch_employee_roster():
+    """讀取 Google 試算表『員工登錄系統』(1.1員工登錄系統分頁)，回傳完整人員名冊（含快取）"""
+    cache_key = 'employee_roster'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    rows = fetch_google_sheet_csv(config.EMPLOYEE_SHEET_ID, gid=config.EMPLOYEE_SHEET_GID)
+    roster = []
+    for r in rows:
+        emp_id = (r.get('工號ID') or '').strip()
+        name   = (r.get('姓名') or '').strip()
+        if not emp_id or not name:
+            continue
+        roster.append({
+            'emp_id':      emp_id,
+            'name':        name,
+            'group':       (r.get('組別') or '').strip(),
+            'title':       (r.get('職務') or '').strip(),
+            'status':      (r.get('狀態') or '').strip(),
+            'nationality': (r.get('國籍') or '').strip(),
+            'hire_date':   (r.get('到職日') or '').strip(),
+            'leave_date':  (r.get('離職日') or '').strip(),
+            'remark':      (r.get('備註') or '').strip(),
+        })
+
+    cache_set(cache_key, roster)
+    return roster
 
 
 def fetch_efficiency_all_groups():
@@ -517,7 +621,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260619m'
+APP_VERSION = 'V20260626b'
 
 @app.route('/ver')
 def ver_check():
@@ -1328,26 +1432,25 @@ def zume_status():
 
 @app.route('/api/zume/scan', methods=['POST'])
 def zume_scan():
-    """重新掃描 Downloads 資料夾並匯入最新 CSV（強制重掃）"""
-    import glob as _glob
-    downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
-    pattern   = os.path.join(downloads, 'zume-n_data_list_*.csv')
-    files     = sorted(_glob.glob(pattern), key=os.path.getmtime, reverse=True)
+    """重新掃描下載/桌面等資料夾並匯入最新 CSV（強制重掃）"""
+    files = _find_zume_csvs()
     if not files:
-        return jsonify({'success': False, 'error': f'Downloads 資料夾找不到 zume-n_data_list_*.csv\n路徑：{downloads}'}), 404
+        dirs = '、'.join(_zume_csv_search_dirs()) or os.path.join(os.path.expanduser('~'), 'Downloads')
+        return jsonify({'success': False,
+                        'error': f'找不到 zume-n_data_list_*.csv\n請先從 ZUMEN 匯出清單 CSV 到「下載」資料夾。\n已搜尋：{dirs}'}), 404
     latest = files[0]
     fname  = os.path.basename(latest)
-    rows   = _parse_zume_csv(latest)
-    if not rows:
+    recs   = _parse_zume_csv(latest)
+    if not recs:
         return jsonify({'success': False, 'error': f'檔案解析失敗或無資料：{fname}'}), 400
     con = sqlite3.connect(ZUME_DB_PATH)
-    con.executemany('INSERT OR REPLACE INTO drawings(part_no,part_name,url) VALUES(?,?,?)', rows)
+    _insert_zume_recs(con, recs)
     con.execute('INSERT OR REPLACE INTO import_log(filename,imported_at,count) VALUES(?,datetime("now"),?)',
-                (fname, len(rows)))
+                (fname, len(recs)))
     con.commit()
     total = con.execute('SELECT COUNT(*) FROM drawings').fetchone()[0]
     con.close()
-    return jsonify({'success': True, 'imported': len(rows), 'total': total, 'file': fname})
+    return jsonify({'success': True, 'imported': len(recs), 'total': total, 'file': fname})
 
 
 @app.route('/api/zume/import', methods=['POST'])
@@ -1357,56 +1460,48 @@ def zume_import():
     if not f:
         return jsonify({'success': False, 'error': '未上傳檔案'}), 400
     fname_lower = f.filename.lower()
-    rows = []
+    recs = []
     try:
         if fname_lower.endswith('.csv'):
             content = f.read().decode('utf-8-sig')
             reader  = csv.reader(io.StringIO(content))
             headers = [h.strip() for h in next(reader)]
-            idx_no  = next((i for i,h in enumerate(headers) if '圖號' in h), None)
-            idx_url = next((i for i,h in enumerate(headers) if h.upper() == 'URL'), None)
-            idx_nm  = next((i for i,h in enumerate(headers) if '品名' in h), 1)
-            if idx_no is None or idx_url is None:
+            idx     = _zume_header_indices(headers)
+            if idx['part_no'] is None or idx['url'] is None:
                 return jsonify({'success': False, 'error': f'找不到「圖號」或「URL」欄'}), 400
             for row in reader:
-                if len(row) > max(idx_no, idx_url):
-                    no  = row[idx_no].strip(); url = row[idx_url].strip()
-                    nm  = row[idx_nm].strip() if idx_nm < len(row) else ''
-                    if no and url.startswith('http'):
-                        rows.append((no, nm, url))
+                rec = _zume_row_to_rec(row, idx)
+                if rec:
+                    recs.append(rec)
         elif fname_lower.endswith(('.xlsx', '.xlsm')):
             if not _OPENPYXL_OK:
                 return jsonify({'success': False, 'error': '請改用 CSV 格式'}), 400
             wb = openpyxl.load_workbook(io.BytesIO(f.read()), read_only=True)
             ws = wb.active
             headers = [str(c.value or '').strip() for c in next(ws.iter_rows(min_row=1, max_row=1))]
-            idx_no  = next((i for i,h in enumerate(headers) if '圖號' in h), None)
-            idx_url = next((i for i,h in enumerate(headers) if h.upper() == 'URL'), None)
-            idx_nm  = next((i for i,h in enumerate(headers) if '品名' in h), 1)
-            if idx_no is None or idx_url is None:
+            idx     = _zume_header_indices(headers)
+            if idx['part_no'] is None or idx['url'] is None:
                 return jsonify({'success': False, 'error': '找不到「圖號」或「URL」欄'}), 400
             for row in ws.iter_rows(min_row=2, values_only=True):
-                no  = str(row[idx_no] or '').strip()
-                url = str(row[idx_url] or '').strip()
-                nm  = str(row[idx_nm]  or '').strip() if idx_nm < len(row) else ''
-                if no and url.startswith('http'):
-                    rows.append((no, nm, url))
+                rec = _zume_row_to_rec(row, idx)
+                if rec:
+                    recs.append(rec)
             wb.close()
         else:
             return jsonify({'success': False, 'error': '僅支援 .csv 或 .xlsx'}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': f'解析失敗：{e}'}), 500
-    if not rows:
+    if not recs:
         return jsonify({'success': False, 'error': '檔案無有效資料'}), 400
     fname = f.filename
     con = sqlite3.connect(ZUME_DB_PATH)
-    con.executemany('INSERT OR REPLACE INTO drawings(part_no,part_name,url) VALUES(?,?,?)', rows)
+    _insert_zume_recs(con, recs)
     con.execute('INSERT OR REPLACE INTO import_log(filename,imported_at,count) VALUES(?,datetime("now"),?)',
-                (fname, len(rows)))
+                (fname, len(recs)))
     con.commit()
     total = con.execute('SELECT COUNT(*) FROM drawings').fetchone()[0]
     con.close()
-    return jsonify({'success': True, 'imported': len(rows), 'total': total})
+    return jsonify({'success': True, 'imported': len(recs), 'total': total})
 
 
 @app.route('/api/zume/lookup', methods=['POST'])
@@ -1456,6 +1551,39 @@ def zume_open():
         return jsonify({'success': True, 'opened': opened, 'not_found': not_found})
     except Exception as e:
         return jsonify({'success': False, 'error': f'開啟失敗：{str(e)}'}), 500
+
+
+@app.route('/api/zume/list')
+def zume_list():
+    """回傳所有匯入的 ZUMEN 圖面（含生產線別/群組/分類/廠商）+ 篩選選項 + 最後匯入資訊"""
+    try:
+        con = sqlite3.connect(ZUME_DB_PATH)
+        con.row_factory = sqlite3.Row
+        rows = [{
+            'part_no':    r['part_no'],
+            'part_name':  r['part_name'] or '',
+            'url':        r['url'],
+            'line':       r['line'] or '',
+            'prod_group': r['prod_group'] or '',
+            'category':   r['category'] or '',
+            'vendor':     r['vendor'] or '',
+        } for r in con.execute(
+            'SELECT part_no, part_name, url, line, prod_group, category, vendor '
+            'FROM drawings ORDER BY part_no')]
+        # 各欄不重複值（給前端下拉用）
+        def distinct(col):
+            return sorted({(r[0] or '').strip() for r in
+                           con.execute(f'SELECT DISTINCT {col} FROM drawings') if (r[0] or '').strip()})
+        options = {c: distinct(c) for c in _ZUME_EXTRA_COLS}
+        last = con.execute(
+            'SELECT filename, imported_at FROM import_log ORDER BY imported_at DESC LIMIT 1').fetchone()
+        con.close()
+        return jsonify({'success': True, 'count': len(rows), 'drawings': rows,
+                        'options': options,
+                        'last_file': last[0] if last else None,
+                        'last_at':   last[1] if last else None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'讀取失敗：{str(e)}'}), 500
 
 
 @app.route('/equipment')
@@ -2614,6 +2742,8 @@ def attendance_list():
 def leave_list():
     """讀取 Google 試算表『請假單』資料"""
     cache_key = 'leave_list'
+    if request.args.get('refresh'):
+        cache_clear(cache_key, 'employee_name_map')
     cached = cache_get(cache_key)
     if cached is not None:
         return jsonify(cached)
@@ -2698,10 +2828,678 @@ def overtime_list():
     return jsonify(result)
 
 
+@app.route('/api/employee/list')
+def employee_list():
+    """讀取 Google 試算表『員工登錄系統』(1.1員工登錄系統分頁)，回傳人員名冊"""
+    try:
+        roster = fetch_employee_roster()
+    except Exception:
+        return jsonify({'success': False, 'error': '無法連線至 Google 試算表，請確認網路狀態'}), 502
+    return jsonify({'success': True, 'count': len(roster), 'employees': roster})
+
+
+@app.route('/api/purchase/list')
+def purchase_list():
+    """讀取 Google 試算表『採購登入表』（主表分頁）資料"""
+    cache_key = 'purchase_list'
+    if request.args.get('refresh'):
+        cache_clear(cache_key)
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
+    try:
+        rows = fetch_google_sheet_csv(config.PURCHASE_SHEET_ID, sheet_name=config.PURCHASE_SHEET_NAME)
+    except Exception:
+        return jsonify({'success': False, 'error': '無法連線至 Google 試算表，請確認網路狀態'}), 502
+
+    records = []
+    for r in rows:
+        raw_qty = (r.get('數量') or '').replace(',', '').strip()
+        try:    qty = float(raw_qty)
+        except ValueError: qty = 0
+        raw_unit = (r.get('單價') or '').replace(',', '').strip()
+        try:    unit_price = float(raw_unit)
+        except ValueError: unit_price = 0
+        raw_sub = (r.get('小計') or '').replace(',', '').strip()
+        try:    subtotal = float(raw_sub)
+        except ValueError: subtotal = 0
+        date = (r.get('日期') or '').strip()
+        if not date and not (r.get('品名') or '').strip():
+            continue  # 跳過空白列
+        records.append({
+            'date':       date,
+            'status':     (r.get('狀態') or '').strip(),
+            'name':       (r.get('品名') or '').strip(),
+            'spec':       (r.get('規格') or '').strip(),
+            'vendor':     (r.get('供應商') or '').strip(),
+            'vendor_no':  (r.get('供應商代號') or '').strip(),
+            'qty':        qty,
+            'unit_price': unit_price,
+            'subtotal':   subtotal,
+            'account':    (r.get('會計科目') or '').strip(),
+            'doc_no':     (r.get('單據號碼') or '').strip(),
+            'remark':     (r.get('備註') or '').strip(),
+        })
+
+    def _sort_key(item):
+        try:
+            parts = item['date'].replace('-', '/').split('/')
+            return tuple(int(p) for p in parts)
+        except Exception:
+            return (0, 0, 0)
+
+    records.sort(key=_sort_key, reverse=True)
+
+    result = {'success': True, 'count': len(records), 'purchases': records}
+    cache_set(cache_key, result)
+    return jsonify(result)
+
+
+# ── 批成本計算（共用區 Excel 範本：刀具/刀表/批成本計算） ──────────────
+
+def _load_batchcost_wb(read_only=False):
+    """開啟批成本計算範本檔案（共用網路路徑）"""
+    return openpyxl.load_workbook(config.BATCH_COST_FILE_PATH, data_only=read_only)
+
+
+def _save_batchcost_wb(wb):
+    """儲存，若檔案被佔用（例如使用者自己開著 Excel）則 fallback 存到桌面，回傳警告訊息（無警告回 None）"""
+    try:
+        wb.save(config.BATCH_COST_FILE_PATH)
+        return None
+    except (PermissionError, OSError) as e:
+        desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+        os.makedirs(desktop, exist_ok=True)
+        fallback = os.path.join(desktop, f'批成本計算_{int(time.time())}.xlsx')
+        wb.save(fallback)
+        return f'原始檔案無法寫入（{type(e).__name__}，可能被開啟中），已改存到：{fallback}'
+
+
+@app.route('/api/batch_cost/lookup_order')
+def batch_cost_lookup_order():
+    """依製令號碼查詢品號/品名/製程代號（優先從 P2 表查，再備援 SSRS；允許不打 "-" 直接輸入數字）"""
+    order = request.args.get('order', '').strip()
+    if not order:
+        return jsonify({'success': False, 'error': '請輸入製令號碼'}), 400
+    # 製令格式為「4位單位代碼-序號」，若使用者輸入全數字沒打 "-"，自動補上方便比對
+    order_norm = order.replace('-', '')
+    if order.isdigit() and len(order) > 4:
+        order_dashed = f'{order[:4]}-{order[4:]}'
+    else:
+        order_dashed = order
+
+    records = None
+    # 1. 優先從 K1_P2（生產報工統計 P2）查詢
+    try:
+        p2_rows = fetch_google_sheet_csv(config.CATEGORY_SHEET_ID, gid=config.CATEGORY_SHEET_GID)
+        records = []
+        for p2r in p2_rows:
+            wo = (p2r.get('製令') or '').strip()
+            if wo == order or wo == order_dashed or wo.replace('-', '') == order_norm:
+                sec_str = (p2r.get('出站總工時(秒)') or '').strip().replace(',', '')
+                try:
+                    seconds = float(sec_str) if sec_str else 0
+                except ValueError:
+                    seconds = 0
+                qty_str = (p2r.get('出站數量') or '').strip().replace(',', '')
+                try:
+                    qty = float(qty_str) if qty_str else 0
+                except ValueError:
+                    qty = 0
+                records.append({
+                    '單別': wo,
+                    '品號': (p2r.get('品號') or '').strip(),
+                    '品名': (p2r.get('品名') or '').strip(),
+                    '製程代號': (p2r.get('製程') or '').strip(),
+                    '製程名稱': (p2r.get('製程名稱') or '').strip(),
+                    '秒數': seconds,
+                    '出站數量': qty,
+                    '報工人員': (p2r.get('報工人員') or '').strip(),
+                    '出站時間': (p2r.get('欄位格式化') or p2r.get('出站時間') or '').strip(),
+                })
+    except Exception:
+        records = None
+
+    # 2. 備援：如果 P2 查不到，試試 SSRS 未完工製令（用補上 "-" 的版本比對，substring 才能命中）
+    if not records:
+        try:
+            records = search_orders(order_id=order_dashed)
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 502
+
+    if not records:
+        return jsonify({'success': False, 'error': '查無此製令'})
+
+    # 如果來自 SSRS（沒有製程名稱和秒數），則再查 P2 表補充
+    if not any(r.get('製程名稱') for r in records):
+        p2_map = {}
+        try:
+            p2_rows = fetch_google_sheet_csv(config.CATEGORY_SHEET_ID, gid=config.CATEGORY_SHEET_GID)
+            for p2r in p2_rows:
+                wo = (p2r.get('製令') or '').strip()
+                proc = (p2r.get('製程') or '').strip()
+                if wo:
+                    proc_name = (p2r.get('製程名稱') or '').strip()
+                    sec_str = (p2r.get('出站總工時(秒)') or '').strip().replace(',', '')
+                    try:
+                        seconds = float(sec_str) if sec_str else 0
+                    except ValueError:
+                        seconds = 0
+                    key = (wo, proc)
+                    if key not in p2_map:
+                        p2_map[key] = {'proc_name': proc_name, 'seconds': seconds}
+        except Exception:
+            p2_map = {}
+    else:
+        p2_map = {}
+
+    # 從『生產日報表P5.3』查機台名稱/機台代號（依製令+製程代號比對；P5.3 的製令欄位帶序號尾碼如 -0010，需先去除才能比對）
+    p53_map = {}
+    try:
+        p53_rows = fetch_google_sheet_csv(config.PROD_REPORT_SHEET_ID, gid=config.PROD_REPORT_SHEET_GID)
+        for p53r in p53_rows:
+            wo_full = (p53r.get('製令') or '').strip()
+            wo = wo_full.rsplit('-', 1)[0] if wo_full.count('-') >= 2 else wo_full
+            proc = (p53r.get('製程代號') or '').strip()
+            if wo:
+                key = (wo, proc)
+                if key not in p53_map:
+                    p53_map[key] = {
+                        'machine_name': (p53r.get('機台名稱') or '').strip(),
+                        'machine_code': (p53r.get('機台代號') or '').strip(),
+                    }
+    except Exception:
+        p53_map = {}
+
+    seen = set()
+    rows = []
+    for r in records:
+        part_no = (r.get('品號') or '').strip()
+        proc_code = (r.get('製程代號') or '').strip()
+        key = (part_no, proc_code)
+        if key in seen:
+            continue
+        seen.add(key)
+        order_full = r.get('單別', '').strip()
+        # 如果已經從 P2 查到，直接用；否則從 p2_map 補充
+        proc_name = r.get('製程名稱', '')
+        seconds = r.get('秒數', 0)
+        if not proc_name and order_full in p2_map:
+            p2_info = p2_map.get((order_full, proc_code), {})
+            proc_name = proc_name or p2_info.get('proc_name', '')
+            seconds = seconds or p2_info.get('seconds', 0)
+        out_qty = r.get('出站數量', 0)
+        p53_info = p53_map.get((order_full, proc_code), {})
+        rows.append({
+            'order':    order_full,
+            'part_no':  part_no,
+            'name':     (r.get('品名') or '').rstrip('|').strip(),
+            'proc_code': proc_code,
+            'proc_name': proc_name,
+            'seconds':  seconds,
+            'out_qty':  out_qty,
+            'machine_name': p53_info.get('machine_name', ''),
+            'machine_code': p53_info.get('machine_code', ''),
+            'operator': r.get('報工人員', ''),
+            'out_time': r.get('出站時間', ''),
+        })
+    return jsonify({'success': True, 'rows': rows})
+
+
+@app.route('/api/batch_cost/tool_catalog')
+def batch_cost_tool_catalog():
+    """讀『刀具』分頁，回傳每把刀的單價/刃數對照表"""
+    if not _OPENPYXL_OK:
+        return jsonify({'success': False, 'error': '伺服器未安裝 openpyxl'}), 500
+    try:
+        wb = _load_batchcost_wb(read_only=True)
+        ws = wb[config.BATCH_COST_TOOL_SHEET]
+        tools = []
+        header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+        idx = {h: i for i, h in enumerate(header) if h}
+        for row_no, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            name = row[idx.get('品名', 0)] if idx.get('品名') is not None else None
+            if not name:
+                continue
+            tools.append({
+                'row':    row_no,
+                'name':   str(name).strip(),
+                'item':   str(row[idx['項目']] or '').strip() if '項目' in idx else '',
+                'vendor': str(row[idx['供應商']] or '').strip() if '供應商' in idx else '',
+                'price':  row[idx['單價']] if '單價' in idx else 0,
+                'edges':  row[idx['刃數']] if '刃數' in idx else 0,
+            })
+        wb.close()
+        return jsonify({'success': True, 'tools': tools})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'讀取範本檔案失敗：{e}'}), 502
+
+
+@app.route('/api/batch_cost/tool_catalog/save', methods=['POST'])
+def batch_cost_tool_catalog_save():
+    """新增或編輯『刀具資料』分頁裡的一把刀（有 row 就編輯該列，沒有就新增一列）"""
+    if not _OPENPYXL_OK:
+        return jsonify({'success': False, 'error': '伺服器未安裝 openpyxl'}), 500
+    data = request.get_json(force=True) or {}
+    row_no = data.get('row')
+    name   = (data.get('name') or '').strip()
+    item   = (data.get('item') or '').strip()
+    vendor = (data.get('vendor') or '').strip()
+    price  = data.get('price') or 0
+    edges  = data.get('edges') or 0
+    if not name:
+        return jsonify({'success': False, 'error': '請輸入刀具名稱'}), 400
+
+    try:
+        wb = _load_batchcost_wb(read_only=False)
+        ws = wb[config.BATCH_COST_TOOL_SHEET]
+        header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+        idx = {h: i for i, h in enumerate(header) if h}
+        values = {'品名': name, '項目': item, '供應商': vendor, '單價': price, '刃數': edges}
+
+        if row_no:
+            target_row = int(row_no)
+        else:
+            target_row = ws.max_row + 1
+        for col_name, val in values.items():
+            if col_name in idx:
+                ws.cell(row=target_row, column=idx[col_name] + 1, value=val)
+
+        warning = _save_batchcost_wb(wb)
+        return jsonify({'success': True, 'warning': warning})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'存檔失敗：{e}'}), 502
+
+
+@app.route('/api/batch_cost/tool_catalog/delete', methods=['POST'])
+def batch_cost_tool_catalog_delete():
+    """刪除『刀具資料』分頁裡的一列"""
+    if not _OPENPYXL_OK:
+        return jsonify({'success': False, 'error': '伺服器未安裝 openpyxl'}), 500
+    data = request.get_json(force=True) or {}
+    row_no = data.get('row')
+    if not row_no:
+        return jsonify({'success': False, 'error': '缺少列號'}), 400
+
+    try:
+        wb = _load_batchcost_wb(read_only=False)
+        ws = wb[config.BATCH_COST_TOOL_SHEET]
+        ws.delete_rows(int(row_no), 1)
+        warning = _save_batchcost_wb(wb)
+        return jsonify({'success': True, 'warning': warning})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'刪除失敗：{e}'}), 502
+
+
+@app.route('/api/batch_cost/tool_map')
+def batch_cost_tool_map():
+    """讀『刀表』分頁，依品號查該品號目前的刀具配置（T1~T39）"""
+    part_no = request.args.get('part_no', '').strip()
+    if not part_no:
+        return jsonify({'success': False, 'error': '請提供品號'}), 400
+    if not _OPENPYXL_OK:
+        return jsonify({'success': False, 'error': '伺服器未安裝 openpyxl'}), 500
+    try:
+        wb = _load_batchcost_wb(read_only=True)
+        ws = wb[config.BATCH_COST_TOOLMAP_SHEET]
+        header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+        idx = {h: i for i, h in enumerate(header) if h}
+        slot_cols = [h for h in header if h and re.match(r'^T\d+$', str(h))]
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if not row[idx.get('品號', -1)]:
+                continue
+            if str(row[idx['品號']]).strip() != part_no:
+                continue
+            slots = []
+            for slot in slot_cols:
+                v = row[idx[slot]]
+                if v:
+                    slots.append({'slot': slot, 'tool': str(v).strip()})
+            wb.close()
+            return jsonify({'success': True, 'found': True,
+                             'machine_type': str(row[idx.get('加工機型', -1)] or '').strip() if '加工機型' in idx else '',
+                             'slots': slots})
+        wb.close()
+        return jsonify({'success': True, 'found': False, 'slots': []})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'讀取範本檔案失敗：{e}'}), 502
+
+
+@app.route('/api/batch_cost/tool_map/save', methods=['POST'])
+def batch_cost_tool_map_save():
+    """新增或覆寫『刀表』分頁裡某品號的刀具配置"""
+    if not _OPENPYXL_OK:
+        return jsonify({'success': False, 'error': '伺服器未安裝 openpyxl'}), 500
+    data = request.get_json(force=True) or {}
+    part_no = (data.get('part_no') or '').strip()
+    machine_type = (data.get('machine_type') or '').strip()
+    slots = data.get('slots') or []   # [{slot:'T1', tool:'...'}, ...]
+    if not part_no:
+        return jsonify({'success': False, 'error': '請提供品號'}), 400
+
+    try:
+        wb = _load_batchcost_wb(read_only=False)
+        ws = wb[config.BATCH_COST_TOOLMAP_SHEET]
+        header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+        idx = {h: i for i, h in enumerate(header) if h}
+        today = date.today().strftime('%Y/%m/%d')
+
+        target_row = None
+        for row_cells in ws.iter_rows(min_row=2):
+            cell = row_cells[idx['品號']]
+            if cell.value and str(cell.value).strip() == part_no:
+                target_row = row_cells
+                break
+
+        if target_row is None:
+            new_idx = ws.max_row + 1
+            ws.cell(row=new_idx, column=idx['建立日期'] + 1, value=today)
+            ws.cell(row=new_idx, column=idx['品號'] + 1, value=part_no)
+            ws.cell(row=new_idx, column=idx['加工機型'] + 1, value=machine_type)
+            for s in slots:
+                if s.get('slot') in idx:
+                    ws.cell(row=new_idx, column=idx[s['slot']] + 1, value=s.get('tool', ''))
+        else:
+            row_no = target_row[0].row
+            ws.cell(row=row_no, column=idx['修改日期'] + 1, value=today)
+            if machine_type:
+                ws.cell(row=row_no, column=idx['加工機型'] + 1, value=machine_type)
+            slot_cols = [h for h in header if h and re.match(r'^T\d+$', str(h))]
+            filled = {s['slot']: s.get('tool', '') for s in slots if s.get('slot')}
+            for slot in slot_cols:
+                ws.cell(row=row_no, column=idx[slot] + 1, value=filled.get(slot, ''))
+
+        warning = _save_batchcost_wb(wb)
+        return jsonify({'success': True, 'warning': warning})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'存檔失敗：{e}'}), 502
+
+
+@app.route('/api/batch_cost/tool_map/list')
+def batch_cost_tool_map_list():
+    """讀『刀表』分頁全部品號的刀具配置清單（維護頁用）"""
+    if not _OPENPYXL_OK:
+        return jsonify({'success': False, 'error': '伺服器未安裝 openpyxl'}), 500
+    try:
+        wb = _load_batchcost_wb(read_only=True)
+        ws = wb[config.BATCH_COST_TOOLMAP_SHEET]
+        header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+        idx = {h: i for i, h in enumerate(header) if h}
+        slot_cols = [h for h in header if h and re.match(r'^T\d+$', str(h))]
+        items = []
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            part_no = row[idx.get('品號', -1)] if '品號' in idx else None
+            if not part_no:
+                continue
+            slots = []
+            for slot in slot_cols:
+                v = row[idx[slot]]
+                if v:
+                    slots.append({'slot': slot, 'tool': str(v).strip()})
+            created = row[idx['建立日期']] if '建立日期' in idx else ''
+            modified = row[idx['修改日期']] if '修改日期' in idx else ''
+            items.append({
+                'part_no': str(part_no).strip(),
+                'machine_type': str(row[idx.get('加工機型', -1)] or '').strip() if '加工機型' in idx else '',
+                'created': str(created) if created else '',
+                'modified': str(modified) if modified else '',
+                'slots': slots,
+            })
+        wb.close()
+        return jsonify({'success': True, 'items': items})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'讀取範本檔案失敗：{e}'}), 502
+
+
+@app.route('/api/batch_cost/tool_map/delete', methods=['POST'])
+def batch_cost_tool_map_delete():
+    """刪除『刀表』分頁裡某品號的整列"""
+    if not _OPENPYXL_OK:
+        return jsonify({'success': False, 'error': '伺服器未安裝 openpyxl'}), 500
+    data = request.get_json(force=True) or {}
+    part_no = (data.get('part_no') or '').strip()
+    if not part_no:
+        return jsonify({'success': False, 'error': '請提供品號'}), 400
+
+    try:
+        wb = _load_batchcost_wb(read_only=False)
+        ws = wb[config.BATCH_COST_TOOLMAP_SHEET]
+        header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+        idx = {h: i for i, h in enumerate(header) if h}
+        target_row_no = None
+        for row_cells in ws.iter_rows(min_row=2):
+            cell = row_cells[idx['品號']]
+            if cell.value and str(cell.value).strip() == part_no:
+                target_row_no = row_cells[0].row
+                break
+        if target_row_no is None:
+            return jsonify({'success': False, 'error': '查無此品號的刀表'}), 404
+        ws.delete_rows(target_row_no, 1)
+
+        warning = _save_batchcost_wb(wb)
+        return jsonify({'success': True, 'warning': warning})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'刪除失敗：{e}'}), 502
+
+
+@app.route('/api/batch_cost/save', methods=['POST'])
+def batch_cost_save():
+    """把一筆批成本計算結果 append 進『批成本計算』分頁（不存在時自動建立；依表頭欄名對應寫入，不依賴固定欄位順序）"""
+    if not _OPENPYXL_OK:
+        return jsonify({'success': False, 'error': '伺服器未安裝 openpyxl'}), 500
+    data = request.get_json(force=True) or {}
+    order      = (data.get('order') or '').strip()
+    part_no    = (data.get('part_no') or '').strip()
+    name       = (data.get('name') or '').strip()
+    proc_code  = (data.get('proc_code') or '').strip()
+    proc_name  = (data.get('proc_name') or '').strip()
+    qty        = data.get('qty') or 0
+    hours      = (data.get('hours') or '').strip()
+    tool_cost  = data.get('tool_cost') or 0
+    labor_cost = data.get('labor_cost') or 0
+    seconds    = data.get('seconds') or 0
+    rate       = data.get('rate') or 0
+    machine_name = (data.get('machine_name') or '').strip()
+    machine_code = (data.get('machine_code') or '').strip()
+    out_time     = (data.get('out_time') or '').strip()
+    tool_usage   = data.get('tool_usage') or []   # [{slot, tool, price, edges, usage, subtotal}, ...]
+    if not order or not part_no:
+        return jsonify({'success': False, 'error': '缺少製令或品號'}), 400
+
+    qty_num = float(qty) if qty else 0
+    tool_cost_per_unit = round((tool_cost / qty_num) if qty_num else 0, 2)
+    total_cost_per_unit = round(labor_cost + tool_cost_per_unit, 2)
+
+    default_header = ['建立日期', '製令', '製程代號', '製程名稱', '品號', '品名',
+                       '每秒鐘生產費用（元）', '完成數量', '刀具費用', '加工秒數', '加工費用',
+                       '刀具成本', '加工費用(含刀具成本)', '機台名稱', '機台代號']
+    # 建立日期優先採用生產報工統計P2的出站時間，查不到才退回今天日期
+    record_date = out_time or date.today().strftime('%Y/%m/%d')
+    value_map = {
+        '建立日期': record_date, '製令': order, '製程代號': proc_code, '製程名稱': proc_name,
+        '品號': part_no, '品名': name, '每秒鐘生產費用（元）': rate, '完成數量': qty,
+        '生產數量': qty,  # 相容舊版表頭命名
+        '刀具費用': tool_cost, '加工秒數': seconds,
+        '加工費用': labor_cost, '總加工費用': labor_cost,  # 相容舊版表頭命名
+        '刀具成本': tool_cost_per_unit,
+        '加工費用(含刀具成本)': total_cost_per_unit,
+        '機台名稱': machine_name, '機台代號': machine_code,
+        '加工時間': hours, '備註': hours,
+    }
+
+    try:
+        wb = _load_batchcost_wb(read_only=False)
+        if config.BATCH_COST_RECORD_SHEET not in wb.sheetnames:
+            ws = wb.create_sheet(config.BATCH_COST_RECORD_SHEET)
+            ws.append(default_header)
+            header = default_header
+        else:
+            ws = wb[config.BATCH_COST_RECORD_SHEET]
+            header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+            if not any(header):
+                header = default_header
+                for col, h in enumerate(header, start=1):
+                    ws.cell(row=1, column=col, value=h)
+
+        new_row = [value_map.get(h, '') for h in header]
+        ws.append(new_row)
+
+        # 同步把每把刀的使用次數明細寫入『製令與刀具壽命』分頁（不存在時自動建立）
+        used_tools = [t for t in tool_usage if (t.get('usage') or 0) > 0]
+        if used_tools:
+            lifespan_default_header = ['建立日期', '製令', '製程代號', '製程名稱', '品號', '品名',
+                                        '刀號', '刀具名稱', '單價', '使用次數', '小計']
+            if config.BATCH_COST_LIFESPAN_SHEET not in wb.sheetnames:
+                ws2 = wb.create_sheet(config.BATCH_COST_LIFESPAN_SHEET)
+                ws2.append(lifespan_default_header)
+                header2 = lifespan_default_header
+            else:
+                ws2 = wb[config.BATCH_COST_LIFESPAN_SHEET]
+                header2 = [c.value for c in next(ws2.iter_rows(min_row=1, max_row=1))]
+                if not any(header2):
+                    header2 = lifespan_default_header
+                    for col, h in enumerate(header2, start=1):
+                        ws2.cell(row=1, column=col, value=h)
+            for t in used_tools:
+                tool_value_map = {
+                    '建立日期': record_date, '製令': order, '製程代號': proc_code, '製程名稱': proc_name,
+                    '品號': part_no, '品名': name,
+                    '刀號': t.get('slot', ''), '刀具名稱': t.get('tool', ''),
+                    '單價': t.get('price', 0), '使用次數': t.get('usage', 0), '小計': t.get('subtotal', 0),
+                }
+                ws2.append([tool_value_map.get(h, '') for h in header2])
+
+        warning = _save_batchcost_wb(wb)
+        return jsonify({'success': True, 'warning': warning})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'存檔失敗：{e}'}), 502
+
+
+@app.route('/api/batch_cost/record/list')
+def batch_cost_record_list():
+    """讀『批成本計算』分頁全部明細（依目前表頭欄名動態回傳，不假設固定欄位）"""
+    if not _OPENPYXL_OK:
+        return jsonify({'success': False, 'error': '伺服器未安裝 openpyxl'}), 500
+    try:
+        wb = _load_batchcost_wb(read_only=True)
+        if config.BATCH_COST_RECORD_SHEET not in wb.sheetnames:
+            return jsonify({'success': True, 'columns': [], 'records': []})
+        ws = wb[config.BATCH_COST_RECORD_SHEET]
+        header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+        columns = [h for h in header if h]
+        records = []
+        for row_no, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            if not any(row):
+                continue
+            rec = {'row': row_no}
+            for col_idx, h in enumerate(header):
+                if not h:
+                    continue
+                v = row[col_idx] if col_idx < len(row) else ''
+                rec[h] = str(v) if v is not None else ''
+            records.append(rec)
+        wb.close()
+
+        def _date_key(rec):
+            date_str = (rec.get('建立日期') or '').split(' ')[0]
+            try:
+                parts = date_str.replace('-', '/').split('/')
+                return tuple(int(p) for p in parts)
+            except (ValueError, TypeError):
+                return (0, 0, 0)
+
+        records.sort(key=_date_key, reverse=True)  # 依建立日期由新到舊排序
+        return jsonify({'success': True, 'columns': columns, 'records': records})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'讀取範本檔案失敗：{e}'}), 502
+
+
+@app.route('/api/batch_cost/lifespan/list')
+def batch_cost_lifespan_list():
+    """讀『製令與刀具壽命』分頁全部明細（依目前表頭欄名動態回傳，供批成本明細展開列使用）"""
+    if not _OPENPYXL_OK:
+        return jsonify({'success': False, 'error': '伺服器未安裝 openpyxl'}), 500
+    try:
+        wb = _load_batchcost_wb(read_only=True)
+        if config.BATCH_COST_LIFESPAN_SHEET not in wb.sheetnames:
+            return jsonify({'success': True, 'columns': [], 'records': []})
+
+        # 依刀具名稱查供應商/項目（來自刀具資料分頁）
+        tool_extra = {}
+        if config.BATCH_COST_TOOL_SHEET in wb.sheetnames:
+            tws = wb[config.BATCH_COST_TOOL_SHEET]
+            theader = [c.value for c in next(tws.iter_rows(min_row=1, max_row=1))]
+            tidx = {h: i for i, h in enumerate(theader) if h}
+            for trow in tws.iter_rows(min_row=2, values_only=True):
+                tname = trow[tidx.get('品名', -1)] if '品名' in tidx else None
+                if not tname:
+                    continue
+                tname = str(tname).strip()
+                if tname not in tool_extra:
+                    tool_extra[tname] = {
+                        'item':   str(trow[tidx['項目']] or '').strip() if '項目' in tidx else '',
+                        'vendor': str(trow[tidx['供應商']] or '').strip() if '供應商' in tidx else '',
+                    }
+
+        ws = wb[config.BATCH_COST_LIFESPAN_SHEET]
+        header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+        columns = [h for h in header if h]
+        records = []
+        for row_no, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            if not any(row):
+                continue
+            rec = {'row': row_no}
+            for col_idx, h in enumerate(header):
+                if not h:
+                    continue
+                v = row[col_idx] if col_idx < len(row) else ''
+                rec[h] = str(v) if v is not None else ''
+            extra = tool_extra.get((rec.get('刀具名稱') or '').strip(), {})
+            rec['項目'] = extra.get('item', '')
+            rec['供應商'] = extra.get('vendor', '')
+            records.append(rec)
+        wb.close()
+        if '項目' not in columns:
+            columns.append('項目')
+        if '供應商' not in columns:
+            columns.append('供應商')
+        return jsonify({'success': True, 'columns': columns, 'records': records})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'讀取範本檔案失敗：{e}'}), 502
+
+
+@app.route('/api/batch_cost/record/delete', methods=['POST'])
+def batch_cost_record_delete():
+    """刪除『批成本計算』分頁裡的一列"""
+    if not _OPENPYXL_OK:
+        return jsonify({'success': False, 'error': '伺服器未安裝 openpyxl'}), 500
+    data = request.get_json(force=True) or {}
+    row_no = data.get('row')
+    if not row_no:
+        return jsonify({'success': False, 'error': '缺少列號'}), 400
+    try:
+        wb = _load_batchcost_wb(read_only=False)
+        ws = wb[config.BATCH_COST_RECORD_SHEET]
+        ws.delete_rows(int(row_no), 1)
+        warning = _save_batchcost_wb(wb)
+        return jsonify({'success': True, 'warning': warning})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'刪除失敗：{e}'}), 502
+
+
+@app.route('/batch_cost')
+def batch_cost_page():
+    """批成本計算頁面"""
+    return render_template('batch_cost.html', app_version=APP_VERSION)
+
+
 @app.route('/api/scrap/list')
 def scrap_list():
     """讀取 Google 試算表『報廢統計』資料"""
     cache_key = 'scrap_list'
+    if request.args.get('refresh'):
+        cache_clear(cache_key)
     cached = cache_get(cache_key)
     if cached is not None:
         return jsonify(cached)
@@ -2779,6 +3577,8 @@ def _build_category_map():
 def prod_report_list():
     """讀取 Google 試算表『生產日報表』資料（含 ABC 分類）"""
     cache_key = 'prod_report_list'
+    if request.args.get('refresh'):
+        cache_clear(cache_key, 'prod_report_monthly_stats_v1', 'category_map')
     cached = cache_get(cache_key)
     if cached is not None:
         return jsonify(cached)
@@ -2852,6 +3652,8 @@ def prod_report_monthly_stats():
     """生產日報表圖表資料：讀『P5.3生產日報表data_ref』分頁，
     依 A/B/C/L 分類 × 年月 彙整生產數（資料來源與『生產報工統計P2』的出站數量不同）"""
     cache_key = 'prod_report_monthly_stats_v1'
+    if request.args.get('refresh'):
+        cache_clear(cache_key, 'prod_report_list', 'category_map')
     cached = cache_get(cache_key)
     if cached is not None:
         return jsonify(cached)
@@ -2968,6 +3770,8 @@ def category_map():
 def k1p2_list():
     """讀取 K1_P2.ref 全部明細記錄"""
     cache_key = 'k1p2_list'
+    if request.args.get('refresh'):
+        cache_clear(cache_key, 'k1p2_monthly_stats_v3', 'category_map')
     cached = cache_get(cache_key)
     if cached is not None:
         return jsonify(cached)
@@ -3010,6 +3814,8 @@ def k1p2_list():
 def k1p2_monthly_stats():
     """K1_P2.ref 月份分類統計：出站數量 × A/B/C/L × 年月"""
     cache_key = 'k1p2_monthly_stats_v3'
+    if request.args.get('refresh'):
+        cache_clear(cache_key, 'k1p2_list', 'category_map')
     cached = cache_get(cache_key)
     if cached is not None:
         return jsonify(cached)

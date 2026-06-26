@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>加工部查詢系統PDS</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='4' fill='%230f62fe'/><polygon fill='white' points='8.5,5.94 10.44,3.13 13.56,3.13 15.5,5.94 18.89,6.21 20.46,8.92 19,12 20.46,15.08 18.89,17.79 15.5,18.06 13.56,20.87 10.44,20.87 8.5,18.06 5.11,17.79 3.54,15.08 5,12 3.54,8.92 5.11,6.21'/><circle cx='12' cy='12' r='4' fill='%230f62fe'/></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --blue:        #1565C0;
+      --blue-d:      #0D47A1;
+      --blue-mid:    #1976D2;
+      --blue-pale:   #E3F2FD;
+      --bg:          #F0F2F5;
+      --surface:     #FFFFFF;
+      --border:      #DDE3EA;
+      --text:        #1A2332;
+      --text-2:      #3D5166;
+      --muted:       #7A8FA3;
+      --success:     #2E7D32;
+      --success-bg:  #E8F5E9;
+      --warn:        #C62828;
+      --warn-bg:     #FFEBEE;
+      --shadow-sm:   0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-md:   0 6px 20px rgba(21,101,192,.12), 0 2px 6px rgba(0,0,0,.06);
+      --radius:      10px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body, * { font-family: 'Noto Sans TC', 'Source Han Sans TC', sans-serif; }
+    body {
+      background: var(--bg); font-size: 0.85rem; color: var(--text);
+      display: flex; flex-direction: column; height: 100vh; overflow: hidden; line-height: 1.5;
+    }
+    .header { background: #1565C0; color: #fff; flex-shrink: 0; box-shadow: 0 2px 8px rgba(21,101,192,.4); position: relative; z-index: 100; }
+    .header-inner { display:flex; align-items:flex-end; padding:.4rem 1rem 0; }
+    .header-logo { margin-left:auto; align-self:center; font-size:1.15rem; font-weight:800; font-style:italic; letter-spacing:.03em; color:#F5A623; }
+    .header-title { font-size:1.1rem; font-weight:700; padding-bottom:.45rem; white-space:nowrap; margin-right:.5rem; }
+    .header-tabs { display:flex; align-items:flex-end; gap:2px; }
+    .header-tab {
+      display: inline-block; padding:.3rem 1rem; font-size:1rem; font-weight:600;
+      color:rgba(255,255,255,.85); text-decoration:none; background:rgba(255,255,255,.15); cursor:pointer; transition:background .15s;
+    }
+    .header-tab.active,.header-tab:hover { background:#fff; color:#1565C0; }
+
+    .page-body { flex:1; overflow:hidden; display:flex; }
+    .bc-sidebar { width:200px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--border); padding:1rem 0; overflow-y:auto; }
+    .bc-side-item {
+      padding:.7rem 1.2rem; font-size:.88rem; font-weight:600; color:var(--text-2); cursor:pointer;
+      border-left:3px solid transparent; display:flex; align-items:center; gap:.5rem;
+    }
+    .bc-side-item:hover { background:var(--blue-pale); }
+    .bc-side-item.active { background:var(--blue-pale); color:var(--blue-d); border-left-color:var(--blue); }
+    .bc-main { flex:1; overflow-y:auto; padding:1.2rem; }
+    .bc-subpage { display:none; }
+    .bc-subpage.active { display:block; }
+    .bc-wrap { width:100%; max-width:920px; margin:0 auto; display:flex; flex-direction:column; gap:1.1rem; }
+    .bc-maint-wrap { width:100%; max-width:1100px; margin:0 auto; display:flex; flex-direction:column; gap:1rem; }
+    .bc-wide-wrap { width:100%; margin:0 auto; display:flex; flex-direction:column; gap:1rem; }
+
+    .bc-card {
+      background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm);
+      overflow:hidden; flex-shrink:0; transition:box-shadow .2s ease;
+    }
+    .bc-card:hover { box-shadow:var(--shadow-md); }
+    .bc-grid-2col { display:grid; grid-template-columns:1fr 1fr; gap:1.4rem; }
+    .bc-field { display:flex; flex-direction:column; gap:.4rem; }
+    .bc-field .bc-label { min-width:0; }
+    .bc-field input { width:100%; }
+    .bc-field-value {
+      padding:.45rem .7rem; background:#F6F9FC; border:1px solid var(--border); border-left:3px solid var(--blue-mid);
+      border-radius:6px; font-size:.85rem; color:var(--text); min-height:1.4em;
+    }
+    .bc-field-value.empty { color:var(--muted); border-left-color:var(--border); }
+    .bc-card-header {
+      background:linear-gradient(90deg,var(--blue-mid) 0%,var(--blue-d) 100%); color:#fff; padding:.7rem 1rem;
+      font-size:.95rem; font-weight:800; display:flex; align-items:center; gap:.5rem;
+      border-left:4px solid var(--blue-d);
+    }
+    .bc-card-body { padding:1.1rem 1.3rem; overflow-x:auto; }
+    .bc-filter-bar { padding:.5rem .9rem; display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
+    .bc-filter-bar input[type=text], .bc-filter-bar select { font-size:.82rem; padding:.3rem .5rem; }
+    .bc-row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
+    .bc-row + .bc-row { margin-top:.7rem; }
+    .bc-label { font-size:.82rem; color:var(--text-2); font-weight:600; min-width:70px; }
+    input[type=text], input[type=number], input[type=date], select {
+      border:1px solid var(--border); border-radius:7px; padding:.45rem .65rem; font-size:.88rem; color:var(--text);
+      background:#fff; transition:border-color .15s, box-shadow .15s;
+    }
+    input:focus, select:focus { outline:none; border-color:var(--blue); box-shadow:0 0 0 3px var(--blue-pale); }
+    .bc-btn {
+      border:none; border-radius:7px; padding:.5rem 1.2rem; font-size:.85rem; font-weight:700; cursor:pointer; color:#fff;
+      background:var(--blue); transition:background .15s, transform .08s, box-shadow .15s; box-shadow:0 1px 2px rgba(0,0,0,.08);
+    }
+    .bc-btn:hover { background:var(--blue-d); box-shadow:0 3px 8px rgba(21,101,192,.25); }
+    .bc-btn:active { transform:scale(.97); }
+    .bc-btn.secondary { background:#fff; color:var(--blue); border:1px solid var(--blue); box-shadow:none; }
+    .bc-btn.secondary:hover { background:var(--blue-pale); }
+    .bc-btn.danger { background:#fff; color:var(--warn); border:1px solid var(--warn); padding:.3rem .6rem; font-size:.78rem; box-shadow:none; }
+    .bc-btn.danger:hover { background:var(--warn-bg); }
+    .bc-btn:disabled { background:#CBD5E1; cursor:not-allowed; box-shadow:none; transform:none; }
+
+    .bc-order-row {
+      padding:.65rem .9rem; border:1px solid var(--border); border-radius:8px; cursor:pointer; margin-bottom:.45rem;
+      display:flex; gap:.8rem; align-items:center; font-size:.85rem; transition:all .15s ease;
+    }
+    .bc-order-row:hover { background:var(--blue-pale); border-color:var(--blue); transform:translateX(2px); }
+    .bc-tag { background:var(--blue-pale); color:var(--blue-d); border-radius:10px; padding:.1rem .6rem; font-size:.76rem; font-weight:700; }
+
+    .bc-selected-info {
+      background:linear-gradient(90deg,var(--success-bg),#fff); border-left:4px solid var(--success); color:#1e293b;
+      border-radius:6px; padding:.7rem 1rem; font-size:.86rem; margin-top:.8rem;
+    }
+    .bc-msg { color:var(--warn); font-size:.83rem; margin-top:.5rem; }
+
+    table.bc-table { width:100%; border-collapse:collapse; font-size:.84rem; }
+    table.bc-table th {
+      background:linear-gradient(180deg,var(--blue-mid),var(--blue-d)); color:rgba(255,255,255,.95);
+      padding:.5rem .75rem; text-align:left; font-weight:600; font-size:.84rem; letter-spacing:.02em;
+      white-space:nowrap; border-right:1px solid rgba(255,255,255,.12);
+      position:sticky; top:0; z-index:2;
+    }
+    table.bc-table th:last-child { border-right:none; }
+    table.bc-table th.center { text-align:center; }
+    table.bc-table td { padding:.45rem .75rem; border-bottom:1px solid #EDF1F5; vertical-align:middle; white-space:nowrap; font-size:.93rem; color:var(--text-2); }
+    table.bc-table tbody tr:nth-child(even) td { background:#FAF9F5; }
+    table.bc-table tbody tr:hover td { background:rgba(21,101,192,.05) !important; color:var(--text); }
+    table.bc-table tfoot td { font-weight:700; background:var(--blue-pale); border-top:2px solid var(--blue); }
+    table.bc-table-compact th { padding:.4rem .55rem; font-size:.78rem; }
+    table.bc-table-compact td { padding:.35rem .55rem; font-size:.78rem; white-space:normal; word-break:break-word; }
+    table.bc-table-nested th { background:linear-gradient(180deg,#546E7A,#37474F); color:rgba(255,255,255,.95); }
+    table.bc-table-nested tbody tr:nth-child(even) td { background:#EFF3F4; }
+    table.bc-table-nested tbody tr:hover td { background:rgba(55,71,79,.08) !important; }
+    .bc-slot-badge { display:inline-block; min-width:38px; text-align:center; background:var(--blue-d); color:#fff; border-radius:5px; padding:.15rem .4rem; font-size:.78rem; font-weight:700; }
+    .bc-qty-input { width:70px; text-align:right; }
+    .bc-tool-name-missing { color:var(--warn); font-weight:700; }
+    .bc-empty { color:var(--muted); font-size:.85rem; padding:1rem; text-align:center; }
+
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">加工部查詢系統PDS</div>
+    <div class="header-tabs">
+      <a href="/"           class="header-tab">製令查詢</a>
+      <a href="/production" class="header-tab">生產中製令</a>
+      <a href="/equipment"  class="header-tab">設備稼動</a>
+      <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
+      <a href="/routing"    class="header-tab">產品途程查詢</a>
+      <span                 class="header-tab active">批成本</span>
+      <a href="/management" class="header-tab">管理</a>
+    </div>
+    <span class="header-logo">MAXCLAW</span>
+  </div>
+</div>
+
+<div class="page-body">
+  <div class="bc-sidebar">
+    <div class="bc-side-item active" data-bc-page="calc" onclick="bcSwitchPage('calc')">📊 批成本計算</div>
+    <div class="bc-side-item" data-bc-page="records" onclick="bcSwitchPage('records')">📋 批成本明細</div>
+    <div class="bc-side-item" data-bc-page="toolmap" onclick="bcSwitchPage('toolmap')">🔧 刀表維護</div>
+    <div class="bc-side-item" data-bc-page="catalog" onclick="bcSwitchPage('catalog')">🗂️ 刀具資料維護</div>
+  </div>
+
+  <div class="bc-main">
+
+  <div id="bc-page-calc" class="bc-subpage active">
+  <div class="bc-wrap">
+
+    <!-- Step 1：製令查詢 -->
+    <div class="bc-card">
+      <div class="bc-card-header">① 輸入製令</div>
+      <div class="bc-card-body">
+        <div class="bc-row">
+          <input type="text" id="bc-order-input" placeholder="輸入製令號碼，例如 5188-20260516001" style="flex:1;min-width:240px" onkeydown="if(event.key==='Enter') bcLookupOrder()">
+          <button class="bc-btn" id="bc-lookup-btn" onclick="bcLookupOrder()">查詢</button>
+          <button class="bc-btn secondary" onclick="bcResetAll()">重新開始</button>
+        </div>
+        <div id="bc-order-results" style="margin-top:.7rem"></div>
+        <div id="bc-msg1" class="bc-msg"></div>
+        <div id="bc-selected-info" class="bc-selected-info" style="display:none"></div>
+        <div id="bc-dup-warning" style="display:none;background:#FFF3E0;border-left:4px solid #E65100;color:#E65100;border-radius:6px;padding:.6rem .9rem;font-size:.85rem;margin-top:.6rem"></div>
+      </div>
+    </div>
+
+    <!-- Step 2：生產資訊 -->
+    <div class="bc-card" id="bc-step2" style="display:none">
+      <div class="bc-card-header">② 生產資訊</div>
+      <div class="bc-card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.2rem">
+          <div class="bc-field">
+            <span class="bc-label">⚙️ 製程名稱</span>
+            <div id="bc-proc-name" class="bc-field-value empty"></div>
+          </div>
+          <div class="bc-field">
+            <span class="bc-label">👤 報工人員</span>
+            <div id="bc-operator" class="bc-field-value empty"></div>
+          </div>
+          <div class="bc-field">
+            <span class="bc-label">⏱️ 加工秒數</span>
+            <div id="bc-proc-seconds" class="bc-field-value empty" style="font-weight:700"></div>
+          </div>
+          <div class="bc-field">
+            <span class="bc-label">🏭 機台名稱</span>
+            <div id="bc-machine-name" class="bc-field-value empty"></div>
+          </div>
+          <div class="bc-field">
+            <span class="bc-label">🔖 機台代號</span>
+            <div id="bc-machine-code" class="bc-field-value empty"></div>
+          </div>
+          <div class="bc-field">
+            <span class="bc-label">📦 完成數量</span>
+            <input type="number" id="bc-qty" placeholder="例如 1000" onchange="bcRecalc()" oninput="bcRecalc()">
+          </div>
+          <div class="bc-field">
+            <span class="bc-label">💰 每秒鐘生產費用（元）</span>
+            <input type="number" id="bc-rate" value="0.2" step="0.01" onchange="bcRecalc()" oninput="bcRecalc()">
+          </div>
+          <div class="bc-field">
+            <span class="bc-label">📝 備註</span>
+            <input type="text" id="bc-hours" placeholder="例如 6.5小時 / 自行填寫">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3：刀表 -->
+    <div class="bc-card" id="bc-step3" style="display:none">
+      <div class="bc-card-header">③ 刀表</div>
+      <div class="bc-card-body">
+        <div id="bc-toolmap-loading" class="bc-empty"><span class="spinner"></span> 載入中…</div>
+        <div id="bc-toolmap-view" style="display:none"></div>
+        <div id="bc-toolmap-edit" style="display:none">
+          <div id="bc-edit-rows"></div>
+          <div class="bc-row" style="margin-top:.6rem">
+            <button class="bc-btn secondary" onclick="bcAddSlotRow()">➕ 新增一把刀</button>
+            <button class="bc-btn" onclick="bcSaveToolMap()">儲存刀表</button>
+            <button class="bc-btn secondary" onclick="bcCancelEditToolMap()">取消</button>
+          </div>
+          <div id="bc-toolmap-msg" class="bc-msg"></div>
+        </div>
+        <datalist id="bc-tool-catalog-list"></datalist>
+      </div>
+    </div>
+
+    <!-- Step 4：成本試算 -->
+    <div class="bc-card" id="bc-step4" style="display:none">
+      <div class="bc-card-header">④ 使用次數與成本試算</div>
+      <div class="bc-card-body">
+        <div id="bc-cost-table"></div>
+      </div>
+    </div>
+
+    <!-- Step 5：送出 -->
+    <div class="bc-card" id="bc-step5" style="display:none">
+      <div class="bc-card-body" style="display:flex;align-items:center;gap:1rem">
+        <button class="bc-btn" style="font-size:1rem;padding:.6rem 1.6rem" onclick="bcSubmit()">✓ 確認送出</button>
+        <span id="bc-submit-msg" style="font-size:.85rem"></span>
+      </div>
+    </div>
+
+  </div>
+  </div> <!-- /bc-page-calc -->
+
+  <!-- 批成本明細 -->
+  <div id="bc-page-records" class="bc-subpage">
+    <div class="bc-wide-wrap">
+      <div class="bc-card">
+        <div class="bc-card-header">
+          📋 批成本明細
+          <div style="margin-left:auto;display:flex;gap:.4rem">
+            <button class="bc-btn" id="bc-rec-view-detail-btn" style="font-size:.78rem;padding:.3rem .7rem" onclick="bcSwitchRecordsView('detail')">📋 明細</button>
+            <button class="bc-btn secondary" id="bc-rec-view-stats-btn" style="font-size:.78rem;padding:.3rem .7rem" onclick="bcSwitchRecordsView('stats')">📊 統計</button>
+            <button class="bc-btn secondary" style="font-size:.78rem;padding:.3rem .7rem" onclick="bcLoadRecordsList()">🔄 重新整理</button>
+          </div>
+        </div>
+        <div class="bc-filter-bar">
+          <input type="text" id="bc-records-search" placeholder="搜尋製令/品號/品名…" oninput="bcRenderRecordsList()" style="width:240px">
+          <select id="bc-records-month" onchange="bcRenderRecordsList()" style="width:140px">
+            <option value="">全部月份</option>
+          </select>
+        </div>
+        <div class="bc-card-body">
+          <div id="bc-records-view-detail">
+            <div id="bc-records-table-wrap"></div>
+          </div>
+          <div id="bc-records-view-stats" style="display:none">
+            <div id="bc-records-stats-content"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 刀表維護 -->
+  <div id="bc-page-toolmap" class="bc-subpage">
+    <div class="bc-wide-wrap">
+      <div class="bc-card">
+        <div class="bc-card-header">
+          🔧 刀表維護
+          <button class="bc-btn secondary" style="margin-left:auto;font-size:.78rem;padding:.3rem .7rem" onclick="bcMaintToolmapNew()">➕ 新增品號刀表</button>
+        </div>
+        <div class="bc-filter-bar">
+          <input type="text" id="bc-maint-tm-search" placeholder="搜尋品號/加工機型…" oninput="bcMaintRenderToolmapList()" style="width:260px">
+        </div>
+        <div class="bc-card-body">
+          <div id="bc-maint-tm-editor" style="display:none;border:1px solid var(--border);border-radius:8px;padding:.8rem;margin-bottom:1rem;background:var(--blue-pale)"></div>
+          <div id="bc-maint-tm-list"><div class="bc-empty">載入中…</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 刀具資料維護 -->
+  <div id="bc-page-catalog" class="bc-subpage">
+    <div class="bc-maint-wrap">
+      <div class="bc-card">
+        <div class="bc-card-header">
+          🗂️ 刀具資料維護
+          <button class="bc-btn secondary" style="margin-left:auto;font-size:.78rem;padding:.3rem .7rem" onclick="bcMaintCatalogNew()">➕ 新增刀具</button>
+        </div>
+        <div class="bc-filter-bar">
+          <input type="text" id="bc-maint-cat-search" placeholder="搜尋刀具名稱/供應商…" oninput="bcMaintRenderCatalogList()" style="width:260px">
+        </div>
+        <div class="bc-card-body">
+          <table class="bc-table">
+            <thead><tr>
+              <th>刀具名稱</th><th style="width:100px">項目</th><th style="width:100px">供應商</th>
+              <th style="width:90px;text-align:right">單價</th><th style="width:70px;text-align:right">刃數</th>
+              <th style="width:130px">操作</th>
+            </tr></thead>
+            <tbody id="bc-maint-cat-tbody"><tr><td colspan="6" class="bc-empty">載入中…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div> <!-- /bc-main -->
+</div>
+
+<div id="bc-toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:.6rem 1.2rem;border-radius:8px;font-size:.85rem;box-shadow:0 4px 16px rgba(0,0,0,.25);display:none;z-index:999"></div>
+
+<script>
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function showToast(msg) {
+  const el = document.getElementById('bc-toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+
+let _bcOrderRows = [];
+let _bcSelected  = null;     // {order, part_no, name, proc_code}
+let _bcSlots     = [];       // [{slot:'T1', tool:'...'}]
+let _bcToolMapFound = false;
+let _bcToolCatalog  = null;  // [{name, vendor, price, edges}]
+let _bcToolCatalogMap = {};  // name -> {price, edges}
+
+async function bcLookupOrder() {
+  const order = document.getElementById('bc-order-input').value.trim();
+  document.getElementById('bc-msg1').textContent = '';
+  if (!order) return;
+  const btn = document.getElementById('bc-lookup-btn');
+  const btnOrigText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '查詢中…';
+  try {
+    const res  = await fetch('/api/batch_cost/lookup_order?order=' + encodeURIComponent(order));
+    const data = await res.json();
+    if (!data.success) { document.getElementById('bc-msg1').textContent = data.error; return; }
+    _bcOrderRows = data.rows;
+    renderBcOrderRows();
+  } catch (e) {
+    document.getElementById('bc-msg1').textContent = '查詢失敗：' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = btnOrigText;
+  }
+}
+
+function bcSetFieldValue(id, value) {
+  const el = document.getElementById(id);
+  el.textContent = value || '—';
+  el.classList.toggle('empty', !value);
+}
+
+function renderBcOrderRows() {
+  const box = document.getElementById('bc-order-results');
+  if (_bcOrderRows.length === 1) {
+    box.innerHTML = '';
+    bcSelectOrder(0);
+    return;
+  }
+  box.innerHTML = _bcOrderRows.map((r,i) => `
+    <div class="bc-order-row" onclick="bcSelectOrder(${i})">
+      <b>${esc(r.order)}</b>　${esc(r.part_no)}　${esc(r.name)}
+      <span class="bc-tag">${esc(r.proc_code || '無製程')}${r.proc_name ? '　'+esc(r.proc_name) : ''}</span>
+    </div>`).join('');
+}
+
+function bcSelectOrder(i) {
+  _bcSelected = _bcOrderRows[i];
+  document.getElementById('bc-order-results').innerHTML = '';
+  const info = document.getElementById('bc-selected-info');
+  info.style.display = '';
+  info.innerHTML = `製令 <b>${esc(_bcSelected.order)}</b>　品號 <b>${esc(_bcSelected.part_no)}</b>　品名 <b>${esc(_bcSelected.name)}</b>　製程代號 <b>${esc(_bcSelected.proc_code || '—')}</b>`;
+  bcSetFieldValue('bc-proc-name', _bcSelected.proc_name);
+  bcSetFieldValue('bc-operator', _bcSelected.operator);
+  bcSetFieldValue('bc-proc-seconds', (_bcSelected.seconds > 0) ? Math.round(_bcSelected.seconds) + ' 秒' : '');
+  bcSetFieldValue('bc-machine-name', _bcSelected.machine_name);
+  bcSetFieldValue('bc-machine-code', _bcSelected.machine_code);
+  // 自動填入完成數量（從 P2 出站數量）
+  document.getElementById('bc-qty').value = (_bcSelected.out_qty && _bcSelected.out_qty > 0) ? Math.round(_bcSelected.out_qty) : '';
+  document.getElementById('bc-hours').value = '';
+  document.getElementById('bc-rate').value = '0.2';
+  document.getElementById('bc-step2').style.display = '';
+  document.getElementById('bc-step3').style.display = '';
+  document.getElementById('bc-step4').style.display = 'none';
+  document.getElementById('bc-step5').style.display = 'none';
+  ensureToolCatalog().then(bcLoadToolMap);
+  bcCheckDuplicateOrder(_bcSelected.order, _bcSelected.proc_code);
+}
+
+async function bcCheckDuplicateOrder(order, procCode) {
+  const box = document.getElementById('bc-dup-warning');
+  box.style.display = 'none';
+  try {
+    const res = await fetch('/api/batch_cost/record/list');
+    const data = await res.json();
+    if (!data.success) return;
+    const matches = data.records.filter(r => r['製令'] === order && r['製程代號'] === procCode);
+    if (!matches.length) return;
+    const dates = matches.map(r => r['建立日期']).filter(Boolean).join('、');
+    box.textContent = `⚠️ 此製令＋製程代號已經計算過批成本（建立日期：${dates || '未知'}，共 ${matches.length} 筆），請確認是否重複輸入。`;
+    box.style.display = '';
+  } catch (e) {
+    // 檢查失敗不擋流程，靜默忽略
+  }
+}
+
+function bcResetAll() {
+  _bcOrderRows = []; _bcSelected = null; _bcSlots = []; _bcToolMapFound = false;
+  document.getElementById('bc-order-input').value = '';
+  document.getElementById('bc-order-results').innerHTML = '';
+  document.getElementById('bc-msg1').textContent = '';
+  document.getElementById('bc-selected-info').style.display = 'none';
+  document.getElementById('bc-dup-warning').style.display = 'none';
+  document.getElementById('bc-qty').value = '';
+  document.getElementById('bc-hours').value = '';
+  document.getElementById('bc-rate').value = '0.2';
+  ['bc-proc-name','bc-operator','bc-proc-seconds','bc-machine-name','bc-machine-code'].forEach(id => bcSetFieldValue(id, ''));
+  ['bc-step2','bc-step3','bc-step4','bc-step5'].forEach(id => document.getElementById(id).style.display = 'none');
+  document.getElementById('bc-submit-msg').textContent = '';
+}
+
+async function ensureToolCatalog() {
+  if (_bcToolCatalog) return;
+  try {
+    const res  = await fetch('/api/batch_cost/tool_catalog');
+    const data = await res.json();
+    if (!data.success) { showToast('讀取刀具資料失敗：' + data.error); return; }
+    _bcToolCatalog = data.tools;
+    _bcToolCatalogMap = {};
+    _bcToolCatalog.forEach(t => { if (!(t.name in _bcToolCatalogMap)) _bcToolCatalogMap[t.name] = t; });
+    document.getElementById('bc-tool-catalog-list').innerHTML =
+      _bcToolCatalog.map(t => `<option value="${esc(t.name)}">`).join('');
+  } catch (e) {
+    showToast('讀取刀具資料失敗：' + e.message);
+  }
+}
+
+// 編輯刀表時，刀具名稱輸入框失焦後檢查刀具資料有無對應記錄，沒有就就地顯示新增表單
+function bcCheckToolExists(input) {
+  const row = input.closest('.bc-row');
+  if (row._toolAddBanner) { row._toolAddBanner.remove(); row._toolAddBanner = null; }
+  const name = input.value.trim();
+  if (!name || !_bcToolCatalogMap || _bcToolCatalogMap[name]) return;
+
+  const banner = document.createElement('div');
+  banner.className = 'bc-tool-add-banner';
+  banner.style.cssText = 'background:#FFF3E0;border:1px solid #FFCC80;border-radius:6px;padding:.5rem .7rem;margin:.2rem 0 .5rem;font-size:.8rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap';
+  banner.innerHTML = `
+    <span style="color:#E65100">⚠️ 刀具資料找不到「${esc(name)}」</span>
+    <input type="number" class="bc-newtool-price" placeholder="單價" style="width:80px">
+    <input type="number" class="bc-newtool-edges" placeholder="刃數" style="width:70px">
+    <input type="text" class="bc-newtool-item" placeholder="項目(選填)" style="width:90px">
+    <input type="text" class="bc-newtool-vendor" placeholder="供應商(選填)" style="width:90px">
+    <button type="button" class="bc-btn" style="font-size:.76rem;padding:.25rem .6rem">➕ 新增到刀具資料</button>
+    <button type="button" class="bc-btn secondary" style="font-size:.76rem;padding:.25rem .6rem">取消</button>`;
+  const [addBtn, cancelBtn] = banner.querySelectorAll('button');
+  addBtn.onclick = () => bcQuickAddTool(banner, name);
+  cancelBtn.onclick = () => { banner.remove(); row._toolAddBanner = null; };
+  row.insertAdjacentElement('afterend', banner);
+  row._toolAddBanner = banner;
+}
+
+async function bcQuickAddTool(banner, name) {
+  const price  = parseFloat(banner.querySelector('.bc-newtool-price').value) || 0;
+  const edges  = parseFloat(banner.querySelector('.bc-newtool-edges').value) || 0;
+  const item   = banner.querySelector('.bc-newtool-item').value.trim();
+  const vendor = banner.querySelector('.bc-newtool-vendor').value.trim();
+  if (!edges) { showToast('請輸入刃數'); return; }
+  try {
+    const res = await fetch('/api/batch_cost/tool_catalog/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ row: null, name, item, vendor, price, edges })
+    });
+    const data = await res.json();
+    if (!data.success) { showToast('新增失敗：' + data.error); return; }
+    if (data.warning) showToast(data.warning);
+    const entry = { name, item, vendor, price, edges };
+    if (!_bcToolCatalog) _bcToolCatalog = [];
+    _bcToolCatalog.push(entry);
+    _bcToolCatalogMap[name] = entry;
+    document.getElementById('bc-tool-catalog-list').insertAdjacentHTML('beforeend', `<option value="${esc(name)}">`);
+    banner.remove();
+    showToast(`已新增刀具「${name}」`);
+    bcRecalc();
+  } catch (e) {
+    showToast('新增失敗：' + e.message);
+  }
+}
+
+async function bcLoadToolMap() {
+  document.getElementById('bc-toolmap-loading').style.display = '';
+  document.getElementById('bc-toolmap-view').style.display = 'none';
+  document.getElementById('bc-toolmap-edit').style.display = 'none';
+  try {
+    const res  = await fetch('/api/batch_cost/tool_map?part_no=' + encodeURIComponent(_bcSelected.part_no));
+    const data = await res.json();
+    document.getElementById('bc-toolmap-loading').style.display = 'none';
+    if (!data.success) { showToast(data.error); return; }
+    _bcToolMapFound = data.found;
+    _bcSlots = data.slots || [];
+    if (_bcToolMapFound) {
+      renderBcToolMapView();
+    } else {
+      document.getElementById('bc-toolmap-view').innerHTML =
+        '<div class="bc-empty">此品號尚無刀表</div>';
+      document.getElementById('bc-toolmap-view').style.display = '';
+      bcStartEditToolMap();
+    }
+  } catch (e) {
+    document.getElementById('bc-toolmap-loading').style.display = 'none';
+    showToast('讀取刀表失敗：' + e.message);
+  }
+}
+
+function renderBcToolMapView() {
+  const view = document.getElementById('bc-toolmap-view');
+  view.style.display = '';
+  const rows = _bcSlots.map(s => `
+    <div class="bc-order-row" style="cursor:default">
+      <span class="bc-slot-badge">${esc(s.slot)}</span>　${esc(s.tool)}
+    </div>`).join('') || '<div class="bc-empty">查無已設定刀具</div>';
+  view.innerHTML = rows + `
+    <div class="bc-row" style="margin-top:.6rem">
+      <button class="bc-btn secondary" onclick="bcStartEditToolMap()">編輯刀表</button>
+    </div>`;
+  renderBcCostTable();
+}
+
+function bcStartEditToolMap() {
+  document.getElementById('bc-toolmap-edit').style.display = '';
+  document.getElementById('bc-edit-rows').innerHTML = '';
+  document.getElementById('bc-toolmap-msg').textContent = '';
+  if (_bcSlots.length) {
+    _bcSlots.forEach(s => bcAddSlotRow(s.slot, s.tool));
+  } else {
+    bcAddSlotRow('T1', '');
+  }
+}
+
+function bcCancelEditToolMap() {
+  document.getElementById('bc-toolmap-edit').style.display = 'none';
+  if (_bcToolMapFound) renderBcToolMapView();
+}
+
+function bcNextFreeSlot() {
+  const used = new Set([..._bcSlots.map(s=>s.slot),
+    ...[...document.querySelectorAll('.bc-edit-slot-input')].map(i=>i.value)]);
+  for (let n = 1; n <= 39; n++) {
+    if (!used.has('T'+n)) return 'T'+n;
+  }
+  return 'T39';
+}
+
+// 刀號字串正規化：純數字自動補上 "T"（送出前防呆，避免漏觸發 blur）
+function bcNormalizeSlotStr(v) {
+  v = (v || '').trim();
+  if (/^\d+$/.test(v)) return 'T' + v;
+  return v.toUpperCase();
+}
+
+// 刀號輸入框共用行為：可省略 "T" 直接打數字（離開焦點時自動補上）、按↓鍵跳到下一列
+function bcSlotInputNormalize(input) {
+  const v = input.value.trim();
+  if (/^\d+$/.test(v)) input.value = 'T' + v;
+}
+function bcSlotInputKeydown(e, slotInputClass) {
+  if (e.key !== 'ArrowDown') return;
+  const inputs = [...document.querySelectorAll('.' + slotInputClass)];
+  const idx = inputs.indexOf(e.target);
+  if (idx >= 0 && idx < inputs.length - 1) {
+    e.preventDefault();
+    inputs[idx + 1].focus();
+    inputs[idx + 1].select();
+  }
+}
+
+function bcAddSlotRow(slot, tool) {
+  slot = slot || bcNextFreeSlot();
+  tool = tool || '';
+  const wrap = document.getElementById('bc-edit-rows');
+  const row = document.createElement('div');
+  row.className = 'bc-row';
+  row.innerHTML = `
+    <input type="text" class="bc-edit-slot-input" value="${esc(slot)}" style="width:60px;text-align:center" title="刀號（例如 7 或 T7，按↓可跳下一列）"
+      onblur="bcSlotInputNormalize(this)" onkeydown="bcSlotInputKeydown(event,'bc-edit-slot-input')">
+    <input type="text" class="bc-edit-tool-input" value="${esc(tool)}" list="bc-tool-catalog-list" placeholder="刀具名稱（可從清單選或自行輸入）" style="flex:1;min-width:240px" onblur="bcCheckToolExists(this)">
+    <button class="bc-btn danger" onclick="this.closest('.bc-row').remove()">移除</button>`;
+  wrap.appendChild(row);
+}
+
+async function bcSaveToolMap() {
+  const rows = [...document.getElementById('bc-edit-rows').children];
+  const slots = rows.map(r => ({
+    slot: bcNormalizeSlotStr(r.querySelector('.bc-edit-slot-input').value),
+    tool: r.querySelector('.bc-edit-tool-input').value.trim(),
+  })).filter(s => s.slot && s.tool);
+
+  try {
+    const res = await fetch('/api/batch_cost/tool_map/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ part_no: _bcSelected.part_no, machine_type: _bcSelected.name, slots })
+    });
+    const data = await res.json();
+    if (!data.success) { document.getElementById('bc-toolmap-msg').textContent = data.error; return; }
+    if (data.warning) showToast(data.warning);
+    _bcSlots = slots.map(s => ({ slot: s.slot, tool: s.tool }));
+    _bcToolMapFound = true;
+    document.getElementById('bc-toolmap-edit').style.display = 'none';
+    renderBcToolMapView();
+    showToast('刀表已儲存');
+  } catch (e) {
+    document.getElementById('bc-toolmap-msg').textContent = '儲存失敗：' + e.message;
+  }
+}
+
+function renderBcCostTable() {
+  document.getElementById('bc-step4').style.display = _bcSlots.length ? '' : 'none';
+  document.getElementById('bc-step5').style.display = _bcSlots.length ? '' : 'none';
+  const box = document.getElementById('bc-cost-table');
+  if (!_bcSlots.length) { box.innerHTML = ''; return; }
+
+  const rows = _bcSlots.map((s, i) => {
+    const info = _bcToolCatalogMap[s.tool];
+    const priceTxt = info ? info.price : '';
+    const edgesTxt = info ? info.edges : '';
+    const itemTxt  = info ? info.item  : '';
+    const vendorTxt = info ? info.vendor : '';
+    const missing  = !info;
+    return `<tr data-slot-idx="${i}">
+      <td><span class="bc-slot-badge">${esc(s.slot)}</span></td>
+      <td class="${missing?'bc-tool-name-missing':''}">${esc(s.tool)}${missing?'　（找不到對應單價/刃數）':''}</td>
+      <td>${esc(itemTxt)}</td>
+      <td>${esc(vendorTxt)}</td>
+      <td style="text-align:right">${priceTxt}</td>
+      <td style="text-align:right">${edgesTxt}</td>
+      <td><input type="number" class="bc-qty-input bc-usage-input" min="0" value="0" onchange="bcRecalc()" oninput="bcRecalc()"></td>
+      <td style="text-align:right" class="bc-cost-cell">0</td>
+    </tr>`;
+  }).join('');
+
+  box.innerHTML = `<table class="bc-table">
+    <thead><tr>
+      <th style="width:60px">刀號</th><th>刀具名稱</th><th style="width:90px">項目</th><th style="width:90px">供應商</th>
+      <th style="width:80px;text-align:right">單價</th>
+      <th style="width:70px;text-align:right">刃數</th><th style="width:90px">使用次數</th><th style="width:100px;text-align:right">小計</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot>
+      <tr><td colspan="7" style="text-align:right">刀具耗用成本總計</td><td id="bc-cost-total" style="text-align:right">0</td></tr>
+      <tr><td colspan="7" style="text-align:right" id="bc-labor-formula">加工費用　(${_bcSelected.seconds>0?Math.round(_bcSelected.seconds):0}秒÷生產數量×${parseFloat(document.getElementById('bc-rate').value||0.2)}元/秒)</td><td id="bc-labor-cost" style="text-align:right">0</td></tr>
+      <tr style="background:var(--blue-pale);"><td colspan="7" style="text-align:right;font-weight:700">成本總計</td><td id="bc-grand-total" style="text-align:right;font-weight:700">0</td></tr>
+    </tfoot>
+  </table>`;
+  bcRecalc();
+}
+
+function bcGatherToolUsage() {
+  const items = [];
+  document.querySelectorAll('#bc-cost-table tbody tr').forEach(tr => {
+    const idx  = +tr.dataset.slotIdx;
+    const s    = _bcSlots[idx];
+    const info = _bcToolCatalogMap[s.tool];
+    const usage = parseFloat(tr.querySelector('.bc-usage-input').value) || 0;
+    const subtotal = parseFloat(tr.querySelector('.bc-cost-cell').textContent.replace(/,/g,'')) || 0;
+    items.push({
+      slot: s.slot, tool: s.tool, price: info ? (info.price||0) : 0, edges: info ? (info.edges||0) : 0,
+      usage, subtotal,
+    });
+  });
+  return items;
+}
+
+function bcRecalc() {
+  let toolCostTotal = 0;
+  document.querySelectorAll('#bc-cost-table tbody tr').forEach(tr => {
+    const idx  = +tr.dataset.slotIdx;
+    const s    = _bcSlots[idx];
+    const info = _bcToolCatalogMap[s.tool];
+    const usage = parseFloat(tr.querySelector('.bc-usage-input').value) || 0;
+    let cost = 0;
+    if (info && info.edges) cost = (usage * (info.price||0)) / info.edges;
+    tr.querySelector('.bc-cost-cell').textContent = cost.toLocaleString('zh-TW', {maximumFractionDigits:1});
+    toolCostTotal += cost;
+  });
+
+  // 計算加工費用：(秒數/完成數量) * 每秒鐘生產費用
+  const qty = parseFloat(document.getElementById('bc-qty').value) || 0;
+  const seconds = _bcSelected ? (_bcSelected.seconds || 0) : 0;
+  const rateEl = document.getElementById('bc-rate');
+  const rate = rateEl ? (parseFloat(rateEl.value) || 0) : 0.2;
+  const laborCost = qty > 0 ? (seconds / qty) * rate : 0;
+
+  const toolCostEl = document.getElementById('bc-cost-total');
+  if (toolCostEl) toolCostEl.textContent = toolCostTotal.toLocaleString('zh-TW', {maximumFractionDigits:1});
+
+  const laborFormulaEl = document.getElementById('bc-labor-formula');
+  if (laborFormulaEl) laborFormulaEl.textContent = `加工費用　(${Math.round(seconds)}秒÷生產數量×${rate}元/秒)`;
+
+  const laborCostEl = document.getElementById('bc-labor-cost');
+  if (laborCostEl) laborCostEl.textContent = laborCost.toLocaleString('zh-TW', {maximumFractionDigits:1});
+
+  const grandTotal = toolCostTotal + laborCost;
+  const grandEl = document.getElementById('bc-grand-total');
+  if (grandEl) grandEl.textContent = grandTotal.toLocaleString('zh-TW', {maximumFractionDigits:1});
+}
+
+async function bcSubmit() {
+  const qty   = document.getElementById('bc-qty').value.trim();
+  const hours = document.getElementById('bc-hours').value.trim();
+  const rate  = parseFloat(document.getElementById('bc-rate').value) || 0;
+  const msgEl = document.getElementById('bc-submit-msg');
+  if (!_bcSelected) { msgEl.textContent = '請先查詢並選擇製令'; return; }
+  if (!qty) { msgEl.textContent = '請填寫完成數量'; return; }
+
+  const toolEl = document.getElementById('bc-cost-total');
+  const laborEl = document.getElementById('bc-labor-cost');
+  const toolCost = toolEl ? (parseFloat(toolEl.textContent.replace(/,/g,'')) || 0) : 0;
+  const laborCost = laborEl ? (parseFloat(laborEl.textContent.replace(/,/g,'')) || 0) : 0;
+
+  try {
+    const res = await fetch('/api/batch_cost/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        order: _bcSelected.order, part_no: _bcSelected.part_no, name: _bcSelected.name,
+        proc_code: _bcSelected.proc_code, proc_name: _bcSelected.proc_name || '',
+        machine_name: _bcSelected.machine_name || '', machine_code: _bcSelected.machine_code || '',
+        out_time: _bcSelected.out_time || '',
+        qty: qty, hours: hours, tool_cost: toolCost, labor_cost: laborCost,
+        seconds: _bcSelected.seconds || 0, rate: rate,
+        tool_usage: bcGatherToolUsage(),
+      })
+    });
+    const data = await res.json();
+    if (!data.success) { msgEl.textContent = '送出失敗：' + data.error; return; }
+    if (data.warning) showToast(data.warning);
+    msgEl.style.color = 'var(--success)';
+    msgEl.textContent = '✓ 已寫入批成本計算分頁';
+    showToast('批成本計算已送出');
+    setTimeout(bcResetAll, 1500);
+  } catch (e) {
+    msgEl.textContent = '送出失敗：' + e.message;
+  }
+}
+
+// ══════════════════════════════════════════
+// 左側選單切換
+// ══════════════════════════════════════════
+function bcSwitchPage(page) {
+  document.querySelectorAll('.bc-side-item').forEach(el => el.classList.toggle('active', el.dataset.bcPage === page));
+  document.querySelectorAll('.bc-subpage').forEach(el => el.classList.remove('active'));
+  document.getElementById('bc-page-' + page).classList.add('active');
+  if (page === 'records') { bcLoadRecordsList(); }
+  if (page === 'toolmap') { ensureToolCatalog(); bcMaintLoadToolmapList(); }
+  if (page === 'catalog') { bcMaintLoadCatalogList(); }
+}
+
+// ══════════════════════════════════════════
+// 批成本明細
+// ══════════════════════════════════════════
+let _bcRecordsColumns = [];
+let _bcRecordsItems = [];
+
+let _bcLifespanByKey = {};
+
+function bcRecordsKey(r) {
+  return `${r['建立日期']||''}|${r['製令']||''}|${r['製程代號']||''}|${r['品號']||''}`;
+}
+
+async function bcLoadRecordsList() {
+  document.getElementById('bc-records-table-wrap').innerHTML = '<div class="bc-empty">載入中…</div>';
+  try {
+    const [res, lifeRes] = await Promise.all([
+      fetch('/api/batch_cost/record/list'),
+      fetch('/api/batch_cost/lifespan/list'),
+    ]);
+    const data = await res.json();
+    const lifeData = await lifeRes.json();
+    if (!data.success) { document.getElementById('bc-records-table-wrap').innerHTML = `<div class="bc-empty">${esc(data.error)}</div>`; return; }
+    _bcRecordsColumns = data.columns;
+    _bcRecordsItems = data.records;
+
+    _bcLifespanByKey = {};
+    if (lifeData.success) {
+      lifeData.records.forEach(r => {
+        const k = bcRecordsKey(r);
+        if (!_bcLifespanByKey[k]) _bcLifespanByKey[k] = [];
+        _bcLifespanByKey[k].push(r);
+      });
+    }
+
+    bcFillRecordsMonthOptions();
+    bcRenderRecordsList();
+  } catch (e) {
+    document.getElementById('bc-records-table-wrap').innerHTML = `<div class="bc-empty">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+
+function bcRecordsMonthOf(dateStr) {
+  const parts = String(dateStr || '').replace(/-/g, '/').split('/');
+  if (parts.length >= 2 && parts[0].length === 4) return `${parts[0]}-${String(parts[1]).padStart(2, '0')}`;
+  return '';
+}
+
+function bcFillRecordsMonthOptions() {
+  const months = [...new Set(_bcRecordsItems.map(r => bcRecordsMonthOf(r['建立日期'])))].filter(Boolean).sort().reverse();
+  const sel = document.getElementById('bc-records-month');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全部月份</option>' + months.map(m => `<option value="${m}">${m}</option>`).join('');
+  sel.value = cur;
+}
+
+function bcUnitCostOf(r) {
+  return parseFloat(r['加工費用(含刀具成本)']) || 0;
+}
+
+// 日期只取月/日（去掉年份）
+function bcShortDate(dateStr) {
+  const parts = String(dateStr || '').replace(/-/g, '/').split('/');
+  if (parts.length >= 3) return `${parts[1]}/${parts[2]}`;
+  return dateStr || '';
+}
+
+// 資料點太多時，自動只顯示部分日期標籤（最多約 10 個），避免擠在一起
+function bcShouldShowLabel(index, total) {
+  if (total <= 10) return true;
+  const step = Math.ceil(total / 10);
+  return index % step === 0 || index === total - 1;
+}
+
+let _bcRecordsView = 'detail';
+
+function bcSwitchRecordsView(view) {
+  _bcRecordsView = view;
+  document.getElementById('bc-rec-view-detail-btn').classList.toggle('secondary', view !== 'detail');
+  document.getElementById('bc-rec-view-stats-btn').classList.toggle('secondary', view !== 'stats');
+  document.getElementById('bc-records-view-detail').style.display = view === 'detail' ? '' : 'none';
+  document.getElementById('bc-records-view-stats').style.display = view === 'stats' ? '' : 'none';
+  bcRenderRecordsList();
+}
+
+function bcRecordsKeywordFiltered() {
+  const kw = (document.getElementById('bc-records-search').value || '').trim().toLowerCase();
+  if (!kw) return _bcRecordsItems;
+  return _bcRecordsItems.filter(r => _bcRecordsColumns.some(c => (r[c] || '').toLowerCase().includes(kw)));
+}
+
+function bcRenderRecordsStats(filtered) {
+  const box = document.getElementById('bc-records-stats-content');
+  if (!filtered.length) { box.innerHTML = '<div class="bc-empty">查無資料</div>'; return; }
+
+  // 月份成本趨勢（取加工費用(含刀具成本)的平均值；只依關鍵字篩選，不受月份下拉限制，才能看到完整趨勢）
+  const kwFiltered = bcRecordsKeywordFiltered();
+  const byMonth = {};
+  kwFiltered.forEach(r => {
+    const m = bcRecordsMonthOf(r['建立日期']) || '未知';
+    if (!byMonth[m]) byMonth[m] = { sum: 0, count: 0 };
+    byMonth[m].sum += bcUnitCostOf(r);
+    byMonth[m].count++;
+  });
+  const monthEntries = Object.entries(byMonth)
+    .map(([m, {sum, count}]) => [m, sum / count])
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  const monthMax = Math.max(...monthEntries.map(e => e[1]), 1);
+
+  // 依品名平均加工成本比較（取加工費用(含刀具成本)的平均值；套用目前月份+關鍵字篩選）
+  const byName = {};
+  filtered.forEach(r => {
+    const name = r['品名'] || '(未知品名)';
+    if (!byName[name]) byName[name] = { sum: 0, count: 0 };
+    byName[name].sum += bcUnitCostOf(r);
+    byName[name].count++;
+  });
+  const nameEntries = Object.entries(byName)
+    .map(([name, {sum, count}]) => [name, sum / count])
+    .sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const nameMax = Math.max(...nameEntries.map(e => e[1]), 1);
+
+  // 加工費用(含刀具成本)比較（依建立日期，取每筆批成本明細的單位成本，套用目前篩選條件）
+  const unitCostEntries = filtered
+    .map(r => ({
+      label: r['建立日期'] || '',
+      val: bcUnitCostOf(r),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .slice(-20);
+  const unitCostMax = Math.max(...unitCostEntries.map(e => e.val), 1);
+  const unitCostAvg = unitCostEntries.reduce((s, e) => s + e.val, 0) / (unitCostEntries.length || 1);
+
+  box.innerHTML = `
+    <div class="bc-card" style="margin-bottom:1rem">
+      <div class="bc-card-header">🔶 加工費用(含刀具成本) 比較（依日期）</div>
+      <div class="bc-card-body" style="position:relative;display:flex;align-items:flex-end;gap:.3rem;min-height:170px;padding-top:1.8rem;overflow-x:auto" id="bc-unitcost-chart-body">
+        <div style="position:absolute;top:.4rem;right:.8rem;font-size:.72rem;color:#9AA5B1;background:rgba(255,255,255,.85);padding:.1rem .4rem;border-radius:4px;z-index:1">
+          平均 ${unitCostAvg.toLocaleString('zh-TW',{maximumFractionDigits:2})}
+        </div>
+        ${unitCostEntries.map(({label, val}, i) => `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:.4rem;flex:0 0 auto;width:54px">
+            <div style="font-size:.76rem;font-weight:700;color:#C5613F">${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>
+            <div class="bc-combo-bar" style="width:30px;background:linear-gradient(180deg,#90CAF9,#42A5F5);border-radius:4px 4px 0 0;height:${(val/unitCostMax*110).toFixed(0)}px;min-height:3px"></div>
+            <div style="font-size:.72rem;color:var(--text-2);white-space:nowrap">${bcShouldShowLabel(i, unitCostEntries.length) ? esc(bcShortDate(label)) : ''}</div>
+          </div>`).join('')}
+      </div>
+      <div class="bc-card-body" style="padding-top:0;font-size:.78rem;color:var(--muted)">┄┄ 平均加工費成本：<b style="color:#C5613F">${unitCostAvg.toLocaleString('zh-TW',{maximumFractionDigits:2})}</b> 元</div>
+    </div>
+
+    <div class="bc-card" style="margin-bottom:1rem">
+      <div class="bc-card-header">📈 月份成本趨勢（加工費用含刀具成本，平均值）</div>
+      <div class="bc-card-body" style="display:flex;align-items:flex-end;gap:.4rem;min-height:160px;padding-top:1.5rem">
+        ${monthEntries.map(([m, val]) => `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:.4rem;flex:0 0 auto;width:60px">
+            <div style="font-size:.78rem;font-weight:700;color:var(--blue-d)">${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>
+            <div style="width:36px;background:linear-gradient(180deg,var(--blue-mid),var(--blue-d));border-radius:4px 4px 0 0;height:${(val/monthMax*110).toFixed(0)}px;min-height:3px"></div>
+            <div style="font-size:.78rem;color:var(--text-2)">${esc(m)}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="bc-card">
+      <div class="bc-card-header">📊 平均加工成本比較（依品名，加工費用含刀具成本）</div>
+      <div class="bc-card-body">
+        ${nameEntries.map(([name, val]) => `
+          <div style="display:flex;align-items:center;gap:.7rem;margin-bottom:.55rem">
+            <div style="width:220px;font-size:.8rem;color:var(--text-2);text-align:right;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(name)}">${esc(name)}</div>
+            <div style="width:280px;max-width:50%;background:#F1F5F9;border-radius:5px;overflow:hidden;height:22px">
+              <div style="height:100%;background:linear-gradient(90deg,var(--blue-mid),var(--blue));border-radius:5px;width:${(val/nameMax*100).toFixed(1)}%;min-width:2px"></div>
+            </div>
+            <div style="width:100px;font-size:.82rem;font-weight:700;text-align:right">${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  requestAnimationFrame(() => bcDrawComboLine('bc-unitcost-chart-body', unitCostAvg, unitCostMax));
+}
+
+// 在長條圖上方疊一條折線（取每根柱子的頂端中心點連線），做出長條+折線組合圖效果；可選擇加畫一條平均值虛線
+function bcDrawComboLine(containerId, avgVal, maxVal) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const oldSvg = container.querySelector('svg.bc-combo-overlay');
+  if (oldSvg) oldSvg.remove();
+  const bars = [...container.querySelectorAll('.bc-combo-bar')];
+  if (!bars.length) return;
+
+  const cRect = container.getBoundingClientRect();
+  const points = bars.map(bar => {
+    const r = bar.getBoundingClientRect();
+    return { x: r.left - cRect.left + r.width / 2, y: r.top - cRect.top, bottom: r.bottom - cRect.top, height: r.height };
+  });
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('class', 'bc-combo-overlay');
+  svg.setAttribute('style', `position:absolute;top:0;left:0;width:${container.scrollWidth}px;height:${cRect.height}px;pointer-events:none;overflow:visible`);
+
+  if (avgVal != null && maxVal) {
+    // 柱子高度公式固定為 (val/maxVal*110)px，柱底對齊容器底部，故反推平均值對應的 y 座標
+    const barBottom = points[0].bottom;
+    const avgY = barBottom - (avgVal / maxVal) * 110;
+    const line = document.createElementNS(svgNS, 'line');
+    line.setAttribute('x1', '0');
+    line.setAttribute('x2', String(container.scrollWidth));
+    line.setAttribute('y1', String(avgY));
+    line.setAttribute('y2', String(avgY));
+    line.setAttribute('stroke', '#9AA5B1');
+    line.setAttribute('stroke-width', '1.5');
+    line.setAttribute('stroke-dasharray', '5,4');
+    svg.appendChild(line);
+  }
+
+  if (bars.length >= 2) {
+    const polyline = document.createElementNS(svgNS, 'polyline');
+    polyline.setAttribute('points', points.map(p => `${p.x},${p.y}`).join(' '));
+    polyline.setAttribute('fill', 'none');
+    polyline.setAttribute('stroke', '#F5A623');
+    polyline.setAttribute('stroke-width', '2.5');
+    polyline.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(polyline);
+  }
+
+  points.forEach(p => {
+    const circle = document.createElementNS(svgNS, 'circle');
+    circle.setAttribute('cx', p.x);
+    circle.setAttribute('cy', p.y);
+    circle.setAttribute('r', '4.5');
+    circle.setAttribute('fill', '#F5A623');
+    circle.setAttribute('stroke', '#fff');
+    circle.setAttribute('stroke-width', '1.5');
+    svg.appendChild(circle);
+  });
+
+  container.appendChild(svg);
+}
+
+function bcRenderRecordsList() {
+  const kw = (document.getElementById('bc-records-search').value || '').trim().toLowerCase();
+  const month = document.getElementById('bc-records-month').value;
+  if (!_bcRecordsColumns.length) {
+    document.getElementById('bc-records-table-wrap').innerHTML = '<div class="bc-empty">尚無批成本計算分頁</div>';
+    return;
+  }
+  const filtered = _bcRecordsItems.filter(r => {
+    if (month && bcRecordsMonthOf(r['建立日期']) !== month) return false;
+    if (kw && !_bcRecordsColumns.some(c => (r[c] || '').toLowerCase().includes(kw))) return false;
+    return true;
+  });
+
+  if (_bcRecordsView === 'stats') {
+    bcRenderRecordsStats(filtered);
+    return;
+  }
+
+  const box = document.getElementById('bc-records-table-wrap');
+  if (!filtered.length) { box.innerHTML = '<div class="bc-empty">查無資料</div>'; return; }
+  const colCount = _bcRecordsColumns.length + 2;
+  box.innerHTML = `<table class="bc-table bc-table-compact">
+    <thead><tr><th style="width:30px"></th>${_bcRecordsColumns.map(c => `<th>${esc(c)}</th>`).join('')}<th style="width:64px">操作</th></tr></thead>
+    <tbody>${filtered.map((r, i) => {
+      const tools = _bcLifespanByKey[bcRecordsKey(r)] || [];
+      const expandId = `bc-rec-expand-${r.row}`;
+      const toggleCell = tools.length
+        ? `<td style="cursor:pointer;text-align:center" onclick="bcToggleRecordExpand('${expandId}', this)">▶</td>`
+        : `<td></td>`;
+      const detailRow = tools.length ? `
+        <tr id="${expandId}" style="display:none">
+          <td colspan="${colCount}" style="background:#F6F9FC;padding:.7rem 1rem">
+            <table class="bc-table bc-table-compact bc-table-nested" style="background:#fff;width:auto">
+              <thead><tr>
+                <th style="width:60px">刀號</th><th style="width:220px">刀具名稱</th>
+                <th style="width:90px">項目</th><th style="width:90px">供應商</th>
+                <th style="width:80px;text-align:right">單價</th><th style="width:80px;text-align:right">使用次數</th><th style="width:90px;text-align:right">小計</th>
+              </tr></thead>
+              <tbody>${tools.map(t => `
+                <tr><td>${esc(t['刀號'])}</td><td>${esc(t['刀具名稱'])}</td>
+                  <td>${esc(t['項目'])}</td><td>${esc(t['供應商'])}</td>
+                  <td style="text-align:right">${esc(t['單價'])}</td><td style="text-align:right">${esc(t['使用次數'])}</td>
+                  <td style="text-align:right">${esc(t['小計'])}</td></tr>`).join('')}</tbody>
+            </table>
+          </td>
+        </tr>` : '';
+      return `<tr>${toggleCell}${_bcRecordsColumns.map(c => {
+        const isHighlight = c === '加工費用(含刀具成本)';
+        return `<td${isHighlight ? ' style="font-weight:700;color:var(--accent-d, #C5613F);background:#FFF7F2"' : ''}>${esc(r[c] || '')}</td>`;
+      }).join('')}
+        <td><button class="bc-btn danger" onclick="bcDeleteRecord(${r.row})">刪除</button></td>
+      </tr>${detailRow}`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+function bcToggleRecordExpand(expandId, cell) {
+  const row = document.getElementById(expandId);
+  const showing = row.style.display !== 'none';
+  row.style.display = showing ? 'none' : '';
+  cell.textContent = showing ? '▶' : '▼';
+}
+
+async function bcDeleteRecord(rowNo) {
+  if (!confirm('確定要刪除這筆批成本明細嗎？')) return;
+  try {
+    const res = await fetch('/api/batch_cost/record/delete', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ row: rowNo })
+    });
+    const data = await res.json();
+    if (!data.success) { showToast('刪除失敗：' + data.error); return; }
+    if (data.warning) showToast(data.warning);
+    showToast('已刪除');
+    bcLoadRecordsList();
+  } catch (e) {
+    showToast('刪除失敗：' + e.message);
+  }
+}
+
+// ══════════════════════════════════════════
+// 刀表維護
+// ══════════════════════════════════════════
+let _bcMaintTmItems = [];
+let _bcMaintTmEditingPartNo = null;  // null=非編輯中, ''=新增中, 否則=編輯該品號
+
+async function bcMaintLoadToolmapList() {
+  document.getElementById('bc-maint-tm-list').innerHTML = '<div class="bc-empty">載入中…</div>';
+  try {
+    const res = await fetch('/api/batch_cost/tool_map/list');
+    const data = await res.json();
+    if (!data.success) { document.getElementById('bc-maint-tm-list').innerHTML = `<div class="bc-empty">${esc(data.error)}</div>`; return; }
+    _bcMaintTmItems = data.items;
+    bcMaintRenderToolmapList();
+  } catch (e) {
+    document.getElementById('bc-maint-tm-list').innerHTML = `<div class="bc-empty">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+
+function bcMaintRenderToolmapList() {
+  const kw = (document.getElementById('bc-maint-tm-search').value || '').trim().toLowerCase();
+  const box = document.getElementById('bc-maint-tm-list');
+  const filtered = _bcMaintTmItems.filter(it =>
+    !kw || it.part_no.toLowerCase().includes(kw) || (it.machine_type||'').toLowerCase().includes(kw));
+  if (!filtered.length) { box.innerHTML = '<div class="bc-empty">查無資料</div>'; return; }
+  box.innerHTML = `<table class="bc-table" style="width:auto">
+    <thead><tr><th style="width:100px">建立日期</th><th style="width:150px">品號</th><th style="width:220px">加工機型</th><th style="width:70px">刀數</th><th style="width:100px">修改日期</th><th style="width:140px">操作</th></tr></thead>
+    <tbody>${filtered.map(it => `
+      <tr>
+        <td>${esc(it.created)}</td>
+        <td>${esc(it.part_no)}</td>
+        <td>${esc(it.machine_type)}</td>
+        <td>${it.slots.length}</td>
+        <td>${esc(it.modified)}</td>
+        <td>
+          <button class="bc-btn secondary" style="padding:.25rem .6rem;font-size:.78rem" onclick="bcMaintToolmapEdit('${esc(it.part_no)}')">編輯</button>
+          <button class="bc-btn danger" onclick="bcMaintToolmapDelete('${esc(it.part_no)}')">刪除</button>
+        </td>
+      </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function bcMaintToolmapNew() {
+  _bcMaintTmEditingPartNo = '';
+  bcMaintRenderToolmapEditor('', '', []);
+}
+
+function bcMaintToolmapEdit(partNo) {
+  const item = _bcMaintTmItems.find(it => it.part_no === partNo);
+  if (!item) return;
+  _bcMaintTmEditingPartNo = partNo;
+  bcMaintRenderToolmapEditor(item.part_no, item.machine_type, item.slots);
+}
+
+function bcMaintRenderToolmapEditor(partNo, machineType, slots) {
+  const box = document.getElementById('bc-maint-tm-editor');
+  box.style.display = '';
+  const isNew = _bcMaintTmEditingPartNo === '';
+  box.innerHTML = `
+    <div class="bc-row">
+      <span class="bc-label">品號</span>
+      <input type="text" id="bc-maint-tm-partno" value="${esc(partNo)}" ${isNew?'':'readonly style="background:#EEE"'} style="width:200px">
+      <span class="bc-label" style="margin-left:1rem">加工機型</span>
+      <input type="text" id="bc-maint-tm-machine" value="${esc(machineType)}" style="flex:1;min-width:200px">
+    </div>
+    <div id="bc-maint-tm-slot-rows" style="margin-top:.7rem"></div>
+    <div class="bc-row" style="margin-top:.6rem">
+      <button class="bc-btn secondary" onclick="bcMaintAddSlotRow()">➕ 新增一把刀</button>
+      <button class="bc-btn" onclick="bcMaintSaveToolmap()">儲存</button>
+      <button class="bc-btn secondary" onclick="bcMaintCancelToolmapEditor()">取消</button>
+    </div>
+    <div id="bc-maint-tm-msg" class="bc-msg"></div>`;
+  const rowsBox = document.getElementById('bc-maint-tm-slot-rows');
+  rowsBox.innerHTML = '';
+  if (slots.length) {
+    slots.forEach(s => bcMaintAddSlotRow(s.slot, s.tool));
+  } else {
+    bcMaintAddSlotRow('T1', '');
+  }
+}
+
+function bcMaintNextFreeSlot() {
+  const used = new Set([...document.querySelectorAll('.bc-maint-slot-input')].map(i => i.value));
+  for (let n = 1; n <= 39; n++) { if (!used.has('T'+n)) return 'T'+n; }
+  return 'T39';
+}
+
+function bcMaintAddSlotRow(slot, tool) {
+  slot = slot || bcMaintNextFreeSlot();
+  tool = tool || '';
+  const wrap = document.getElementById('bc-maint-tm-slot-rows');
+  const row = document.createElement('div');
+  row.className = 'bc-row';
+  row.innerHTML = `
+    <input type="text" class="bc-maint-slot-input" value="${esc(slot)}" style="width:60px;text-align:center" title="刀號（可省略 T，按↓可跳下一列）"
+      onblur="bcSlotInputNormalize(this)" onkeydown="bcSlotInputKeydown(event,'bc-maint-slot-input')">
+    <input type="text" class="bc-maint-tool-input" value="${esc(tool)}" list="bc-tool-catalog-list" placeholder="刀具名稱" style="flex:1;min-width:240px" onblur="bcCheckToolExists(this)">
+    <button class="bc-btn danger" onclick="this.closest('.bc-row').remove()">移除</button>`;
+  wrap.appendChild(row);
+}
+
+function bcMaintCancelToolmapEditor() {
+  _bcMaintTmEditingPartNo = null;
+  document.getElementById('bc-maint-tm-editor').style.display = 'none';
+}
+
+async function bcMaintSaveToolmap() {
+  const partNo = document.getElementById('bc-maint-tm-partno').value.trim();
+  const machineType = document.getElementById('bc-maint-tm-machine').value.trim();
+  const msgEl = document.getElementById('bc-maint-tm-msg');
+  if (!partNo) { msgEl.textContent = '請輸入品號'; return; }
+  const rows = [...document.getElementById('bc-maint-tm-slot-rows').children];
+  const slots = rows.map(r => ({
+    slot: bcNormalizeSlotStr(r.querySelector('.bc-maint-slot-input').value),
+    tool: r.querySelector('.bc-maint-tool-input').value.trim(),
+  })).filter(s => s.slot && s.tool);
+
+  try {
+    const res = await fetch('/api/batch_cost/tool_map/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ part_no: partNo, machine_type: machineType, slots })
+    });
+    const data = await res.json();
+    if (!data.success) { msgEl.textContent = data.error; return; }
+    if (data.warning) showToast(data.warning);
+    showToast('刀表已儲存');
+    bcMaintCancelToolmapEditor();
+    bcMaintLoadToolmapList();
+  } catch (e) {
+    msgEl.textContent = '儲存失敗：' + e.message;
+  }
+}
+
+async function bcMaintToolmapDelete(partNo) {
+  if (!confirm(`確定要刪除品號「${partNo}」的刀表嗎？`)) return;
+  try {
+    const res = await fetch('/api/batch_cost/tool_map/delete', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ part_no: partNo })
+    });
+    const data = await res.json();
+    if (!data.success) { showToast('刪除失敗：' + data.error); return; }
+    if (data.warning) showToast(data.warning);
+    showToast('已刪除');
+    bcMaintLoadToolmapList();
+  } catch (e) {
+    showToast('刪除失敗：' + e.message);
+  }
+}
+
+// ══════════════════════════════════════════
+// 刀具資料維護
+// ══════════════════════════════════════════
+let _bcMaintCatItems = [];
+
+async function bcMaintLoadCatalogList() {
+  document.getElementById('bc-maint-cat-tbody').innerHTML = '<tr><td colspan="6" class="bc-empty">載入中…</td></tr>';
+  try {
+    const res = await fetch('/api/batch_cost/tool_catalog');
+    const data = await res.json();
+    if (!data.success) { document.getElementById('bc-maint-cat-tbody').innerHTML = `<tr><td colspan="6" class="bc-empty">${esc(data.error)}</td></tr>`; return; }
+    _bcMaintCatItems = data.tools;
+    _bcToolCatalog = data.tools;
+    _bcToolCatalogMap = {};
+    _bcToolCatalog.forEach(t => { if (!(t.name in _bcToolCatalogMap)) _bcToolCatalogMap[t.name] = t; });
+    document.getElementById('bc-tool-catalog-list').innerHTML = _bcToolCatalog.map(t => `<option value="${esc(t.name)}">`).join('');
+    bcMaintRenderCatalogList();
+  } catch (e) {
+    document.getElementById('bc-maint-cat-tbody').innerHTML = `<tr><td colspan="6" class="bc-empty">載入失敗：${esc(e.message)}</td></tr>`;
+  }
+}
+
+function bcMaintRenderCatalogList() {
+  const kw = (document.getElementById('bc-maint-cat-search').value || '').trim().toLowerCase();
+  const tbody = document.getElementById('bc-maint-cat-tbody');
+  const filtered = _bcMaintCatItems
+    .filter(t => !kw || t.name.toLowerCase().includes(kw) || (t.vendor||'').toLowerCase().includes(kw))
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+  if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="6" class="bc-empty">查無資料</td></tr>'; return; }
+
+  const nameCounts = {};
+  _bcMaintCatItems.forEach(t => { nameCounts[t.name] = (nameCounts[t.name] || 0) + 1; });
+
+  tbody.innerHTML = filtered.map(t => {
+    const isDup = nameCounts[t.name] > 1;
+    return `
+    <tr data-row="${t.row}"${isDup ? ' style="background:#FFF3E0"' : ''}>
+      <td class="bc-cat-name">${esc(t.name)}${isDup ? ' <span style="color:#E65100;font-weight:700;font-size:.78rem" title="刀具資料裡有重複名稱，請確認並合併/刪除多餘的一筆">⚠️ 重複</span>' : ''}</td>
+      <td class="bc-cat-item">${esc(t.item)}</td>
+      <td class="bc-cat-vendor">${esc(t.vendor)}</td>
+      <td class="bc-cat-price" style="text-align:right">${esc(t.price)}</td>
+      <td class="bc-cat-edges" style="text-align:right">${esc(t.edges)}</td>
+      <td>
+        <button class="bc-btn secondary" style="padding:.25rem .6rem;font-size:.78rem" onclick="bcMaintCatalogEditRow(${t.row})">編輯</button>
+        <button class="bc-btn danger" onclick="bcMaintCatalogDelete(${t.row})">刪除</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function bcMaintCatalogNew() {
+  const tbody = document.getElementById('bc-maint-cat-tbody');
+  const row = document.createElement('tr');
+  row.dataset.row = '';
+  row.innerHTML = `
+    <td><input type="text" class="bc-cat-edit-name" placeholder="刀具名稱" style="width:100%"></td>
+    <td><input type="text" class="bc-cat-edit-item" style="width:100%"></td>
+    <td><input type="text" class="bc-cat-edit-vendor" style="width:100%"></td>
+    <td><input type="number" class="bc-cat-edit-price" style="width:100%;text-align:right"></td>
+    <td><input type="number" class="bc-cat-edit-edges" style="width:100%;text-align:right"></td>
+    <td>
+      <button class="bc-btn" style="padding:.25rem .6rem;font-size:.78rem" onclick="bcMaintCatalogSaveRow(this)">儲存</button>
+      <button class="bc-btn secondary" style="padding:.25rem .6rem;font-size:.78rem" onclick="this.closest('tr').remove()">取消</button>
+    </td>`;
+  tbody.insertBefore(row, tbody.firstChild);
+}
+
+function bcMaintCatalogEditRow(rowNo) {
+  const tr = document.querySelector(`#bc-maint-cat-tbody tr[data-row="${rowNo}"]`);
+  if (!tr) return;
+  const item = _bcMaintCatItems.find(t => t.row === rowNo);
+  if (!item) return;
+  tr.innerHTML = `
+    <td><input type="text" class="bc-cat-edit-name" value="${esc(item.name)}" style="width:100%"></td>
+    <td><input type="text" class="bc-cat-edit-item" value="${esc(item.item)}" style="width:100%"></td>
+    <td><input type="text" class="bc-cat-edit-vendor" value="${esc(item.vendor)}" style="width:100%"></td>
+    <td><input type="number" class="bc-cat-edit-price" value="${esc(item.price)}" style="width:100%;text-align:right"></td>
+    <td><input type="number" class="bc-cat-edit-edges" value="${esc(item.edges)}" style="width:100%;text-align:right"></td>
+    <td>
+      <button class="bc-btn" style="padding:.25rem .6rem;font-size:.78rem" onclick="bcMaintCatalogSaveRow(this)">儲存</button>
+      <button class="bc-btn secondary" style="padding:.25rem .6rem;font-size:.78rem" onclick="bcMaintRenderCatalogList()">取消</button>
+    </td>`;
+}
+
+async function bcMaintCatalogSaveRow(btn) {
+  const tr = btn.closest('tr');
+  const rowNo = tr.dataset.row;
+  const name   = tr.querySelector('.bc-cat-edit-name').value.trim();
+  const item   = tr.querySelector('.bc-cat-edit-item').value.trim();
+  const vendor = tr.querySelector('.bc-cat-edit-vendor').value.trim();
+  const price  = parseFloat(tr.querySelector('.bc-cat-edit-price').value) || 0;
+  const edges  = parseFloat(tr.querySelector('.bc-cat-edit-edges').value) || 0;
+  if (!name) { showToast('請輸入刀具名稱'); return; }
+
+  const dupExists = _bcMaintCatItems.some(t => t.name === name && String(t.row) !== String(rowNo));
+  if (dupExists && !confirm(`刀具資料裡已經有一筆名稱叫「${name}」了，確定要新增/改成重複的名稱嗎？`)) return;
+
+  try {
+    const res = await fetch('/api/batch_cost/tool_catalog/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ row: rowNo || null, name, item, vendor, price, edges })
+    });
+    const data = await res.json();
+    if (!data.success) { showToast('儲存失敗：' + data.error); return; }
+    if (data.warning) showToast(data.warning);
+    showToast('已儲存');
+    bcMaintLoadCatalogList();
+  } catch (e) {
+    showToast('儲存失敗：' + e.message);
+  }
+}
+
+async function bcMaintCatalogDelete(rowNo) {
+  if (!confirm('確定要刪除這把刀具嗎？')) return;
+  try {
+    const res = await fetch('/api/batch_cost/tool_catalog/delete', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ row: rowNo })
+    });
+    const data = await res.json();
+    if (!data.success) { showToast('刪除失敗：' + data.error); return; }
+    if (data.warning) showToast(data.warning);
+    showToast('已刪除');
+    bcMaintLoadCatalogList();
+  } catch (e) {
+    showToast('刪除失敗：' + e.message);
+  }
+}
+</script>
+</body>
+</html>

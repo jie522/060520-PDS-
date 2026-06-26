@@ -47,9 +47,12 @@
       --radius-sm:   5px;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    /* 文字用思源黑體；尾端的 emoji 字型只在遇到 emoji 圖示時生效，確保彩色顯示 */
+    body, * {
+      font-family: 'Noto Sans TC', 'Source Han Sans TC', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+    }
     body {
       background: var(--bg);
-      font-family: 'Noto Sans TC', 'Source Han Sans TC', sans-serif;
       font-size: 0.85rem;
       color: var(--text);
       display: flex;
@@ -68,6 +71,7 @@
       z-index: 100;
     }
     .header-inner { display:flex; align-items:flex-end; padding:.4rem 1rem 0; }
+    .header-logo { margin-left:auto; align-self:center; font-size:1.15rem; font-weight:800; font-style:italic; letter-spacing:.03em; color:#F5A623; }
     .header-title { font-size:1.1rem; font-weight:700; padding-bottom:.45rem; white-space:nowrap; margin-right:.5rem; }
     .header-tabs { display:flex; align-items:flex-end; gap:2px; }
     .header-tab {
@@ -114,7 +118,10 @@
       background: transparent; border: 1px solid transparent; transition: all .15s;
       text-align: left; white-space: nowrap; cursor: pointer;
     }
-    .page-sub-tab.active { background: #E3F2FD; color: #1565C0; border-color: #E3F2FD; }
+    .page-sub-tab.active {
+      background: #1565C0; color: #fff; border-color: #1565C0; font-weight: 700;
+      box-shadow: 0 2px 6px rgba(21,101,192,.35), inset 4px 0 0 #0D47A1;
+    }
     .page-sub-tab:not(.active):hover { background: var(--surface-2); color: #1565C0; }
 
     /* ══ Page Body ══ */
@@ -168,7 +175,11 @@
       padding: 0.7rem 1rem;
       letter-spacing: 0.02em;
     }
-    #today-summary {
+    .today-leave-header.tomorrow-leave-header {
+      background: linear-gradient(90deg, #2E7D32 0%, #1B5E20 100%);
+      border-left: 4px solid #1B5E20;
+    }
+    #today-summary, #tomorrow-summary {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       gap: 0.5rem;
@@ -186,6 +197,7 @@
       box-shadow: 0 1px 4px rgba(21,101,192,.1);
       transition: transform .15s, box-shadow .15s;
     }
+    #tomorrow-summary .leave-card { border-left-color: #2E7D32; box-shadow: 0 1px 4px rgba(46,125,50,.15); }
     .leave-card:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(21,101,192,.18); }
     .leave-card .lc-top { display: flex; align-items: center; justify-content: space-between; gap: .4rem; }
     .leave-card .lc-name { font-size: 0.92rem; font-weight: 800; color: var(--text); }
@@ -199,7 +211,7 @@
       white-space: nowrap;
     }
     .leave-card .lc-time { color: var(--muted); font-weight: 600; font-size: 0.78rem; }
-    #today-empty { padding: 0.6rem 0.9rem; color: var(--muted-light); font-size: 0.83rem; }
+    #today-empty, #tomorrow-empty { padding: 0.6rem 0.9rem; color: var(--muted-light); font-size: 0.83rem; }
 
     /* ══ 個人請假摘要 ══ */
     .person-summary {
@@ -321,7 +333,7 @@
     .sc-kpi-card .kpi-sub { font-size:.86rem; color:#94A3B8; margin-top:.25rem; }
     .sc-dash-row { display: flex; gap: .75rem; }
     .sc-dash-card { background:#fff; border-radius:10px; padding:1rem 1.2rem; box-shadow:0 1px 8px rgba(0,0,0,.07); flex:1; min-width:0; }
-    .sc-dash-card.sc-wide { flex:2.5; }
+    .sc-dash-card.sc-wide { flex:1.8; }
     .sc-dash-ttl { font-size:.88rem; font-weight:700; color:#64748B; letter-spacing:.03em; margin-bottom:.9rem; }
     /* 直式柱狀圖 */
     .sc-vbar-wrap { display:flex; flex-direction:column; }
@@ -352,8 +364,9 @@
     .sc-cat-C { background:#FEF3C7; color:#B45309; border:1px solid #FDE68A; }
     .sc-cat-L { background:#F3E8FF; color:#7C3AED; border:1px solid #E9D5FF; }
     .sc-cat-  { background:#F4F4F5; color:#71717A; border:1px solid #E4E4E7; }
-    #sc-chart-month .bar-fill { background: linear-gradient(90deg, #1565C0, #42A5F5); }
-    #sc-chart-qty  .bar-fill { background: linear-gradient(90deg, #2E7D32, #66BB6A); }
+    #ot-chart-month .bar-fill { background: linear-gradient(90deg, #1565C0, #42A5F5); }
+    #ot-chart-emp   .bar-fill { background: linear-gradient(90deg, #2E7D32, #66BB6A); }
+    #ot-view-chart > div { max-width: 640px; }
     /* ══ 出勤統計 ══ */
     #att-content table.pro-table { font-size:.88rem; border-collapse:separate; border-spacing:0; }
     #att-content table.pro-table thead th { background: linear-gradient(180deg, var(--blue-mid), var(--blue-d)); font-size:.83rem; letter-spacing:.03em; white-space:nowrap; }
@@ -369,6 +382,11 @@
     #scrap-content td.sc-spec { color: var(--text-2); font-size:.85rem; line-height:1.5; }
     #scrap-content td.sc-remark { color: var(--muted); font-size:.85rem; }
     #scrap-content td.sc-amount { font-family:'Noto Sans TC','Source Han Sans TC',sans-serif; text-align:right; font-size:.93rem; color: var(--warn); font-weight:700; padding-right:.8rem; }
+    /* ══ 採購登入表 ══ */
+    #purchase-content table.pro-table { font-size:.88rem; border-collapse:separate; border-spacing:0; }
+    #purchase-content table.pro-table thead th { background: linear-gradient(180deg, var(--blue-mid), var(--blue-d)); font-size:.82rem; letter-spacing:.02em; white-space:nowrap; }
+    #purchase-content table.pro-table tbody tr:hover td { background: rgba(21,101,192,.05) !important; }
+    #purchase-content td.td-code { color: var(--blue-d); font-size:.85rem; font-family:'Noto Sans TC','Source Han Sans TC',sans-serif; }
     /* ══ 生產日報表 ══ */
     #prod-content table.pro-table { font-size:.93rem; border-collapse:separate; border-spacing:0; }
     #prod-content table.pro-table thead th { background: linear-gradient(180deg, var(--blue-mid), var(--blue-d)); font-size:.84rem; letter-spacing:.03em; white-space:nowrap; }
@@ -385,6 +403,10 @@
     #prod-content td.pr-qty   { font-weight:700; color:var(--text); font-family:'Noto Sans TC','Source Han Sans TC',sans-serif; }
     #prod-content td.pr-sec   { color:var(--muted); font-size:.85rem; font-family:'Noto Sans TC','Source Han Sans TC',sans-serif; }
     #prod-content td.pr-std   { color:var(--muted); font-size:.83rem; }
+    #prod-content td.pr-actsec span {
+      display:inline-block; padding:.1rem .5rem; border-radius:10px;
+      font-weight:700; font-size:.85rem; background:#FFF3E0; color:#E65100;
+    }
     #prod-content td.pr-mcode { color:var(--text-2); font-size:.84rem; white-space:nowrap; }
     #prod-content td.pr-mname { color:var(--text); font-size:.9rem; white-space:nowrap; }
     #prod-content td.pr-remark{ color:var(--muted); font-size:.83rem; }
@@ -415,34 +437,34 @@
     #jig-content td.jig-remarks-link { color: var(--blue-d); cursor: pointer; text-decoration: underline dotted; }
     #jig-content td.jig-remarks-link:hover { color: var(--blue); }
     /* ══ 治檢具備註彈窗 ══ */
-    #jig-remarks-modal {
+    #jig-remarks-modal, #pu-pw-modal {
       display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
       z-index: 300; align-items: center; justify-content: center; cursor: pointer;
     }
-    #jig-remarks-modal.show { display: flex; }
-    #jig-remarks-modal .rm-card {
+    #jig-remarks-modal.show, #pu-pw-modal.show { display: flex; }
+    #jig-remarks-modal .rm-card, #pu-pw-modal .rm-card {
       cursor: default; background: #fff; border-radius: 12px;
       box-shadow: 0 8px 40px rgba(0,0,0,.28); min-width: 360px; max-width: 520px;
       width: 90vw; overflow: hidden; animation: rm-in .15s ease;
     }
     @keyframes rm-in { from { transform: scale(.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-    #jig-remarks-modal .rm-header {
+    #jig-remarks-modal .rm-header, #pu-pw-modal .rm-header {
       background: linear-gradient(135deg, #1565C0 0%, #1976D2 100%);
       color: #fff; padding: .9rem 1.2rem;
       display: flex; align-items: center; justify-content: space-between; gap: .8rem;
     }
-    #jig-remarks-modal .rm-title { font-size: 1.05rem; font-weight: 700; letter-spacing: .02em; }
+    #jig-remarks-modal .rm-title, #pu-pw-modal .rm-title { font-size: 1.05rem; font-weight: 700; letter-spacing: .02em; }
     #jig-remarks-modal .rm-badge {
       font-size: 0.72rem; font-weight: 600; background: rgba(255,255,255,.2);
       border: 1px solid rgba(255,255,255,.35); border-radius: 20px;
       padding: .1rem .6rem; white-space: nowrap;
     }
-    #jig-remarks-modal .rm-close {
+    #jig-remarks-modal .rm-close, #pu-pw-modal .rm-close {
       cursor: pointer; font-size: 1.3rem; color: rgba(255,255,255,.7);
       line-height: 1; padding: .1rem .2rem; border-radius: 4px; flex-shrink: 0;
     }
-    #jig-remarks-modal .rm-close:hover { color: #fff; background: rgba(255,255,255,.15); }
-    #jig-remarks-modal .rm-body {
+    #jig-remarks-modal .rm-close:hover, #pu-pw-modal .rm-close:hover { color: #fff; background: rgba(255,255,255,.15); }
+    #jig-remarks-modal .rm-body, #pu-pw-modal .rm-body {
       padding: 1.2rem 1.4rem 1.4rem; max-height: 55vh; overflow-y: auto;
     }
     #jig-remarks-modal .rm-line {
@@ -468,6 +490,30 @@
     #jig-content .jig-status-revise  { background: #FFEBEE; color: #C62828; }
     #jig-content .jig-status-done    { background: #E8F5E9; color: #2E7D32; }
 
+    /* ── 員工名冊 ── */
+    #emp-content table.pro-table thead th { background: linear-gradient(180deg, var(--blue-mid), var(--blue-d)); cursor: pointer; white-space: nowrap; }
+    #emp-content table.pro-table td.td-code,
+    #emp-group-content table.pro-table td.td-code { color: var(--blue-d); }
+    #emp-content .emp-status, #emp-group-content .emp-status {
+      display: inline-block; padding: 0.15rem 0.6rem; border-radius: 12px;
+      font-size: 0.78rem; font-weight: 700; white-space: nowrap;
+    }
+    #emp-content .emp-status-active, #emp-group-content .emp-status-active { background: #E8F5E9; color: #2E7D32; }
+    #emp-content .emp-status-leave, #emp-group-content .emp-status-leave  { background: #ECEFF1; color: #546E7A; }
+    #emp-content .emp-status-transfer, #emp-group-content .emp-status-transfer { background: #FFF3E0; color: #E65100; }
+    #emp-group-content table.pro-table { width: auto; }
+    #emp-group-content table.pro-table thead th { background: linear-gradient(180deg, var(--blue-mid), var(--blue-d)); white-space: nowrap; }
+    #emp-group-content tr.emp-group-row td {
+      background: #EEF2F6 !important; font-weight: 700; color: var(--blue-d);
+      padding: .4rem .7rem; border-top: 1px solid #D6DEE8;
+    }
+    #emp-group-content .emp-group-count {
+      display: inline-block; margin-left: .4rem; padding: 0 .45rem; border-radius: 9px;
+      background: var(--blue-pale); color: var(--blue-d); font-size: .75rem; font-weight: 700;
+    }
+    /* 分組標題靠左、組內人員資料向右縮排，呈現主從層級 */
+    #emp-group-content tbody tr:not(.emp-group-row) td:first-child { padding-left: 2.6rem; }
+
     /* ── 設計變更通知單 ── */
     #dcn-content table.pro-table { width:auto; font-size:.9rem; border-collapse:separate; border-spacing:0; }
     #dcn-content table.pro-table td { white-space:nowrap; }
@@ -488,6 +534,15 @@
     #dcn-content .dcn-status-revise  { background: #FFEBEE; color: #C62828; }
     #dcn-content .dcn-status-done    { background: #E8F5E9; color: #2E7D32; }
     #dcn-content table.pro-table tbody tr { cursor: pointer; }
+
+    /* ── ZUMEN 圖面 ── */
+    #zume-content table.pro-table { font-size:.9rem; border-collapse:separate; border-spacing:0; width:100%; }
+    #zume-content table.pro-table thead th { background: linear-gradient(180deg, var(--blue-mid), var(--blue-d)); font-size:.84rem; letter-spacing:.03em; white-space:nowrap; }
+    #zume-content table.pro-table tbody tr:hover td { background: rgba(21,101,192,.05); }
+    #zume-content td.td-code { color: var(--blue-d); font-size:.88rem; }
+    #zume-content td { white-space:nowrap; }
+    .zume-open-btn { background:#1565C0; color:#fff; border:none; border-radius:6px; padding:.2rem .6rem; font-size:.8rem; font-weight:600; cursor:pointer; }
+    .zume-open-btn:hover { background:#0d47a1; }
 
     /* ══ DCN 詳情彈窗 ══ */
     #dcn-card-modal {
@@ -1127,8 +1182,10 @@
       <a href="/equipment"  class="header-tab">設備稼動</a>
       <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
       <a href="/routing"    class="header-tab">產品途程查詢</a>
+      <a href="/batch_cost" class="header-tab">批成本</a>
       <span                 class="header-tab active">管理</span>
     </div>
+    <span class="header-logo">MAXCLAW</span>
   </div>
 </div>
 
@@ -1140,6 +1197,7 @@
       <span class="nav-group-icon g-hr">📁</span>
       <span class="nav-group-label">人員勤務</span>
     </div>
+    <span class="page-sub-tab" onclick="switchSubPage('employee')">👤 員工名冊</span>
     <span class="page-sub-tab active" onclick="switchSubPage('leave')">📋 請假統計</span>
     <span class="page-sub-tab" onclick="switchSubPage('attendance')">📊 出勤統計</span>
     <span class="page-sub-tab" onclick="switchSubPage('overtime')">⏱️ 加班統計</span>
@@ -1154,6 +1212,7 @@
     <span class="page-sub-tab" onclick="switchSubPage('prod')">📅 生產日報表P5.3</span>
     <span class="page-sub-tab" onclick="switchSubPage('p2')">📈 生產報工統計P2</span>
     <span class="page-sub-tab" onclick="switchSubPage('scrap')">📉 報廢統計</span>
+    <span class="page-sub-tab" onclick="switchSubPage('purchase')">🛒 採購登入表</span>
   </div>
 
   <div class="nav-group">
@@ -1163,17 +1222,53 @@
     </div>
     <span class="page-sub-tab" onclick="switchSubPage('jig')">📄 治檢具清單</span>
     <span class="page-sub-tab" onclick="switchSubPage('dcn')">📄 設計變更通知單</span>
+    <span class="page-sub-tab" onclick="switchSubPage('zume')">📄 ZUMEN 圖面</span>
   </div>
 
 </div>
 
 <div class="page-body">
 
+  <div id="sub-page-employee" class="sub-page-container" style="display:none">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+      <div class="card-header today-leave-header">👤 員工名冊</div>
+      <div class="filter-bar">
+        <input type="text" id="emp-f-kw" placeholder="搜尋工號/姓名…" oninput="renderEmployeeCurrent()" style="width:160px">
+        <label>組別</label>
+        <select id="emp-f-group" onchange="renderEmployeeCurrent()"><option value="">全部</option></select>
+        <label>國籍</label>
+        <select id="emp-f-nation" onchange="renderEmployeeCurrent()"><option value="">全部</option></select>
+        <div class="view-switch">
+          <button class="view-btn active" data-emp-view="table" onclick="switchEmployeeView('table')">📋 列表</button>
+          <button class="view-btn" data-emp-view="group" onclick="switchEmployeeView('group')">🗂️ 分組檢視</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:500;color:var(--muted);white-space:nowrap;margin-left:auto">
+          <input type="checkbox" id="emp-f-showall" onchange="renderEmployeeCurrent()" style="cursor:pointer"> 顯示離職/轉調人員
+        </label>
+        <span class="filter-count"><strong id="emp-f-count">0</strong> 筆</span>
+      </div>
+      <div class="table-wrap" id="emp-view-table">
+        <div id="emp-content"><div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div></div>
+      </div>
+      <div class="table-wrap" id="emp-view-group" style="display:none">
+        <div id="emp-group-content"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="sub-page-leave" class="sub-page-container">
-    <div class="card">
-      <div class="card-header today-leave-header">📅 今日請假人員</div>
-      <div id="today-summary"></div>
-      <div id="today-empty" style="display:none">今日無人請假</div>
+    <div style="display:flex;gap:1rem">
+      <div class="card" style="flex:1;min-width:0">
+        <div class="card-header today-leave-header">📅 今日請假人員</div>
+        <div id="today-summary"></div>
+        <div id="today-empty" style="display:none">今日無人請假</div>
+      </div>
+
+      <div class="card" style="flex:1;min-width:0">
+        <div class="card-header today-leave-header tomorrow-leave-header">📅 明日請假人員</div>
+        <div id="tomorrow-summary"></div>
+        <div id="tomorrow-empty" style="display:none">明日無人請假</div>
+      </div>
     </div>
 
     <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
@@ -1191,6 +1286,7 @@
           <button class="view-btn" data-view="calendar" onclick="switchView('calendar')">📅 日曆</button>
           <button class="view-btn" data-view="chart" onclick="switchView('chart')">📊 統計</button>
         </div>
+        <button id="leave-refresh-btn" class="jig-rebuild-btn" onclick="refreshLeaves()">⟳ 重新整理</button>
         <span class="filter-count"><strong id="f-count">0</strong> 筆</span>
       </div>
       <div id="person-summary" class="person-summary"></div>
@@ -1235,6 +1331,8 @@
     <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
       <div class="card-header today-leave-header">📊 出勤統計表（M9出勤表）</div>
       <div class="filter-bar">
+        <label>年份</label>
+        <select id="att-f-year" onchange="renderAttendanceCurrent()"><option value="">全部</option></select>
         <label>年月</label>
         <select id="att-f-ym" onchange="renderAttendanceCurrent()"><option value="">全部</option></select>
         <input type="text" id="att-f-keyword" placeholder="搜尋人員/備註…" oninput="renderAttendanceCurrent()" style="width:180px">
@@ -1293,6 +1391,7 @@
         <select id="jig-f-unit" onchange="renderJigTable()"><option value="">全部</option></select>
         <label>狀態</label>
         <select id="jig-f-status" onchange="renderJigTable()"><option value="">全部</option></select>
+        <input type="text" id="jig-f-kw" placeholder="搜尋名稱/品名/產品機型/備註…" oninput="renderJigTable()" style="width:200px">
         <button id="jig-rebuild-btn" class="jig-rebuild-btn" onclick="rebuildJigIndex()">⟳ 重新整理</button>
         <span id="jig-last-updated" class="jig-last-updated"></span>
         <span class="filter-count"><strong id="jig-f-count">0</strong> 筆</span>
@@ -1334,6 +1433,32 @@
     </div>
   </div>
 
+  <div id="sub-page-zume" class="sub-page-container" style="display:none">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+      <div class="card-header today-leave-header">📐 ZUMEN 圖面</div>
+
+      <div id="zume-view-list" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+        <div class="filter-bar">
+          <input type="text" id="zume-f-kw" placeholder="搜尋圖號/品名…" oninput="renderZumeTable()" style="width:200px">
+          <label>生產線別</label>
+          <select id="zume-f-line" onchange="renderZumeTable()"><option value="">全部</option></select>
+          <label>生產群組</label>
+          <select id="zume-f-group" onchange="renderZumeTable()"><option value="">全部</option></select>
+          <label>分類</label>
+          <select id="zume-f-cat" onchange="renderZumeTable()"><option value="">全部</option></select>
+          <label>廠商</label>
+          <select id="zume-f-vendor" onchange="renderZumeTable()"><option value="">全部</option></select>
+          <button id="zume-rescan-btn" class="jig-rebuild-btn" onclick="rescanZume()">⟳ 重新匯入</button>
+          <span id="zume-last-updated" class="jig-last-updated"></span>
+          <span class="filter-count"><strong id="zume-f-count">0</strong> 筆</span>
+        </div>
+        <div class="table-wrap">
+          <div id="zume-content"><div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="sub-page-scrap" class="sub-page-container" style="display:none">
     <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
       <div class="card-header today-leave-header">📉 報廢統計</div>
@@ -1355,8 +1480,10 @@
           <button class="view-btn active" data-sc-view="table" onclick="switchScrapView('table')">📋 明細</button>
           <button class="view-btn" data-sc-view="chart" onclick="switchScrapView('chart')">📊 月統計</button>
         </div>
+        <button id="sc-refresh-btn" class="jig-rebuild-btn" onclick="refreshScrapData()">⟳ 重新整理</button>
         <span class="filter-count"><strong id="sc-f-count">0</strong> 筆
           &nbsp;｜&nbsp;合計 <strong id="sc-f-amount">0</strong> 元</span>
+        <a href="javascript:void(0)" onclick="openSourceLink('https://docs.google.com/spreadsheets/d/1v8mKx0m7RyUSjzOeBJMy576hqvGKyerxyNQo4pfVw04/edit?gid=0#gid=0')" style="margin-left:.8rem;font-size:.8rem;color:var(--blue-d);text-decoration:underline;white-space:nowrap">🔗 資料來源</a>
       </div>
       <div class="table-wrap" id="sc-view-table">
         <div id="scrap-content">
@@ -1381,6 +1508,48 @@
     </div>
   </div>
 
+  <div id="sub-page-purchase" class="sub-page-container" style="display:none">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+      <div class="card-header today-leave-header">🛒 採購登入表</div>
+      <div class="filter-bar">
+        <label>區間</label>
+        <input type="date" id="pu-date-from" onchange="renderPurchaseCurrent()" style="width:130px">
+        <span style="color:var(--muted);font-size:.85rem;padding:0 2px">～</span>
+        <input type="date" id="pu-date-to" onchange="renderPurchaseCurrent()" style="width:130px">
+        <label>狀態</label>
+        <select id="pu-f-status" onchange="renderPurchaseCurrent()"><option value="">全部</option></select>
+        <label>會計科目</label>
+        <select id="pu-f-account" onchange="renderPurchaseCurrent()"><option value="">全部</option></select>
+        <label>供應商</label>
+        <input type="text" id="pu-f-vendor" list="pu-vendor-list" placeholder="輸入或選擇供應商…" oninput="renderPurchaseCurrent()" style="width:130px">
+        <datalist id="pu-vendor-list"></datalist>
+        <label>規格</label>
+        <select id="pu-f-spec" onchange="renderPurchaseCurrent()">
+          <option value="">全部</option>
+          <option value="詠設">詠設</option>
+          <option value="詠基" selected>詠基</option>
+        </select>
+        <input type="text" id="pu-f-kw" placeholder="搜尋品名/規格/備註（空格=AND，-前綴=排除）" oninput="renderPurchaseCurrent()" style="width:230px">
+        <div class="view-switch">
+          <button class="view-btn active" data-pu-view="table" onclick="switchPurchaseView('table')">📋 明細</button>
+          <button class="view-btn" data-pu-view="stats" onclick="switchPurchaseView('stats')">📊 統計</button>
+        </div>
+        <button id="pu-refresh-btn" class="jig-rebuild-btn" onclick="refreshPurchaseData()">⟳ 重新整理</button>
+        <span class="filter-count"><strong id="pu-f-count">0</strong> 筆
+          &nbsp;｜&nbsp;小計合計 <strong id="pu-f-amount">0</strong> 元</span>
+        <a href="javascript:void(0)" onclick="openSourceLink('https://docs.google.com/spreadsheets/d/1HVSiu4GdO8R8ABkjM5oObLr-e7ZEkTwY5em9Vf9QoDA/edit?gid=0#gid=0')" style="margin-left:.8rem;font-size:.8rem;color:var(--blue-d);text-decoration:underline;white-space:nowrap">🔗 資料來源</a>
+      </div>
+      <div class="table-wrap" id="pu-view-table">
+        <div id="purchase-content">
+          <div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>
+        </div>
+      </div>
+      <div class="table-wrap" id="pu-view-stats" style="display:none">
+        <div id="purchase-stats"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ══ 生產日報表 ══ -->
   <div id="sub-page-prod" class="sub-page-container" style="display:none">
     <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
@@ -1391,15 +1560,24 @@
         <span style="color:var(--muted);font-size:.85rem;padding:0 2px">～</span>
         <input type="date" id="pr-date-to" onchange="renderProdCurrent()" style="width:130px">
         <input type="text" id="pr-f-operator" placeholder="生產人員…" oninput="renderProdCurrent()" style="width:100px">
+        <select id="pr-f-cat" onchange="renderProdCurrent()" style="background:#fff;border:1px solid #d0d5dd;border-radius:6px;padding:.25rem .5rem;font-size:.88rem">
+          <option value="">全部分類</option>
+          <option value="A">A.CNC</option>
+          <option value="B">B.鑽床</option>
+          <option value="C">C.沖床</option>
+          <option value="L">L.車床</option>
+        </select>
         <input type="text" id="pr-f-search" placeholder="搜尋品號/品名/機台…" oninput="renderProdCurrent()" style="width:180px">
         <div class="view-switch">
           <button class="view-btn active" data-pr-view="table" onclick="switchProdView('table')">📋 明細</button>
           <button class="view-btn" data-pr-view="chart" onclick="switchProdView('chart')">📊 績效統計</button>
         </div>
+        <button id="pr-refresh-btn" class="jig-rebuild-btn" onclick="refreshProdData()">⟳ 重新整理</button>
         <span class="filter-count">
           <strong id="pr-f-count">0</strong> 筆
           &nbsp;｜&nbsp;生產數合計 <strong id="pr-f-qty">0</strong>
         </span>
+        <a href="javascript:void(0)" onclick="openSourceLink('https://docs.google.com/spreadsheets/d/1U_fY-DuNyTPa54PrSy2q9c_JGWqHa48R1fUmA6XBzU4/edit?gid=1434035703#gid=1434035703')" style="margin-left:.8rem;font-size:.8rem;color:var(--blue-d);text-decoration:underline;white-space:nowrap">🔗 資料來源</a>
       </div>
       <div class="table-wrap" id="pr-view-table">
         <div id="prod-content">
@@ -1466,10 +1644,12 @@
           <button class="view-btn" data-p2-view="chart" onclick="switchP2View('chart')">📊 績效統計</button>
           <button class="view-btn" data-p2-view="targets" onclick="switchP2View('targets')">🎯 管理指標</button>
         </div>
+        <button id="p2-refresh-btn" class="jig-rebuild-btn" onclick="refreshP2Data()">⟳ 重新整理</button>
         <span class="filter-count">
           <strong id="p2-f-count">0</strong> 筆
           &nbsp;｜&nbsp;出站數量合計 <strong id="p2-f-qty">0</strong>
         </span>
+        <a href="javascript:void(0)" onclick="openSourceLink('https://docs.google.com/spreadsheets/d/1_B0O5RRkrYCR-vzF02B5yVRlwxe3xeQk_k7yzt7qJ5s/edit?gid=1288146346#gid=1288146346')" style="margin-left:.8rem;font-size:.8rem;color:var(--blue-d);text-decoration:underline;white-space:nowrap">🔗 資料來源</a>
       </div>
       <!-- 明細表 -->
       <div class="table-wrap" id="p2-view-table">
@@ -1750,24 +1930,30 @@ function todayKey() {
   return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
 }
 
+function tomorrowKey() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+}
+
 const LEAVE_EMOJI = {
   '特休': '🏖️', '事假': '📋', '病假': '🏥', '公假': '📜',
   '公傷假': '🚑', '喪假': '🕯️', '婚假': '💍', '產假': '👶',
   '陪產假': '👶', '生理假': '🩹', '安胎假': '🤰'
 };
 
-function renderTodaySummary() {
-  const today = todayKey();
-  const todays = _leaves.filter(l => l._dateKey === today);
-  const summaryEl = document.getElementById('today-summary');
-  const emptyEl = document.getElementById('today-empty');
-  if (!todays.length) {
+function renderDaySummary(dateKey, summaryElId, emptyElId, emptyText) {
+  const matches = _leaves.filter(l => l._dateKey === dateKey);
+  const summaryEl = document.getElementById(summaryElId);
+  const emptyEl = document.getElementById(emptyElId);
+  if (!matches.length) {
     summaryEl.innerHTML = '';
     emptyEl.style.display = 'block';
+    emptyEl.textContent = emptyText;
     return;
   }
   emptyEl.style.display = 'none';
-  summaryEl.innerHTML = todays.map(l => {
+  summaryEl.innerHTML = matches.map(l => {
     const type = l.type || '請假';
     const emoji = LEAVE_EMOJI[l.type] || '📌';
     return `
@@ -1779,6 +1965,11 @@ function renderTodaySummary() {
       <div class="lc-time">⏰ ${esc(l.start)}–${esc(l.end)}</div>
     </div>`;
   }).join('');
+}
+
+function renderTodaySummary() {
+  renderDaySummary(todayKey(), 'today-summary', 'today-empty', '今日無人請假');
+  renderDaySummary(tomorrowKey(), 'tomorrow-summary', 'tomorrow-empty', '明日無人請假');
 }
 
 function populateTypeFilter() {
@@ -2079,27 +2270,224 @@ function closeJigRemarks() {
 }
 
 function switchSubPage(page) {
-  const pages = ['leave','attendance','application','overtime','jig','dcn','scrap','prod','p2'];
+  const pages = ['employee','leave','attendance','application','overtime','jig','dcn','zume','scrap','purchase','prod','p2'];
   pages.forEach(p => {
     const el = document.getElementById('sub-page-' + p);
     if (el) el.style.display = 'none';
   });
-  document.querySelectorAll('.page-sub-tab').forEach(t => t.classList.remove('active'));
+  // 依各 tab 自己的 onclick 對應 page 設定 active（不依 DOM 順序，避免分組後錯位）
+  document.querySelectorAll('.page-sub-tab').forEach(t => {
+    t.classList.toggle('active', (t.getAttribute('onclick') || '').includes(`switchSubPage('${page}')`));
+  });
 
-  const idx = pages.indexOf(page);
-  if (idx >= 0) {
+  if (pages.indexOf(page) >= 0) {
     const el = document.getElementById('sub-page-' + page);
     if (el) el.style.display = '';
-    const tabs = document.querySelectorAll('.page-sub-tab');
-    if (tabs[idx]) tabs[idx].classList.add('active');
   }
-  if (page === 'attendance') loadAttendanceData();
+  if (page === 'employee') loadEmployeeData();
+  else if (page === 'attendance') loadAttendanceData();
   else if (page === 'overtime')  loadOvertimeData();
   else if (page === 'jig')  loadJigData();
   else if (page === 'dcn')  loadDcnData();
+  else if (page === 'zume') loadZumeData();
   else if (page === 'scrap') loadScrapData();
+  else if (page === 'purchase') loadPurchaseData();
   else if (page === 'prod')  loadProdData();
   else if (page === 'p2')   loadP2Data();
+}
+
+// ── 員工名冊 ──────────────────────────────────────────────────────
+let _empData = [], _empLoaded = false, _empView = 'table';
+let _empSort = { col: 'emp_id', dir: 1 };
+const EMP_GROUP_COLORS = { A:'#3B82F6', B:'#22C55E', C:'#F59E0B', L:'#A855F7', M:'#64748B' };
+const EMP_GROUP_ORDER  = { A:1, B:2, C:3, L:4, M:5 };
+
+function empFmtDate(v) {
+  const m = (v || '').trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (!m) return v || '';
+  return `${m[1]}/${m[2].padStart(2,'0')}/${m[3].padStart(2,'0')}`;
+}
+
+function empStatusClass(status) {
+  const s = status || '';
+  if (/^1\./.test(s)) return 'emp-status-active';
+  if (/^4\./.test(s)) return 'emp-status-transfer';
+  return 'emp-status-leave';
+}
+
+function empSortVal(v) {
+  // 「N.標籤」格式（職務/狀態）→ 取數字前綴排序，避免 10/11/12 排到 2~9 前面
+  const m = /^(\d+)\./.exec(v || '');
+  if (m) return parseInt(m[1], 10);
+  // 日期格式 YYYY/M/D 或 YYYY-M-D → 轉成可比較的數字，避免未補零造成排序錯亂
+  const d = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/.exec(v || '');
+  if (d) return parseInt(d[1],10)*10000 + parseInt(d[2],10)*100 + parseInt(d[3],10);
+  return null;
+}
+
+function empSortBy(col) {
+  if (_empSort.col === col) {
+    _empSort.dir *= -1;
+  } else {
+    _empSort.col = col;
+    _empSort.dir = 1;
+  }
+  renderEmployeeTable();
+}
+
+function switchEmployeeView(view) {
+  _empView = view;
+  document.querySelectorAll('[data-emp-view]').forEach(b => b.classList.toggle('active', b.dataset.empView === view));
+  document.getElementById('emp-view-table').style.display = view === 'table' ? '' : 'none';
+  document.getElementById('emp-view-group').style.display = view === 'group' ? '' : 'none';
+  renderEmployeeCurrent();
+}
+
+function renderEmployeeCurrent() {
+  if (_empView === 'group') renderEmployeeGroupView();
+  else renderEmployeeTable();
+}
+
+function getFilteredEmployees() {
+  const kw      = (document.getElementById('emp-f-kw').value || '').trim().toLowerCase();
+  const fGroup  = document.getElementById('emp-f-group').value;
+  const fNation = document.getElementById('emp-f-nation').value;
+  const showAll = document.getElementById('emp-f-showall').checked;
+  return _empData.filter(e => {
+    if (!showAll && !/^1\./.test(e.status)) return false;
+    if (fGroup  && e.group       !== fGroup)  return false;
+    if (fNation && e.nationality !== fNation) return false;
+    if (kw && !`${e.emp_id} ${e.name}`.toLowerCase().includes(kw)) return false;
+    return true;
+  });
+}
+
+async function loadEmployeeData() {
+  if (_empLoaded) { renderEmployeeCurrent(); return; }
+  document.getElementById('emp-content').innerHTML =
+    '<div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>';
+  try {
+    const res  = await fetch('/api/employee/list');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    _empData   = data.employees || [];
+    _empLoaded = true;
+    fillEmployeeFilters();
+    renderEmployeeCurrent();
+  } catch (e) {
+    document.getElementById('emp-content').innerHTML = `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+
+function fillEmployeeFilters() {
+  const groups = [...new Set(_empData.map(e => e.group).filter(Boolean))].sort();
+  const nations = [...new Set(_empData.map(e => e.nationality).filter(Boolean))].sort();
+  document.getElementById('emp-f-group').innerHTML =
+    '<option value="">全部</option>' + groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
+  document.getElementById('emp-f-nation').innerHTML =
+    '<option value="">全部</option>' + nations.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+}
+
+function renderEmployeeTable() {
+  const rows = getFilteredEmployees();
+  // 排序
+  const col = _empSort.col, dir = _empSort.dir;
+  rows.sort((a, b) => {
+    const av = (a[col] || ''), bv = (b[col] || '');
+    const an = empSortVal(av), bn = empSortVal(bv);
+    if (an !== null && bn !== null) return (an - bn) * dir;
+    return av < bv ? -dir : av > bv ? dir : 0;
+  });
+
+  document.getElementById('emp-f-count').textContent = rows.length;
+  const content = document.getElementById('emp-content');
+  if (!rows.length) {
+    content.innerHTML = '<div class="msg-empty"><span>查無符合條件的人員</span></div>';
+    return;
+  }
+
+  function thSort(c, label, width) {
+    const active = _empSort.col === c;
+    const arrow  = active ? (_empSort.dir === 1 ? ' ↑' : ' ↓') : '';
+    return `<th style="${width?'width:'+width+';':''}${active?'text-decoration:underline;':''}" onclick="empSortBy('${c}')">${label}${arrow}</th>`;
+  }
+
+  const trs = rows.map(e => {
+    const letter   = (e.group || '').split('.')[0];
+    const gcol     = EMP_GROUP_COLORS[letter] || '#9CA3AF';
+    const isActive = /^1\./.test(e.status);
+    // 在職中員工的「離職日」欄位在來源試算表常殘留無意義的舊值，在職中時不顯示
+    const leaveTxt = isActive ? '' : empFmtDate(e.leave_date);
+    return `<tr>
+      <td class="td-code">${esc(e.emp_id)}</td>
+      <td style="font-weight:600">${esc(e.name)}</td>
+      <td class="td-center">${e.group ? `<span style="display:inline-block;width:88px;padding:.1rem 0;text-align:center;border-radius:10px;font-size:.78rem;font-weight:700;color:#fff;background:${gcol}">${esc(e.group)}</span>` : ''}</td>
+      <td>${esc(e.title)}</td>
+      <td class="td-center">${esc(e.nationality)}</td>
+      <td class="td-center"><span class="emp-status ${empStatusClass(e.status)}">${esc(e.status)}</span></td>
+      <td class="td-center">${esc(empFmtDate(e.hire_date))}</td>
+      <td class="td-center">${esc(leaveTxt)}</td>
+      <td style="color:var(--muted);font-size:.85rem">${esc(e.remark)}</td>
+    </tr>`;
+  }).join('');
+  content.innerHTML = `<table class="pro-table">
+    <thead><tr>
+      ${thSort('emp_id','工號','90px')}${thSort('name','姓名','90px')}${thSort('group','組別','110px')}
+      ${thSort('title','職務','90px')}${thSort('nationality','國籍','70px')}${thSort('status','狀態','90px')}
+      ${thSort('hire_date','到職日','100px')}${thSort('leave_date','離職日','100px')}<th>備註</th>
+    </tr></thead>
+    <tbody>${trs}</tbody>
+  </table>`;
+}
+
+function renderEmployeeGroupView() {
+  const rows = getFilteredEmployees();
+  document.getElementById('emp-f-count').textContent = rows.length;
+  const content = document.getElementById('emp-group-content');
+  if (!rows.length) {
+    content.innerHTML = '<div class="msg-empty"><span>查無符合條件的人員</span></div>';
+    return;
+  }
+
+  // 依組別分組，組內依姓名排序
+  const byGroup = {};
+  rows.forEach(e => { (byGroup[e.group || '(未分類)'] = byGroup[e.group || '(未分類)'] || []).push(e); });
+  const groupNames = Object.keys(byGroup).sort((a, b) => {
+    const pa = EMP_GROUP_ORDER[a.split('.')[0]] || 9, pb = EMP_GROUP_ORDER[b.split('.')[0]] || 9;
+    return pa !== pb ? pa - pb : a.localeCompare(b);
+  });
+
+  const bodyHtml = groupNames.map(gname => {
+    const list = [...byGroup[gname]].sort((a, b) => a.name.localeCompare(b.name));
+    const letter = gname.split('.')[0];
+    const gcol = EMP_GROUP_COLORS[letter] || '#9CA3AF';
+    const headerRow = `<tr class="emp-group-row"><td colspan="7">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${gcol};margin-right:6px;vertical-align:middle"></span>
+      ${esc(gname)}<span class="emp-group-count">${list.length}</span>
+    </td></tr>`;
+    const rowsHtml = list.map(e => {
+      const elLetter = (e.group || '').split('.')[0];
+      const ecol = EMP_GROUP_COLORS[elLetter] || '#9CA3AF';
+      return `<tr>
+        <td class="td-code">${esc(e.emp_id)}</td>
+        <td style="font-weight:600">${esc(e.name)}</td>
+        <td class="td-center">${e.group ? `<span style="display:inline-block;width:88px;padding:.1rem 0;text-align:center;border-radius:10px;font-size:.78rem;font-weight:700;color:#fff;background:${ecol}">${esc(e.group)}</span>` : ''}</td>
+        <td>${esc(e.title)}</td>
+        <td class="td-center">${esc(e.nationality)}</td>
+        <td class="td-center"><span class="emp-status ${empStatusClass(e.status)}">${esc(e.status)}</span></td>
+        <td style="color:var(--muted);font-size:.85rem">${esc(e.remark)}</td>
+      </tr>`;
+    }).join('');
+    return headerRow + rowsHtml;
+  }).join('');
+
+  content.innerHTML = `<table class="pro-table">
+    <thead><tr>
+      <th style="width:90px">工號</th><th style="width:90px">姓名</th><th style="width:110px">組別</th>
+      <th style="width:90px">職務</th><th style="width:70px">國籍</th><th style="width:90px">狀態</th><th>備註</th>
+    </tr></thead>
+    <tbody>${bodyHtml}</tbody>
+  </table>`;
 }
 
 // ── 出勤統計 ──────────────────────────────────────────────────────
@@ -2108,6 +2496,8 @@ let _attRows = [], _attHeaders = [], _attLoaded = false;
 async function loadAttendanceData() {
   if (_attLoaded) { renderAttendanceCurrent(); return; }
   document.getElementById('att-content').innerHTML = '<div class="msg-empty">載入中…</div>';
+  // 月統計需要加班時數 → 先確保加班資料已載入
+  if (!_overtimesLoaded) { try { await loadOvertimeData(); } catch(e) {} }
   try {
     const res  = await fetch('/api/attendance/list');
     const data = await res.json();
@@ -2127,6 +2517,11 @@ async function loadAttendanceData() {
       const sel = document.getElementById('att-f-ym');
       sel.innerHTML = '<option value="">全部</option>' +
         yms.map(ym => `<option value="${ym}">${ym}</option>`).join('');
+      // 年份選單（由年月推導）
+      const years = [...new Set(yms.map(ym => ym.substring(0, 4)))].sort().reverse();
+      const ySel = document.getElementById('att-f-year');
+      ySel.innerHTML = '<option value="">全部</option>' +
+        years.map(y => `<option value="${y}">${y}</option>`).join('');
     }
 
     renderAttendanceCurrent();
@@ -2151,14 +2546,16 @@ function renderAttendanceCurrent() {
 
 // 取得目前篩選後的資料（依日期由新到舊）
 function _attFiltered() {
-  const ymFilter = (document.getElementById('att-f-ym')?.value || '').trim();
-  const kw       = (document.getElementById('att-f-keyword')?.value || '').trim().toLowerCase();
-  const dateKey  = _attHeaders.find(h => /日期|月份|年月|date/i.test(h)) || '';
+  const yearFilter = (document.getElementById('att-f-year')?.value || '').trim();
+  const ymFilter   = (document.getElementById('att-f-ym')?.value || '').trim();
+  const kw         = (document.getElementById('att-f-keyword')?.value || '').trim().toLowerCase();
+  const dateKey    = _attHeaders.find(h => /日期|月份|年月|date/i.test(h)) || '';
 
   let rows = _attRows.filter(r => {
-    if (ymFilter && dateKey) {
-      const v = (r[dateKey] || '').trim();
-      if (!v.startsWith(ymFilter)) return false;
+    if (dateKey) {
+      const v = (r[dateKey] || '').trim().replace(/\//g, '-');
+      if (yearFilter && !v.startsWith(yearFilter)) return false;
+      if (ymFilter   && !v.startsWith(ymFilter))   return false;
     }
     if (kw) return Object.values(r).some(v => String(v).toLowerCase().includes(kw));
     return true;
@@ -2256,7 +2653,17 @@ function renderAttendanceMonthly() {
   const monthsAsc = [...months].reverse();                   // 舊→新（圖表）
   const aggLabel  = h => /人數/.test(h) ? `${h}（平均）` : `${h}（合計）`;
 
-  // 彙總每月數值（圖表用，舊→新）
+  // ── 每月加班總時數（來自加班統計）+ 出勤人數欄（取1位小數平均，與表格一致） ──
+  const otByMonth = {};
+  _overtimes.forEach(o => { if (o._monthKey) otByMonth[o._monthKey] = (otByMonth[o._monthKey] || 0) + o._hoursNum; });
+  const cntCol = numCols.find(h => /人數/.test(h));
+  const _avgCnt = g => {
+    if (!cntCol) return 0;
+    const cv = g.map(r => Number(String(r[cntCol] ?? '').replace(/,/g,''))).filter(v => !isNaN(v));
+    return cv.length ? Math.round((cv.reduce((a,b)=>a+b,0)/cv.length) * 10) / 10 : 0;
+  };
+
+  // 彙總每月數值（圖表用，舊→新）含「加班時數」「出勤總時數」
   const monthData = monthsAsc.map(key => {
     const g = groups[key];
     const agg = {};
@@ -2266,14 +2673,16 @@ function renderAttendanceMonthly() {
         ? (/人數/.test(h) ? vals.reduce((a,b)=>a+b,0)/vals.length : vals.reduce((a,b)=>a+b,0))
         : null;
     });
-    return { key, days: g.length, ...agg };
+    const ot = otByMonth[key] || 0;
+    return { key, days: g.length, ...agg, '加班時數': ot, '出勤總時數': _avgCnt(g) * g.length * 8 + ot };
   });
 
   // ── 表格 ──
-  const colGroup = `<colgroup><col style="width:110px"><col style="width:72px">${numCols.map(()=>'<col style="width:120px">').join('')}</colgroup>`;
-  const thead = `<th style="text-align:center">月份</th><th style="text-align:center">天數</th>${numCols.map(h=>`<th style="text-align:center">${esc(aggLabel(h))}</th>`).join('')}`;
+  const colGroup = `<colgroup><col style="width:110px"><col style="width:72px">${numCols.map(()=>'<col style="width:120px">').join('')}<col style="width:120px"><col style="width:130px"></colgroup>`;
+  const thead = `<th style="text-align:center">月份</th><th style="text-align:center">天數</th>${numCols.map(h=>`<th style="text-align:center">${esc(aggLabel(h))}</th>`).join('')}<th style="text-align:center">加班時數（合計）</th><th style="text-align:center">出勤總時數</th>`;
   const tbody = months.map(key => {
     const g = groups[key];
+    const days = g.length;
     const cells = numCols.map(h => {
       const vals = g.map(r => Number(String(r[h] ?? '').replace(/,/g,''))).filter(v => !isNaN(v));
       if (!vals.length) return `<td style="text-align:center;color:#CBD5E1">—</td>`;
@@ -2283,7 +2692,12 @@ function renderAttendanceMonthly() {
         : sum.toLocaleString('zh-TW');
       return `<td style="text-align:center;font-weight:600">${out}</td>`;
     }).join('');
-    return `<tr><td style="text-align:center;font-weight:700;color:var(--blue-d)">${esc(key)}</td><td style="text-align:center">${g.length}</td>${cells}</tr>`;
+    const otHours    = otByMonth[key] || 0;
+    const totalHours = _avgCnt(g) * days * 8 + otHours;   // 出勤總時數 =（出勤人數平均 × 天數 × 8小時）+ 加班時數合計
+    const fmt1 = v => v.toLocaleString('zh-TW', {maximumFractionDigits:1});
+    const otCell  = `<td style="text-align:center;font-weight:600;color:#E08A2B">${otHours ? fmt1(otHours) : '—'}</td>`;
+    const totCell = `<td style="text-align:center;font-weight:700;color:var(--blue-d)">${Math.round(totalHours).toLocaleString('zh-TW')}</td>`;
+    return `<tr><td style="text-align:center;font-weight:700;color:var(--blue-d)">${esc(key)}</td><td style="text-align:center">${days}</td>${cells}${otCell}${totCell}</tr>`;
   }).join('');
 
   const tableHtml = `<div style="flex-shrink:0">
@@ -2291,25 +2705,30 @@ function renderAttendanceMonthly() {
       ${colGroup}<thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody>
     </table></div>`;
 
-  // ── SVG 圖表（P2 馬卡龍配色，帶標題 card） ──
-  // 每個數值欄對應一個顏色（與 P2 macaron 一致）
+  // ── SVG 圖表（只顯示單一年份；P2 馬卡龍配色） ──
   const ATT_COLORS_LT = ['#7EB6F5','#F9C784','#7FD4A8','#C3A6E8','#B0B7C3'];
   const ATT_COLORS_DK = ['#3B82C9','#E08A2B','#3C9D6E','#9560C9','#8A93A1'];
 
-  const n = monthData.length;
-  const W=360, H=118, ML=40, MR=8, MT=14, MB=20;
+  // 圖表只取單一年份：有選年份就用選的，否則用資料中最新的年份
+  const selYear   = (document.getElementById('att-f-year')?.value || '').trim();
+  const allYears  = [...new Set(monthData.map(m => m.key.substring(0,4)))].sort();
+  const chartYear = selYear || (allYears.length ? allYears[allYears.length-1] : '');
+  const chartData = chartYear ? monthData.filter(m => m.key.startsWith(chartYear)) : monthData;
+
+  const n = chartData.length;
+  // ML 留夠空間避免最左側數值標籤被切到；MT/MR 加大避免最高長條/最右側標籤被切到
+  const W=560, H=192, ML=32, MR=34, MT=30, MB=24;
   const cW=W-ML-MR, cH=H-MT-MB;
   const xOf = i => ML + (n > 1 ? i*cW/(n-1) : cW/2);
-  const mLbl = i => monthData[i].key.replace(/^\d{4}-/,'') + '月';
+  const mLbl = i => chartData[i].key.replace(/^\d{4}-/,'') + '月';
 
-  const mkChart = (h, ci) => {
+  const mkChart = (h, ci, label) => {
     const isAvg  = /人數/.test(h);
     const clrLt  = ATT_COLORS_LT[ci % ATT_COLORS_LT.length];
     const clrDk  = ATT_COLORS_DK[ci % ATT_COLORS_DK.length];
-    const max    = Math.max(...monthData.map(m => m[h] ?? 0), 1);
+    const max    = Math.max(...chartData.map(m => m[h] ?? 0), 1);
     const yOf    = v => MT + cH - (v/max)*cH;
-    const fmtLbl = v => isAvg ? v.toFixed(1) : v.toLocaleString('zh-TW');
-    const fmtY   = v => isAvg ? v.toFixed(1) : Math.round(v).toLocaleString('zh-TW');
+    const fmtLbl = v => isAvg ? v.toFixed(1) : Math.round(v).toLocaleString('zh-TW');
     const FF     = 'Noto Sans TC,sans-serif';
 
     let s = `<svg width="100%" viewBox="0 0 ${W} ${H}" style="display:block">`;
@@ -2317,48 +2736,49 @@ function renderAttendanceMonthly() {
     [0.25,0.5,0.75,1].forEach(p => {
       const y = MT+cH*(1-p);
       s += `<line x1="${ML}" y1="${y}" x2="${W-MR}" y2="${y}" stroke="#E8EDF2" stroke-width="1"/>`;
-      s += `<text x="${ML-4}" y="${y+3.5}" text-anchor="end" font-size="9" fill="#94a3b8" font-family="${FF}">${fmtY(max*p)}</text>`;
     });
     // baseline
     s += `<line x1="${ML}" y1="${MT+cH}" x2="${W-MR}" y2="${MT+cH}" stroke="#CBD5E1" stroke-width="1.5"/>`;
 
     if (isAvg) {
       // 折線圖（P2 mkLineSVG 風格）
-      const pts = monthData.map((m,i) => m[h]!=null ? [xOf(i), yOf(m[h])] : null);
+      const pts = chartData.map((m,i) => m[h]!=null ? [xOf(i), yOf(m[h])] : null);
       const valid = pts.filter(Boolean);
       if (valid.length > 1)
         s += `<polyline points="${valid.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${clrDk}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
       pts.forEach((pt,i) => {
         if (!pt) return;
-        s += `<circle cx="${pt[0]}" cy="${pt[1]}" r="4" fill="${clrDk}" stroke="white" stroke-width="1.5"/>`;
-        s += `<text x="${pt[0]}" y="${pt[1]-8}" text-anchor="middle" font-size="10" font-weight="600" fill="${clrDk}" font-family="${FF}">${fmtLbl(monthData[i][h])}</text>`;
+        s += `<circle cx="${pt[0]}" cy="${pt[1]}" r="4.5" fill="${clrDk}" stroke="white" stroke-width="1.5"/>`;
+        s += `<text x="${pt[0]}" y="${pt[1]-9}" text-anchor="middle" font-size="12" font-weight="700" fill="${clrDk}" font-family="${FF}">${fmtLbl(chartData[i][h])}</text>`;
       });
     } else {
       // 直條圖（P2 scVbar 風格，馬卡龍漸層）
-      const bw = Math.max(Math.min(cW/n*0.52, 36), 6);
-      monthData.forEach((m,i) => {
+      const bw = Math.max(Math.min(cW/n*0.52, 50), 6);
+      chartData.forEach((m,i) => {
         if (m[h] == null) return;
         const bh = Math.max(m[h]/max*cH, 2);
         const bx = xOf(i)-bw/2, by = MT+cH-bh;
         s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="${clrLt}" rx="2"/>`;
-        if (m[h] > 0) s += `<text x="${xOf(i)}" y="${by-5}" text-anchor="middle" font-size="10" font-weight="600" fill="${clrDk}" font-family="${FF}">${fmtLbl(m[h])}</text>`;
+        if (m[h] > 0) s += `<text x="${xOf(i)}" y="${by-6}" text-anchor="middle" font-size="12" font-weight="700" fill="${clrDk}" font-family="${FF}">${fmtLbl(m[h])}</text>`;
       });
     }
     // X 月份標籤
-    monthData.forEach((_,i) => {
+    chartData.forEach((_,i) => {
       if (n > 14 && i%2 !== 0) return;
-      s += `<text x="${xOf(i)}" y="${H-3}" text-anchor="middle" font-size="10" font-weight="500" fill="#64748b" font-family="${FF}">${esc(mLbl(i))}</text>`;
+      s += `<text x="${xOf(i)}" y="${H-4}" text-anchor="middle" font-size="12" font-weight="500" fill="#64748b" font-family="${FF}">${esc(mLbl(i))}</text>`;
     });
     s += '</svg>';
 
     // P2 風格 card：深色漸層標題列 + 白色圖表區
-    return `<div style="background:#fff;border:1px solid #D1D9E6;border-radius:8px;overflow:hidden;box-shadow:0 1px 5px rgba(0,0,0,.07);min-width:280px">
-      <div style="background:linear-gradient(90deg,${clrDk},${clrDk}cc);color:#fff;padding:5px 12px;font-size:.83rem;font-weight:700;letter-spacing:.03em">${esc(aggLabel(h))}</div>
-      <div style="padding:8px 4px 2px">${s}</div>
+    return `<div style="background:#fff;border:1px solid #D1D9E6;border-radius:8px;overflow:hidden;box-shadow:0 1px 5px rgba(0,0,0,.07)">
+      <div style="background:linear-gradient(90deg,${clrDk},${clrDk}cc);color:#fff;padding:6px 14px;font-size:.9rem;font-weight:700;letter-spacing:.03em">${esc(label || aggLabel(h))}</div>
+      <div style="padding:10px 6px 4px">${s}</div>
     </div>`;
   };
 
-  const chartsHtml = `<div style="flex:1;display:flex;flex-direction:column;gap:10px;min-width:0">${numCols.map((h,i)=>mkChart(h,i)).join('')}</div>`;
+  const chartItems = numCols.map((h,i) => mkChart(h,i));
+  chartItems.push(mkChart('出勤總時數', numCols.length, '出勤總時數（小時）'));
+  const chartsHtml = `<div style="flex:1;min-width:460px;max-width:720px;display:flex;flex-direction:column;gap:12px">${chartItems.join('')}</div>`;
 
   document.getElementById('att-content').innerHTML =
     `<div style="display:flex;gap:16px;align-items:flex-start;padding:10px 12px;overflow:auto">${tableHtml}${chartsHtml}</div>`;
@@ -2466,14 +2886,15 @@ function renderOtChart() {
     }
   });
 
-  const monthEntries = Object.entries(monthTotals).sort((a, b) => a[0].localeCompare(b[0]));
+  // 維度最多 1 年：只取最近 12 個月
+  const monthEntries = Object.entries(monthTotals).sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
   const maxMonth = Math.max(...monthEntries.map(e => e[1]), 1);
   document.getElementById('ot-chart-month').innerHTML = monthEntries.map(([m, v]) => {
     const [y, mm] = m.split('-');
     return `
     <div class="bar-row">
       <div class="bar-label">${y}年${mm}月</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${v / maxMonth * 100}%;background:#1976D2"></div></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${v / maxMonth * 100}%"></div></div>
       <div class="bar-value">${v.toFixed(1)}</div>
     </div>`;
   }).join('');
@@ -2483,7 +2904,7 @@ function renderOtChart() {
   document.getElementById('ot-chart-emp').innerHTML = empEntries.map(([e, v]) => `
     <div class="bar-row">
       <div class="bar-label">${esc(empNames[e] || e)}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${v / maxEmp * 100}%;background:#2FA876"></div></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${v / maxEmp * 100}%"></div></div>
       <div class="bar-value">${v.toFixed(1)}</div>
     </div>`).join('');
 
@@ -2549,25 +2970,40 @@ if (new URLSearchParams(window.location.search).get('tab') === 'overtime') {
 
 async function loadLeaves() {
   calInit();
-  const cached = sessionStorage.getItem(LEAVE_CACHE_KEY);
+  const cached = localStorage.getItem(LEAVE_CACHE_KEY);
   if (cached) {
-    try { applyLeaves(JSON.parse(cached)); } catch (e) { /* 快取損毀，忽略 */ }
-  } else {
-    document.getElementById('leave-content').innerHTML =
-      '<div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>';
+    try { applyLeaves(JSON.parse(cached)); return; } catch (e) { /* 快取損毀，忽略 */ }
   }
-
+  document.getElementById('leave-content').innerHTML =
+    '<div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>';
   try {
     const res = await fetch('/api/leave/list');
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
-    sessionStorage.setItem(LEAVE_CACHE_KEY, JSON.stringify(data.leaves));
+    localStorage.setItem(LEAVE_CACHE_KEY, JSON.stringify(data.leaves));
     applyLeaves(data.leaves);
   } catch (e) {
-    if (!cached) {
-      document.getElementById('leave-content').innerHTML =
-        `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
-    }
+    document.getElementById('leave-content').innerHTML =
+      `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+
+async function refreshLeaves() {
+  const btn = document.getElementById('leave-refresh-btn');
+  btn.disabled = true; btn.textContent = '⟳ 整理中…';
+  try {
+    localStorage.removeItem(LEAVE_CACHE_KEY);
+    const res = await fetch('/api/leave/list?refresh=1');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    localStorage.setItem(LEAVE_CACHE_KEY, JSON.stringify(data.leaves));
+    applyLeaves(data.leaves);
+    btn.textContent = '✓ 已更新';
+  } catch (e) {
+    showToast('重新整理失敗：' + e.message);
+    btn.textContent = '⟳ 重新整理';
+  } finally {
+    setTimeout(() => { btn.textContent = '⟳ 重新整理'; btn.disabled = false; }, 2000);
   }
 }
 
@@ -3206,7 +3642,8 @@ let _jigLoaded = false;
 let _scraps = [];
 let _scrapsLoaded = false;
 const SCRAP_CACHE_KEY = 'pds_scrap_cache_v1';
-const CAT_COLOR = { A:'#1565C0', B:'#2E7D32', C:'#E65100', L:'#6A1B9A' };
+// 分類配色標準（A/B/C/L/未分類），全站所有「分類」相關圖表一律套用此配色（見 CLAUDE.md）
+const CAT_COLOR = { A:'#3B82F6', B:'#22C55E', C:'#F59E0B', L:'#A855F7', other:'#6B7280' };
 const CAT_NAME  = { A:'CNC', B:'鑽床', C:'沖床', L:'車床' };
 
 function scrapParseDateKey(s) {
@@ -3244,6 +3681,11 @@ function getFilteredScraps() {
   });
 }
 
+function scFilterByCat(cat) {
+  document.getElementById('sc-f-cat').value = cat;
+  renderScrapCurrent();
+}
+
 function renderScrapTable() {
   let rows = getFilteredScraps();
   if (_scrapSort && _scrapSort.col === 'amount') {
@@ -3265,7 +3707,7 @@ function renderScrapTable() {
     <tr>
       <td class="td-center pr-date" style="width:92px">${esc(s.date)}</td>
       <td class="td-center pr-cat" style="width:90px">
-        ${catLbl ? `<span class="cat-badge cat-${s.category}">${esc(catLbl)}</span>` : ''}
+        ${catLbl ? `<span class="cat-badge cat-${s.category}" onclick="scFilterByCat('${s.category}')" ondblclick="scFilterByCat('')" title="單擊篩選／雙擊清除" style="cursor:pointer">${esc(catLbl)}</span>` : ''}
       </td>
       <td class="td-code" style="width:188px">${esc(s.part_no)}</td>
       <td class="sc-name" style="width:200px">${esc(s.name)}</td>
@@ -3297,7 +3739,7 @@ function scVbar(entries, colorFn, fmtVal, fmtLbl, clickFn) {
   const max = Math.max(...entries.map(e => e[1]), 1);
   const n = entries.length;
   // 固定 SVG 座標系 — 兩個圖共用相同 viewBox，月份 x 座標完全一致
-  const W = 640, BH = 170, MT = 32, MB = 24, ML = 8, MR = 8;
+  const W = 640, BH = 120, MT = 28, MB = 22, ML = 8, MR = 8;
   const H = MT + BH + MB;
   const slotW = (W - ML - MR) / n;
   const pad = Math.max(Math.round(slotW * 0.12), 4);
@@ -3344,11 +3786,18 @@ function renderScrapChart() {
   document.getElementById('sc-f-amount').textContent = totalAmt.toLocaleString('zh-TW', {maximumFractionDigits:0});
 
   const byMonth = {}, byCat = {}, byMonthQty = {};
+  const byMonthCatAmt = {}, byMonthCatQty = {};
   rows.forEach(s => {
     const mk = s._dateKey ? s._dateKey.substring(0,7) : '未知';
     byMonth[mk]    = (byMonth[mk]    || 0) + s.amount;
     byMonthQty[mk] = (byMonthQty[mk] || 0) + s.qty;
     byCat[s.category] = (byCat[s.category] || 0) + s.amount;
+
+    const cat = ['A','B','C','L'].includes(s.category) ? s.category : 'other';
+    const amtBucket = byMonthCatAmt[mk] || (byMonthCatAmt[mk] = {A:0,B:0,C:0,L:0,other:0,total:0});
+    amtBucket[cat] += s.amount; amtBucket.total += s.amount;
+    const qtyBucket = byMonthCatQty[mk] || (byMonthCatQty[mk] = {A:0,B:0,C:0,L:0,other:0,total:0});
+    qtyBucket[cat] += s.qty; qtyBucket.total += s.qty;
   });
 
   // ── KPI Cards ──
@@ -3378,14 +3827,12 @@ function renderScrapChart() {
       <div class="kpi-sub">${topCat ? '$'+topCat[1].toLocaleString('zh-TW') : ''}</div>
     </div>`;
 
-  // ── 每月金額（直式）──
-  const monthEntries = Object.entries(byMonth).sort((a,b) => a[0].localeCompare(b[0]));
-  document.getElementById('sc-chart-month').innerHTML = scVbar(
-    monthEntries,
-    () => 'linear-gradient(180deg,#42A5F5,#1565C0)',
-    v => '$' + v.toLocaleString('zh-TW', {maximumFractionDigits:0}),
-    k => k.replace(/^\d{4}-/,'') + '月',
-    'drillDownMonth'
+  // ── 每月金額（直式，依分類堆疊）──
+  const SCRAP_STACK_COLORS = { ...CAT_COLOR, other: '#9CA3AF' };
+  const monthKeys = Object.keys(byMonth).sort();
+  const amtItems = monthKeys.map(mk => ({ ...byMonthCatAmt[mk], key: mk, label: mk.replace(/^\d{4}-/,'') + '月' }));
+  document.getElementById('sc-chart-month').innerHTML = scStackedVbar(
+    amtItems, SCRAP_STACK_COLORS, v => '$' + v.toLocaleString('zh-TW', {maximumFractionDigits:0}), 'drillDownMonth'
   );
 
   // ── 分類佔比（佔總金額百分比） ──
@@ -3406,14 +3853,10 @@ function renderScrapChart() {
     </div>`;
   }).join('') || '<div class="msg-empty">無資料</div>';
 
-  // ── 每月件數（直式） ──
-  const qtyEntries = Object.entries(byMonthQty).sort((a,b) => a[0].localeCompare(b[0]));
-  document.getElementById('sc-chart-qty').innerHTML = scVbar(
-    qtyEntries,
-    () => 'linear-gradient(180deg,#66BB6A,#2E7D32)',
-    v => v + '件',
-    k => k.replace(/^\d{4}-/,'') + '月',
-    'drillDownMonth'
+  // ── 每月件數（直式，依分類堆疊） ──
+  const qtyItems = monthKeys.map(mk => ({ ...byMonthCatQty[mk], key: mk, label: mk.replace(/^\d{4}-/,'') + '月' }));
+  document.getElementById('sc-chart-qty').innerHTML = scStackedVbar(
+    qtyItems, SCRAP_STACK_COLORS, v => v.toLocaleString('zh-TW') + '件', 'drillDownMonth'
   );
 }
 
@@ -3446,7 +3889,7 @@ function renderScrapCurrent() {
 
 async function loadScrapData() {
   if (_scrapsLoaded) { renderScrapCurrent(); return; }
-  const cached = sessionStorage.getItem(SCRAP_CACHE_KEY);
+  const cached = localStorage.getItem(SCRAP_CACHE_KEY);
   if (cached) {
     try {
       applyScrapData(JSON.parse(cached));
@@ -3459,11 +3902,31 @@ async function loadScrapData() {
     const res = await fetch('/api/scrap/list');
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
-    sessionStorage.setItem(SCRAP_CACHE_KEY, JSON.stringify(data.scraps));
+    localStorage.setItem(SCRAP_CACHE_KEY, JSON.stringify(data.scraps));
     applyScrapData(data.scraps);
   } catch(e) {
     document.getElementById('scrap-content').innerHTML =
       `<div class="msg-empty"><span>載入失敗：${esc(String(e))}</span></div>`;
+  }
+}
+
+async function refreshScrapData() {
+  const btn = document.getElementById('sc-refresh-btn');
+  btn.disabled = true; btn.textContent = '⟳ 整理中…';
+  try {
+    localStorage.removeItem(SCRAP_CACHE_KEY);
+    _scrapsLoaded = false;
+    const res  = await fetch('/api/scrap/list?refresh=1');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    localStorage.setItem(SCRAP_CACHE_KEY, JSON.stringify(data.scraps));
+    applyScrapData(data.scraps);
+    btn.textContent = '✓ 已更新';
+  } catch(e) {
+    showToast('重新整理失敗：' + e.message);
+    btn.textContent = '⟳ 重新整理';
+  } finally {
+    setTimeout(() => { btn.textContent = '⟳ 重新整理'; btn.disabled = false; }, 2000);
   }
 }
 
@@ -3473,6 +3936,408 @@ function applyScrapData(scraps) {
   _scrapsLoaded = true;
   initScrapDateRange();
   renderScrapCurrent();
+}
+
+// ── 採購登入表 ──────────────────────────────────────────────────────
+let _purchases = [], _purchasesLoaded = false, _puView = 'table';
+const PURCHASE_CACHE_KEY = 'pds_purchase_cache_v1';
+let _puSort = { col: 'date', dir: -1 };   // 預設日期新→舊
+
+const PU_STATUS_COLOR = {
+  '採購':'#1565C0', '研磨':'#7C3AED', '維修':'#DC2626',
+  '現金單':'#0D9488', '訂金':'#D97706', '其它':'#64748B', '其他':'#64748B',
+};
+let _puAccountColorMap = {}, _puAccountLabelMap = {}, _puVendorColorMap = {};
+// 供應商用同一色系（藍～靛）不同深淺區分，跟狀態/會計科目的多色系badge做出區隔
+const PU_VENDOR_SHADES = ['#0D47A1','#1565C0','#1976D2','#1E88E5','#283593','#3949AB','#3F51B5','#5C6BC0','#00695C','#00838F','#006064','#37474F'];
+
+function puFmtDate(v) {
+  const m = (v || '').trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (!m) return v || '';
+  return `${m[1]}/${m[2].padStart(2,'0')}/${m[3].padStart(2,'0')}`;
+}
+
+// 會計科目原始文字常有「其他/其它」「修繕保養/修繕及保養費用」等用字不一的情況，
+// 但結尾的科目代號數字是穩定的，因此用代號歸併、再挑最常見的文字當代表標籤
+function puAccountCode(account) {
+  const m = /(\d+)\s*$/.exec(account || '');
+  return m ? m[1] : (account || '');
+}
+
+function buildAccountMaps() {
+  const freq = {};   // code -> { label: count }
+  _purchases.forEach(p => {
+    const code = puAccountCode(p.account);
+    p._acctCode = code;
+    if (!p.account) return;
+    const bucket = freq[code] || (freq[code] = {});
+    bucket[p.account] = (bucket[p.account] || 0) + 1;
+  });
+  const codes = Object.keys(freq).sort();
+  _puAccountLabelMap = {};
+  codes.forEach(code => {
+    const entries = Object.entries(freq[code]).sort((a,b) => b[1]-a[1]);
+    _puAccountLabelMap[code] = entries[0][0];
+  });
+  _puAccountColorMap = {};
+  codes.forEach((code, i) => { _puAccountColorMap[code] = TYPE_COLORS[i % TYPE_COLORS.length]; });
+
+  const vendors = [...new Set(_purchases.map(p => p.vendor).filter(Boolean))].sort();
+  _puVendorColorMap = {};
+  vendors.forEach((v, i) => { _puVendorColorMap[v] = PU_VENDOR_SHADES[i % PU_VENDOR_SHADES.length]; });
+}
+
+async function loadPurchaseData() {
+  if (_purchasesLoaded) { renderPurchaseCurrent(); return; }
+  const cached = localStorage.getItem(PURCHASE_CACHE_KEY);
+  if (cached) {
+    try { applyPurchaseData(JSON.parse(cached)); return; } catch(e) {}
+  }
+  document.getElementById('purchase-content').innerHTML =
+    '<div class="msg-empty"><span class="spinner"></span><span>載入採購資料…</span></div>';
+  try {
+    const res  = await fetch('/api/purchase/list');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    localStorage.setItem(PURCHASE_CACHE_KEY, JSON.stringify(data.purchases));
+    applyPurchaseData(data.purchases);
+  } catch(e) {
+    document.getElementById('purchase-content').innerHTML =
+      `<div class="msg-empty"><span>載入失敗：${esc(String(e))}</span></div>`;
+  }
+}
+
+function applyPurchaseData(purchases) {
+  _purchases = purchases;
+  _purchases.forEach(p => { p._dateKey = scrapParseDateKey(p.date); });
+  buildAccountMaps();
+  _purchasesLoaded = true;
+  fillPurchaseFilters();
+  renderPurchaseCurrent();
+}
+
+async function refreshPurchaseData() {
+  const btn = document.getElementById('pu-refresh-btn');
+  btn.disabled = true; btn.textContent = '⟳ 整理中…';
+  try {
+    localStorage.removeItem(PURCHASE_CACHE_KEY);
+    _purchasesLoaded = false;
+    const res  = await fetch('/api/purchase/list?refresh=1');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    localStorage.setItem(PURCHASE_CACHE_KEY, JSON.stringify(data.purchases));
+    applyPurchaseData(data.purchases);
+    btn.textContent = '✓ 已更新';
+  } catch(e) {
+    showToast('重新整理失敗：' + e.message);
+    btn.textContent = '⟳ 重新整理';
+  } finally {
+    setTimeout(() => { btn.textContent = '⟳ 重新整理'; btn.disabled = false; }, 2000);
+  }
+}
+
+// 通用「資料來源」密碼保護連結（採購登入表/報廢統計/生產日報表P5.3/生產報工統計P2 共用）
+let _pwModalTargetUrl = '';
+
+function openSourceLink(url) {
+  _pwModalTargetUrl = url;
+  document.getElementById('pu-pw-input').value = '';
+  document.getElementById('pu-pw-modal').classList.add('show');
+  setTimeout(() => document.getElementById('pu-pw-input').focus(), 50);
+}
+
+function closePurchasePwModal() {
+  document.getElementById('pu-pw-modal').classList.remove('show');
+}
+
+function confirmPurchasePw() {
+  const pw = document.getElementById('pu-pw-input').value;
+  closePurchasePwModal();
+  if (pw !== 'maxclaw') { showToast('密碼錯誤'); return; }
+  window.open(_pwModalTargetUrl, '_blank');
+}
+
+function fillPurchaseFilters() {
+  const statuses = [...new Set(_purchases.map(p => p.status).filter(Boolean))].sort();
+  const vendors  = [...new Set(_purchases.map(p => p.vendor).filter(Boolean))].sort();
+  const accountCodes = Object.keys(_puAccountLabelMap).sort();
+  document.getElementById('pu-f-status').innerHTML =
+    '<option value="">全部</option>' + statuses.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  document.getElementById('pu-f-account').innerHTML =
+    '<option value="">全部</option>' + accountCodes.map(c => `<option value="${esc(c)}">${esc(_puAccountLabelMap[c])}</option>`).join('');
+  document.getElementById('pu-vendor-list').innerHTML =
+    vendors.map(v => `<option value="${esc(v)}">`).join('');
+}
+
+function puSortBy(col) {
+  if (_puSort.col === col) { _puSort.dir *= -1; } else { _puSort.col = col; _puSort.dir = 1; }
+  renderPurchaseTable();
+}
+
+function switchPurchaseView(view) {
+  _puView = view;
+  document.querySelectorAll('[data-pu-view]').forEach(b => b.classList.toggle('active', b.dataset.puView === view));
+  document.getElementById('pu-view-table').style.display = view === 'table' ? '' : 'none';
+  document.getElementById('pu-view-stats').style.display = view === 'stats' ? '' : 'none';
+  renderPurchaseCurrent();
+}
+
+function renderPurchaseCurrent() {
+  if (_puView === 'stats') renderPurchaseStats();
+  else renderPurchaseTable();
+}
+
+// AND/NOT 模糊搜尋語法：空格=AND（全部都要符合）、-前綴=NOT（排除），跟主頁製令搜尋語法一致
+function matchAndNot(query, text) {
+  if (!query) return true;
+  const textUpper = (text || '').toUpperCase();
+  for (const token of query.trim().split(/\s+/)) {
+    if (token.startsWith('-') && token.length > 1) {
+      if (textUpper.includes(token.slice(1).toUpperCase())) return false;
+    } else if (token) {
+      if (!textUpper.includes(token.toUpperCase())) return false;
+    }
+  }
+  return true;
+}
+
+function getFilteredPurchases() {
+  const fFrom   = document.getElementById('pu-date-from').value;
+  const fTo     = document.getElementById('pu-date-to').value;
+  const fStatus  = document.getElementById('pu-f-status').value;
+  const fAccount = document.getElementById('pu-f-account').value;
+  const fVendor = (document.getElementById('pu-f-vendor').value || '').trim().toLowerCase();
+  const fSpec   = document.getElementById('pu-f-spec').value;   // ''=全部／'詠設'=含詠設／'詠基'=不含詠設
+  const kw      = (document.getElementById('pu-f-kw').value || '').trim();
+
+  return _purchases.filter(p => {
+    if (fFrom && p._dateKey && p._dateKey < fFrom) return false;
+    if (fTo   && p._dateKey && p._dateKey > fTo)   return false;
+    if (fStatus && p.status !== fStatus) return false;
+    if (fAccount && p._acctCode !== fAccount) return false;
+    if (fVendor && !(p.vendor||'').toLowerCase().includes(fVendor)) return false;
+    if (fSpec === '詠設' && !(p.spec||'').includes('詠設')) return false;
+    if (fSpec === '詠基' && (p.spec||'').includes('詠設')) return false;
+    if (kw && !matchAndNot(kw, `${p.name} ${p.spec} ${p.doc_no} ${p.remark}`)) return false;
+    return true;
+  });
+}
+
+function puFilterByStatus(status) {
+  document.getElementById('pu-f-status').value = status;
+  renderPurchaseCurrent();
+}
+
+function puFilterByAccount(code) {
+  document.getElementById('pu-f-account').value = code;
+  renderPurchaseCurrent();
+}
+
+function puAccountBadge(p) {
+  if (!p.account) return '';
+  const code = p._acctCode;
+  const col  = _puAccountColorMap[code] || '#64748B';
+  const label = _puAccountLabelMap[code] || p.account;
+  return `<span onclick="puFilterByAccount('${code}')" ondblclick="puFilterByAccount('')" title="單擊篩選／雙擊清除" style="cursor:pointer;display:inline-block;width:150px;padding:.1rem 0;text-align:center;border-radius:10px;font-size:.78rem;font-weight:700;color:#fff;background:${col}">${esc(label)}</span>`;
+}
+
+function renderPurchaseTable() {
+  let rows = getFilteredPurchases();
+
+  const col = _puSort.col, dir = _puSort.dir;
+  rows = [...rows].sort((a, b) => {
+    if (col === 'date') return (a._dateKey < b._dateKey ? -1 : a._dateKey > b._dateKey ? 1 : 0) * dir;
+    if (['qty','unit_price','subtotal'].includes(col)) return ((a[col]||0) - (b[col]||0)) * dir;
+    const av = (a[col]||''), bv = (b[col]||'');
+    return av < bv ? -dir : av > bv ? dir : 0;
+  });
+
+  const totalAmt = rows.reduce((s,p) => s + (p.subtotal||0), 0);
+  document.getElementById('pu-f-count').textContent  = rows.length;
+  document.getElementById('pu-f-amount').textContent = totalAmt.toLocaleString('zh-TW', {maximumFractionDigits:0});
+
+  const content = document.getElementById('purchase-content');
+  if (!rows.length) {
+    content.innerHTML = '<div class="msg-empty"><span>查無符合條件的採購紀錄</span></div>';
+    return;
+  }
+
+  function thSort(c, label, width, align) {
+    const active = _puSort.col === c;
+    const arrow  = active ? (_puSort.dir === 1 ? ' ↑' : ' ↓') : '';
+    return `<th style="${width?'width:'+width+';':''}${align?'text-align:'+align+';':''}cursor:pointer;${active?'text-decoration:underline;':''}" onclick="puSortBy('${c}')">${label}${arrow}</th>`;
+  }
+
+  const trs = rows.map(p => {
+    const stColor = PU_STATUS_COLOR[p.status] || '#64748B';
+    const vColor  = _puVendorColorMap[p.vendor] || '#37474F';
+    return `<tr>
+      <td class="td-center" style="white-space:nowrap">${esc(puFmtDate(p.date))}</td>
+      <td class="td-center">${p.status ? `<span onclick="puFilterByStatus('${esc(p.status)}')" ondblclick="puFilterByStatus('')" title="單擊篩選／雙擊清除" style="cursor:pointer;display:inline-block;width:64px;padding:.1rem 0;text-align:center;border-radius:10px;font-size:.78rem;font-weight:700;color:#fff;background:${stColor}">${esc(p.status)}</span>` : ''}</td>
+      <td>${esc(p.name)}</td>
+      <td style="color:var(--muted);font-size:.85rem">${esc(p.spec)}</td>
+      <td style="color:${vColor};font-weight:600">${esc(p.vendor)}</td>
+      <td style="text-align:right">${p.qty ? p.qty.toLocaleString('zh-TW') : ''}</td>
+      <td style="text-align:right">${p.unit_price ? p.unit_price.toLocaleString('zh-TW') : ''}</td>
+      <td style="text-align:right;font-weight:700">${p.subtotal ? p.subtotal.toLocaleString('zh-TW') : ''}</td>
+      <td class="td-center">${puAccountBadge(p)}</td>
+      <td style="color:var(--muted);font-size:.85rem">${esc(p.remark)}</td>
+    </tr>`;
+  }).join('');
+
+  content.innerHTML = `<table class="pro-table">
+    <thead><tr>
+      ${thSort('date','日期','92px')}${thSort('status','狀態','82px')}
+      <th style="min-width:180px">品名</th><th style="min-width:140px">規格</th>
+      ${thSort('vendor','供應商','90px')}${thSort('qty','數量','62px','right')}
+      ${thSort('unit_price','單價','78px','right')}${thSort('subtotal','小計','82px','right')}
+      ${thSort('account','會計科目','170px')}<th>備註</th>
+    </tr></thead>
+    <tbody>${trs}</tbody>
+  </table>`;
+}
+
+// ── 採購統計：每月 × 會計科目（小計金額彙整） ──
+function renderPurchaseStats() {
+  const rows = getFilteredPurchases();
+  document.getElementById('pu-f-count').textContent = rows.length;
+  const totalAmt = rows.reduce((s,p) => s + (p.subtotal||0), 0);
+  document.getElementById('pu-f-amount').textContent = totalAmt.toLocaleString('zh-TW', {maximumFractionDigits:0});
+
+  const content = document.getElementById('purchase-stats');
+  if (!rows.length) {
+    content.innerHTML = '<div class="msg-empty"><span>查無符合條件的採購紀錄</span></div>';
+    return;
+  }
+
+  // 依「科目代號」歸併（原始文字常見「其他/其它」等用字不一，代號才是穩定的分組依據）
+  const byMonth = {};
+  const codeTotals = {};
+  rows.forEach(p => {
+    const mk = p._dateKey ? p._dateKey.substring(0,7) : '未知';
+    const bucket = byMonth[mk] || (byMonth[mk] = {});
+    bucket[p._acctCode] = (bucket[p._acctCode] || 0) + (p.subtotal || 0);
+    codeTotals[p._acctCode] = (codeTotals[p._acctCode] || 0) + (p.subtotal || 0);
+  });
+  // 欄位依總金額由大到小排序，最重要的科目排最左邊，方便閱讀
+  const codes = Object.keys(codeTotals).sort((a,b) => codeTotals[b] - codeTotals[a]);
+  const monthKeys = Object.keys(byMonth).sort();
+  const curMonth = new Date().toISOString().substring(0,7);
+
+  const fmt = n => n ? n.toLocaleString('zh-TW', {maximumFractionDigits:0}) : '';
+  const grid = 'border:1px solid #D0D5DB';
+  const thBase = `padding:.6rem .9rem;font-size:.84rem;font-weight:700;white-space:nowrap;text-align:right;color:#fff;background:#37474F;${grid}`;
+  const thMo   = `${thBase};text-align:center`;
+  const tfBase = `padding:.55rem .9rem;font-size:.88rem;font-weight:700;text-align:right;background:#CFD8DC;color:#1e293b;${grid}`;
+
+  const head = `<th style="${thMo}">月份</th>` +
+    codes.map(c => `<th style="${thBase}"><span style="display:inline-flex;align-items:center;gap:.35rem;justify-content:flex-end">
+      <span style="width:9px;height:9px;border-radius:2px;background:${_puAccountColorMap[c]||'#64748B'};flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,.5)"></span>${esc(_puAccountLabelMap[c]||c)}</span></th>`).join('') +
+    `<th style="${thBase};background:#263238">合計</th>`;
+
+  const body = monthKeys.map((mk, i) => {
+    const bucket  = byMonth[mk];
+    const rowTot  = codes.reduce((s,c) => s + (bucket[c]||0), 0);
+    const isCur   = mk === curMonth;
+    // 當月用紅框框起整列（比照生產日報表P5.3/P2明細表的當月標示手法），不改底色
+    const bdrV    = isCur ? 'border-top:2px solid #DC2626;border-bottom:2px solid #DC2626;' : '';
+    const bdrL    = isCur ? 'border-left:2px solid #DC2626;' : '';
+    const bdrR    = isCur ? 'border-right:2px solid #DC2626;' : '';
+    const rowBg   = i % 2 === 0 ? '#FFFFFF' : '#EEF1F3';
+    const tdBase  = `padding:.55rem .9rem;text-align:right;font-size:.87rem;color:#1e293b;background:${rowBg};${grid};${bdrV}`;
+    const tdMo    = `${tdBase};text-align:center;font-weight:700;background:#CFD8DC;${bdrL}`;
+    const cells = codes.map(c =>
+      `<td style="${tdBase}">${bucket[c] ? fmt(bucket[c]) : '<span style="color:#B0BEC5">–</span>'}</td>`
+    ).join('');
+    return `<tr>
+      <td style="${tdMo}">${mk.replace(/^\d{4}-/,'') + '月'}</td>${cells}
+      <td style="${tdBase};font-weight:700;background:#E3E8EB;${bdrR}">${fmt(rowTot)}</td>
+    </tr>`;
+  }).join('');
+
+  const grandTot = codes.reduce((s,c) => s + (codeTotals[c]||0), 0);
+  const footCells = codes.map(c => `<td style="${tfBase}">${fmt(codeTotals[c]||0)}</td>`).join('');
+  const foot = `<td style="${tfBase};text-align:center">總計</td>${footCells}<td style="${tfBase};font-size:.92rem;background:#B0BEC5">${fmt(grandTot)}</td>`;
+
+  const tableHtml = `<table style="width:100%;border-collapse:collapse">
+    <thead><tr>${head}</tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr>${foot}</tr></tfoot>
+  </table>`;
+
+  // ── 每月堆疊長條圖（依科目分色，跟表頭色塊對應），放在表格下方 ──
+  const monthTotals = monthKeys.map(mk => codes.reduce((s,c) => s + (byMonth[mk][c]||0), 0));
+  const maxMonth = Math.max(...monthTotals, 1);
+  const BAR_H = 22, GAP = 36, ML = 46, MR = 90, MT = 16, MB = 8;
+  const CW = 900, CH = MT + MB + monthKeys.length * GAP;
+  let chart = `<svg width="100%" viewBox="0 0 ${CW} ${CH}" style="display:block;overflow:visible">`;
+  monthKeys.forEach((mk, i) => {
+    const y = MT + i * GAP + (GAP - BAR_H) / 2;
+    chart += `<text x="${ML-6}" y="${y+BAR_H/2+4.5}" text-anchor="end" font-size="12" font-weight="600" fill="#64748b" font-family="Noto Sans TC,sans-serif">${mk.replace(/^\d{4}-/,'')+'月'}</text>`;
+    let xOff = 0;
+    codes.forEach(c => {
+      const v = byMonth[mk][c] || 0;
+      if (!v) return;
+      const w = Math.round(v / maxMonth * (CW - ML - MR));
+      chart += `<rect x="${ML+xOff}" y="${y}" width="${w}" height="${BAR_H}" fill="${_puAccountColorMap[c]}"/>`;
+      xOff += w;
+    });
+    chart += `<text x="${ML+xOff+6}" y="${y+BAR_H/2+4.5}" font-size="11" font-weight="700" fill="#475569" font-family="Noto Sans TC,sans-serif">${fmt(monthTotals[i])}</text>`;
+  });
+  chart += '</svg>';
+
+  // ── 月份購買頻率（依目前篩選的供應商/品名/關鍵字等條件彙整次數與數量）──
+  const freqByMonth = {};
+  rows.forEach(p => {
+    const mk = p._dateKey ? p._dateKey.substring(0,7) : '未知';
+    const b = freqByMonth[mk] || (freqByMonth[mk] = { cnt:0, qty:0, amt:0 });
+    b.cnt += 1; b.qty += (p.qty||0); b.amt += (p.subtotal||0);
+  });
+  const freqMonths = Object.keys(freqByMonth).sort();
+  const maxCnt = Math.max(...freqMonths.map(mk => freqByMonth[mk].cnt), 1);
+  const freqRows = freqMonths.map(mk => {
+    const b = freqByMonth[mk];
+    const barW = Math.round(b.cnt / maxCnt * 180);
+    return `<tr>
+      <td style="padding:.45rem .9rem;text-align:center;font-weight:700;color:#fff;background:#37474F;border:1px solid #D0D5DB">${mk.replace(/^\d{4}-/,'')+'月'}</td>
+      <td style="padding:.45rem .9rem;border:1px solid #D0D5DB">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:${barW}px;height:14px;background:#1565C0"></div>
+          <span style="font-weight:700;color:#1e293b">${b.cnt}</span>
+        </div>
+      </td>
+      <td style="padding:.45rem .9rem;text-align:right;border:1px solid #D0D5DB">${fmt(b.qty)}</td>
+      <td style="padding:.45rem .9rem;text-align:right;font-weight:700;border:1px solid #D0D5DB">${fmt(b.amt)}</td>
+    </tr>`;
+  }).join('');
+  const freqTot = { cnt: rows.length, qty: rows.reduce((s,p)=>s+(p.qty||0),0), amt: totalAmt };
+  const freqTable = `<table style="border-collapse:collapse;width:auto">
+    <thead><tr>
+      <th style="padding:.5rem .9rem;background:#37474F;color:#fff;font-size:.84rem;border:1px solid #D0D5DB">月份</th>
+      <th style="padding:.5rem .9rem;background:#37474F;color:#fff;font-size:.84rem;text-align:left;border:1px solid #D0D5DB">購買次數</th>
+      <th style="padding:.5rem .9rem;background:#37474F;color:#fff;font-size:.84rem;text-align:right;border:1px solid #D0D5DB">購買數量</th>
+      <th style="padding:.5rem .9rem;background:#37474F;color:#fff;font-size:.84rem;text-align:right;border:1px solid #D0D5DB">小計金額</th>
+    </tr></thead>
+    <tbody>${freqRows}</tbody>
+    <tfoot><tr>
+      <td style="padding:.5rem .9rem;text-align:center;font-weight:700;background:#CFD8DC;border:1px solid #D0D5DB">總計</td>
+      <td style="padding:.5rem .9rem;font-weight:700;background:#CFD8DC;border:1px solid #D0D5DB">${freqTot.cnt} 筆</td>
+      <td style="padding:.5rem .9rem;text-align:right;font-weight:700;background:#CFD8DC;border:1px solid #D0D5DB">${fmt(freqTot.qty)}</td>
+      <td style="padding:.5rem .9rem;text-align:right;font-weight:700;background:#CFD8DC;border:1px solid #D0D5DB">${fmt(freqTot.amt)}</td>
+    </tr></tfoot>
+  </table>`;
+
+  content.innerHTML = `<div style="display:flex;flex-direction:column;gap:20px">
+    <div style="overflow-x:auto">${tableHtml}</div>
+    <div>
+      <div style="font-size:.85rem;font-weight:700;color:#475569;margin-bottom:.6rem">📊 每月金額分布（依會計科目）</div>
+      ${chart}
+    </div>
+    <div>
+      <div style="font-size:.85rem;font-weight:700;color:#475569;margin-bottom:.6rem">📈 月份購買頻率（可用上方供應商/規格/關鍵字篩選縮小範圍）</div>
+      ${freqTable}
+    </div>
+  </div>`;
 }
 
 // 初始化報廢區間（當年度）
@@ -3507,14 +4372,21 @@ function parseProdDateKey(str) {
   } catch(e) {}
 })();
 
+function prFilterByCat(cat) {
+  document.getElementById('pr-f-cat').value = cat;
+  renderProdCurrent();
+}
+
 function getFilteredProd() {
   const op     = (document.getElementById('pr-f-operator')?.value || '').trim().toLowerCase();
+  const fCat   = document.getElementById('pr-f-cat')?.value || '';
   const search = (document.getElementById('pr-f-search')?.value || '').trim().toLowerCase();
   const fromVal = document.getElementById('pr-date-from').value;
   const toVal   = document.getElementById('pr-date-to').value;
   const from = fromVal ? new Date(fromVal) : null;
   const to   = toVal   ? new Date(toVal)   : null;
   return _prodData.filter(r => {
+    if (fCat && r.category !== fCat) return false;
     if (op) {
       const nameMatch = (r._empName || '').toLowerCase().includes(op);
       const idMatch   = r.operator.toLowerCase().includes(op);
@@ -3570,11 +4442,11 @@ function renderProdCurrent() {
 }
 
 // ── 堆疊長條圖（亮色主題）─────────────────────────────────────────────────────
-function scStackedVbar(items, colors) {
+function scStackedVbar(items, colors, fmtVal, clickFn) {
   if (!items || !items.length) return '<div style="color:#94a3b8;text-align:center;padding:2rem">無資料</div>';
   const maxVal = Math.max(...items.map(d => d.total), 1);
   const cats   = ['other', 'L', 'C', 'B', 'A']; // 由底到頂
-  const fmtFull = n => n.toLocaleString('zh-TW');
+  const fmtFull = fmtVal || (n => n.toLocaleString('zh-TW'));
 
   const bars = items.map(item => {
     const activeCats = cats.filter(c => (item[c]||0) > 0);
@@ -3591,10 +4463,12 @@ function scStackedVbar(items, colors) {
                border-radius:${isTop?'5px 5px 0 0':'0'}"></div>`;
       cum += pct;
     });
+    const clkStyle = clickFn && item.key ? 'cursor:pointer' : '';
+    const clkAttr  = clickFn && item.key ? `onclick="${clickFn}('${item.key}')"` : '';
     return `
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:7px">
       <div style="font-size:.95rem;color:#1e293b;font-weight:700;white-space:nowrap;letter-spacing:-.01em">${fmtFull(item.total)}</div>
-      <div style="position:relative;width:min(68px,85%);height:230px;background:#E9EDF2;border-radius:5px 5px 0 0;overflow:hidden;box-shadow:inset 0 -2px 0 rgba(0,0,0,.06)">${segs}</div>
+      <div style="position:relative;width:min(68px,85%);height:230px;background:#E9EDF2;border-radius:5px 5px 0 0;overflow:hidden;box-shadow:inset 0 -2px 0 rgba(0,0,0,.06);${clkStyle}" ${clkAttr}>${segs}</div>
       <div style="font-size:.85rem;color:#475569;font-weight:600;white-space:nowrap">${item.label}</div>
     </div>`;
   }).join('');
@@ -3840,9 +4714,11 @@ function renderProdTable() {
       <td class="td-center pr-proc">${esc(r.process_code)}</td>
       <td class="td-center pr-qty">${r.qty > 0 ? r.qty.toLocaleString('zh-TW') : ''}</td>
       <td class="td-center pr-sec">${r.seconds > 0 ? r.seconds.toLocaleString('zh-TW') : ''}</td>
+      <td class="td-center pr-actsec">${r.qty > 0 && r.seconds > 0 ? `<span>${(r.seconds / r.qty).toLocaleString('zh-TW', {maximumFractionDigits:1})}</span>` : ''}</td>
       <td class="pr-std">${esc(r.std_time)}</td>
+      <td class="td-center pr-mname">${esc(r.machine_name)}</td>
       <td class="td-center pr-mcode">${esc(r.machine_code)}</td>
-      <td class="td-center pr-cat">${r.category?`<span class="cat-badge cat-${r.category}">${esc(r.category)}</span>`:''}</td>
+      <td class="td-center pr-cat">${r.category?`<span class="cat-badge cat-${r.category}" onclick="prFilterByCat('${r.category}')" ondblclick="prFilterByCat('')" title="單擊篩選／雙擊清除" style="cursor:pointer">${esc(K1P2_CAT_LABELS[r.category] || r.category)}</span>`:''}</td>
     </tr>`;
   }).join('');
   content.innerHTML = `
@@ -3856,9 +4732,11 @@ function renderProdTable() {
         <th class="center" style="width:75px">製程</th>
         <th class="center" style="width:62px">生產數</th>
         <th class="center" style="width:62px">秒數</th>
+        <th class="center" style="width:70px">實際秒數</th>
         <th style="width:52px">標工</th>
+        <th class="center" style="width:90px">機台名稱</th>
         <th class="center" style="width:68px">機台代號</th>
-        <th class="center" style="width:52px">分類</th>
+        <th class="center" style="width:80px">分類</th>
       </tr></thead>
       <tbody>${trs}</tbody>
     </table>`;
@@ -3866,7 +4744,7 @@ function renderProdTable() {
 
 async function loadCatMap() {
   if (Object.keys(_catMap).length > 0) return;  // 已載入就跳過
-  const cached = sessionStorage.getItem(CAT_MAP_CACHE_KEY);
+  const cached = localStorage.getItem(CAT_MAP_CACHE_KEY);
   if (cached) {
     try {
       const parsed = JSON.parse(cached);
@@ -3878,7 +4756,7 @@ async function loadCatMap() {
     const data = await res.json();
     if (data.success && data.map && Object.keys(data.map).length > 0) {
       _catMap = data.map;
-      sessionStorage.setItem(CAT_MAP_CACHE_KEY, JSON.stringify(_catMap));
+      localStorage.setItem(CAT_MAP_CACHE_KEY, JSON.stringify(_catMap));
     }
   } catch(e) {}
 }
@@ -3889,7 +4767,7 @@ async function loadProdData() {
   if (!_overtimesLoaded) {
     try { await loadOvertimeData(); } catch(e) {}
   }
-  const cached = sessionStorage.getItem(PROD_CACHE_KEY);
+  const cached = localStorage.getItem(PROD_CACHE_KEY);
   if (cached) {
     try { applyProdData(JSON.parse(cached)); return; } catch(e) {}
   }
@@ -3899,11 +4777,32 @@ async function loadProdData() {
     const res  = await fetch('/api/prod_report/list');
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
-    sessionStorage.setItem(PROD_CACHE_KEY, JSON.stringify(data.records));
+    localStorage.setItem(PROD_CACHE_KEY, JSON.stringify(data.records));
     applyProdData(data.records);
   } catch(e) {
     document.getElementById('prod-content').innerHTML =
       `<div class="msg-empty"><span>載入失敗：${esc(String(e))}</span></div>`;
+  }
+}
+
+async function refreshProdData() {
+  const btn = document.getElementById('pr-refresh-btn');
+  btn.disabled = true; btn.textContent = '⟳ 整理中…';
+  try {
+    localStorage.removeItem(PROD_CACHE_KEY);
+    _prodLoaded = false;
+    _prodChartStats = null;   // 連帶清掉圖表快取，重新整理時一併更新績效統計
+    const res  = await fetch('/api/prod_report/list?refresh=1');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    localStorage.setItem(PROD_CACHE_KEY, JSON.stringify(data.records));
+    applyProdData(data.records);
+    btn.textContent = '✓ 已更新';
+  } catch(e) {
+    showToast('重新整理失敗：' + e.message);
+    btn.textContent = '⟳ 重新整理';
+  } finally {
+    setTimeout(() => { btn.textContent = '⟳ 重新整理'; btn.disabled = false; }, 2000);
   }
 }
 
@@ -4143,6 +5042,11 @@ function sortP2(col) {
   renderP2Table();
 }
 
+function p2FilterByCat(cat) {
+  document.getElementById('p2-f-cat').value = cat;
+  renderP2Current();
+}
+
 function renderP2Table() {
   const rows = getFilteredP2();
   document.getElementById('p2-f-count').textContent = rows.length;
@@ -4166,9 +5070,10 @@ function renderP2Table() {
   };
   const trs = rows.map(r => {
     const cat   = r.category;
+    const catAttrs = cat ? ` onclick="p2FilterByCat('${cat}')" ondblclick="p2FilterByCat('')" title="單擊篩選／雙擊清除" style="cursor:pointer"` : '';
     const badge = cat && K1P2_CAT_LABELS[cat]
-      ? `<span class="cat-badge cat-${cat}">${esc(K1P2_CAT_LABELS[cat])}</span>`
-      : (cat ? `<span class="cat-badge">${esc(cat)}</span>` : '');
+      ? `<span class="cat-badge cat-${cat}"${catAttrs}>${esc(K1P2_CAT_LABELS[cat])}</span>`
+      : (cat ? `<span class="cat-badge"${catAttrs}>${esc(cat)}</span>` : '');
     const hlStyle = r.ym === curYM ? ' style="background:#EFF6FF"' : '';
     return `
     <tr${hlStyle}>
@@ -4428,8 +5333,42 @@ async function renderP2Chart() {
     return o+'</svg>';
   };
 
-  const chartWrap = (tbl, chart) =>
-    `<div style="display:flex;gap:24px;align-items:flex-start">${tbl}<div style="flex:1;min-width:220px;padding-top:2px">${chart}</div></div>`;
+  const chartWrap = (tbl, chart, extra) =>
+    `<div style="display:flex;gap:24px;align-items:flex-start">${tbl}<div style="flex:1;min-width:220px;padding-top:2px">${chart}</div>${extra ? `<div style="flex-shrink:0;padding-top:2px">${extra}</div>` : ''}</div>`;
+
+  // ── 視覺化：各月各分類佔比（月份為列，與左側堆疊長條逐列對齊）──
+  // 採用與 mkStackedBar 相同的垂直幾何（MT/GAP/BAR_H），確保每月與對應長條平行併排
+  const mkMonthlyPct = valFn => {
+    const FF = 'Noto Sans TC,sans-serif';
+    const BAR_H=22, GAP=38, MT=46, MB=12, colW=40, ML2=8;
+    const W = ML2 + catBase.length*colW + 6;
+    const H = MT + MB + rows.length*GAP;
+    let o = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible">`;
+    // 標題 + 分類欄標題
+    o += `<text x="0" y="11" font-size="11" fill="#94a3b8" font-family="${FF}">各月分類佔比</text>`;
+    catBase.forEach((c, ci) => {
+      const cx = ML2 + ci*colW + colW/2;
+      o += `<rect x="${cx-15}" y="25" width="8" height="8" rx="2" fill="${c.bg}"/>`;
+      o += `<text x="${cx-3}" y="32.5" font-size="12" font-weight="700" fill="${c.cc||'#475569'}" font-family="${FF}">${c.key==='other'?'未':c.key}</text>`;
+    });
+    o += `<line x1="0" y1="${MT-8}" x2="${W}" y2="${MT-8}" stroke="#E2E8F0" stroke-width="1"/>`;
+    // 每月一列，與長條圖同基線
+    rows.forEach((r, i) => {
+      const tot = catBase.reduce((s,c) => s + (valFn(r,c)||0), 0) || 1;
+      const yb  = MT + i*GAP + 23.5;
+      if (r.month === curYM) {
+        const yr = MT + i*GAP + (GAP-BAR_H)/2;
+        o += `<rect x="0" y="${yr-2}" width="${W}" height="${BAR_H+4}" fill="#EFF6FF"/>`;
+      }
+      catBase.forEach((c, ci) => {
+        const cx = ML2 + ci*colW + colW/2;
+        const p  = (valFn(r,c)||0) / tot * 100;
+        const col = p>=0.05 ? (c.cc||'#334155') : '#CBD5E1';
+        o += `<text x="${cx}" y="${yb}" text-anchor="middle" font-size="12" font-weight="${p>=30?700:500}" fill="${col}" font-family="${FF}">${p>=0.05?p.toFixed(0)+'%':'—'}</text>`;
+      });
+    });
+    return o + '</svg>';
+  };
 
   // ── 件數表 ──
   const qtyBodyRows = rows.map((r, i) => {
@@ -4450,7 +5389,8 @@ async function renderP2Chart() {
     <td style="${tfBase}">${fmt(grand + totOther)}</td>`;
   tableEl.innerHTML = chartWrap(
     mkTable('p2-qt', '合計（件）', qtyBodyRows, qtyFoot),
-    mkStackedBar(rows, catBase, (r,c)=>r[c.key], v=>fmt(v))
+    mkStackedBar(rows, catBase, (r,c)=>r[c.key], v=>fmt(v)),
+    mkMonthlyPct((r,c)=>r[c.key])
   );
 
   // ── 秒數表 ──
@@ -4472,7 +5412,8 @@ async function renderP2Chart() {
     <td style="${tfBase}">${fmt(grandSec + totSecOther)}</td>`;
   secTableEl.innerHTML = chartWrap(
     mkTable('p2-sc', '合計（秒）', secBodyRows, secFoot),
-    mkStackedBar(rows, catBase, (r,c)=>r[c.secKey], v=>fmt(v))
+    mkStackedBar(rows, catBase, (r,c)=>r[c.secKey], v=>fmt(v)),
+    mkMonthlyPct((r,c)=>r[c.secKey])
   );
 
   // ── 每PCS秒數表 ──
@@ -4507,12 +5448,12 @@ async function renderP2Chart() {
   );
 }
 
-async function loadP2Data() {
-  if (_p2Loaded) { renderP2Current(); return; }
+async function loadP2Data(forceRefresh) {
+  if (_p2Loaded && !forceRefresh) { renderP2Current(); return; }
   document.getElementById('p2-content').innerHTML =
     '<div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>';
   try {
-    const res  = await fetch('/api/k1p2/list');
+    const res  = await fetch('/api/k1p2/list' + (forceRefresh ? '?refresh=1' : ''));
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     _p2Data = data.records;
@@ -4532,6 +5473,20 @@ async function loadP2Data() {
   } catch(e) {
     document.getElementById('p2-content').innerHTML =
       `<div class="msg-empty">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+
+async function refreshP2Data() {
+  const btn = document.getElementById('p2-refresh-btn');
+  btn.disabled = true; btn.textContent = '⟳ 整理中…';
+  try {
+    await loadP2Data(true);
+    btn.textContent = '✓ 已更新';
+  } catch(e) {
+    showToast('重新整理失敗：' + e.message);
+    btn.textContent = '⟳ 重新整理';
+  } finally {
+    setTimeout(() => { btn.textContent = '⟳ 重新整理'; btn.disabled = false; }, 2000);
   }
 }
 
@@ -4617,11 +5572,13 @@ function renderJigTable() {
   const fSub    = document.getElementById('jig-f-submitter').value;
   const fUnit   = document.getElementById('jig-f-unit').value;
   const fStatus = document.getElementById('jig-f-status').value;
+  const kw      = (document.getElementById('jig-f-kw').value || '').trim().toLowerCase();
 
   let jigs = _jigData;
   if (fSub)    jigs = jigs.filter(j => j.submitter === fSub);
   if (fUnit)   jigs = jigs.filter(j => j.unit === fUnit);
   if (fStatus) jigs = jigs.filter(j => j.status === fStatus);
+  if (kw)      jigs = jigs.filter(j => `${j.folder_name} ${j.item_name} ${j.product_model} ${j.remarks}`.toLowerCase().includes(kw));
 
   // 排序
   const col = _jigSort.col, dir = _jigSort.dir;
@@ -4931,6 +5888,116 @@ async function openDcnFolder(path) {
     showToast('開啟資料夾失敗：' + e.message);
   }
 }
+
+// ── ZUMEN 圖面 ────────────────────────────────────────────────────
+let _zumeData = [], _zumeLoaded = false, _zumeOptions = {};
+
+async function loadZumeData() {
+  if (_zumeLoaded) return;
+  document.getElementById('zume-content').innerHTML =
+    '<div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>';
+  try {
+    const res  = await fetch('/api/zume/list');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    _zumeData    = data.drawings || [];
+    _zumeOptions = data.options  || {};
+    _zumeLoaded  = true;
+    fillZumeFilters();
+    renderZumeTable();
+    const upd = document.getElementById('zume-last-updated');
+    if (data.last_at) {
+      const utc = new Date(data.last_at.replace(' ', 'T') + 'Z');
+      const d = utc.toLocaleString('zh-TW', {timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).replace(/\//g,'-').replace(',','');
+      upd.textContent = `上次匯入：${d}（${data.last_file||''}）`;
+    } else {
+      upd.textContent = '尚未匯入 ZUMEN CSV（請按「重新匯入」）';
+    }
+  } catch (e) {
+    document.getElementById('zume-content').innerHTML = `<div class="msg-error">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+
+function fillZumeFilters() {
+  const map = { line:'zume-f-line', prod_group:'zume-f-group', category:'zume-f-cat', vendor:'zume-f-vendor' };
+  Object.entries(map).forEach(([col,id]) => {
+    const sel  = document.getElementById(id);
+    const vals = _zumeOptions[col] || [];
+    sel.innerHTML = '<option value="">全部</option>' + vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  });
+}
+
+function renderZumeTable() {
+  const kw      = (document.getElementById('zume-f-kw').value||'').trim().toLowerCase();
+  const fLine   = document.getElementById('zume-f-line').value;
+  const fGroup  = document.getElementById('zume-f-group').value;
+  const fCat    = document.getElementById('zume-f-cat').value;
+  const fVendor = document.getElementById('zume-f-vendor').value;
+  const rows = _zumeData.filter(r => {
+    if (fLine   && r.line       !== fLine)   return false;
+    if (fGroup  && r.prod_group !== fGroup)  return false;
+    if (fCat    && r.category   !== fCat)    return false;
+    if (fVendor && r.vendor     !== fVendor) return false;
+    if (kw && !`${r.part_no} ${r.part_name}`.toLowerCase().includes(kw)) return false;
+    return true;
+  });
+  document.getElementById('zume-f-count').textContent = rows.length;
+  const content = document.getElementById('zume-content');
+  if (!rows.length) {
+    content.innerHTML = '<div class="msg-empty"><span>查無圖面資料（請先按「重新匯入」載入 ZUMEN CSV）</span></div>';
+    return;
+  }
+  // 只顯示整批有資料的欄
+  const show = {
+    line: _zumeData.some(r=>r.line), prod_group: _zumeData.some(r=>r.prod_group),
+    category: _zumeData.some(r=>r.category), vendor: _zumeData.some(r=>r.vendor),
+  };
+  const head = `<th style="width:170px">圖號</th><th>品名</th>`
+    + (show.line       ? '<th style="width:90px">生產線別</th>' : '')
+    + (show.prod_group ? '<th style="width:90px">生產群組</th>' : '')
+    + (show.category   ? '<th style="width:80px">分類</th>'     : '')
+    + (show.vendor     ? '<th style="width:120px">廠商/客戶</th>' : '')
+    + '<th style="width:72px" class="center">ZUMEN</th>';
+  const trs = rows.map(r => {
+    const pn = esc(r.part_no).replace(/'/g, "\\'");
+    return `<tr>
+      <td class="td-code">${esc(r.part_no)}</td>
+      <td>${esc(r.part_name)}</td>`
+      + (show.line       ? `<td class="td-center">${esc(r.line)}</td>`       : '')
+      + (show.prod_group ? `<td class="td-center">${esc(r.prod_group)}</td>` : '')
+      + (show.category   ? `<td class="td-center">${esc(r.category)}</td>`   : '')
+      + (show.vendor     ? `<td>${esc(r.vendor)}</td>`                       : '')
+      + `<td class="td-center"><button class="zume-open-btn" onclick="openZume('${pn}')">開啟</button></td>
+    </tr>`;
+  }).join('');
+  content.innerHTML = `<table class="pro-table"><thead><tr>${head}</tr></thead><tbody>${trs}</tbody></table>`;
+}
+
+async function openZume(partNo) {
+  try {
+    const res  = await fetch('/api/zume/open', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({item_nos:[partNo]}) });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+  } catch(e) { showToast('開啟 ZUMEN 失敗：' + e.message); }
+}
+
+async function rescanZume() {
+  const btn = document.getElementById('zume-rescan-btn');
+  btn.disabled = true; btn.textContent = '⟳ 匯入中…';
+  try {
+    const res  = await fetch('/api/zume/scan', { method:'POST' });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    _zumeLoaded = false;
+    await loadZumeData();
+    btn.textContent = `✓ 匯入 ${data.imported} 筆`;
+  } catch(e) {
+    showToast('重新匯入失敗：' + e.message);
+    btn.textContent = '⟳ 重新匯入';
+  } finally {
+    setTimeout(()=>{ btn.textContent='⟳ 重新匯入'; btn.disabled=false; }, 2500);
+  }
+}
 </script>
 
 <div id="event-modal" onclick="if(event.target===this) closeEventModal()">
@@ -4971,6 +6038,24 @@ async function openDcnFolder(path) {
       <span class="rm-close" onclick="closeJigRemarks()">✕</span>
     </div>
     <div class="rm-body" id="rm-body"></div>
+  </div>
+</div>
+
+<div id="pu-pw-modal" onclick="if(event.target===this) closePurchasePwModal()">
+  <div class="rm-card" style="min-width:300px;max-width:340px">
+    <div class="rm-header">
+      <span class="rm-title">🔒 請輸入密碼</span>
+      <span class="rm-close" onclick="closePurchasePwModal()">✕</span>
+    </div>
+    <div class="rm-body">
+      <input type="password" id="pu-pw-input" placeholder="密碼"
+        onkeydown="if(event.key==='Enter') confirmPurchasePw()"
+        style="width:100%;padding:.5rem .7rem;border:1px solid var(--border);border-radius:6px;font-size:.95rem">
+      <div style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem">
+        <button onclick="closePurchasePwModal()" style="padding:.4rem 1rem;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer">取消</button>
+        <button onclick="confirmPurchasePw()" style="padding:.4rem 1rem;border:none;border-radius:6px;background:var(--blue-d);color:#fff;cursor:pointer;font-weight:700">確定</button>
+      </div>
+    </div>
   </div>
 </div>
 

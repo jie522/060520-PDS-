@@ -68,6 +68,17 @@ OVERTIME_SHEET_NAME = 'M2.加班人員'
 ATTENDANCE_SHEET_ID  = '1hH2bbU3jNtQ_ddG8D9cr5qJc1qolf30gT9YjqhpORno'
 ATTENDANCE_SHEET_GID = '1760796831'
 
+# ── 管理頁面：Google 試算表（採購登入表）設定 ────
+PURCHASE_SHEET_ID  = '1HVSiu4GdO8R8ABkjM5oObLr-e7ZEkTwY5em9Vf9QoDA'
+PURCHASE_SHEET_NAME = '主表'
+
+# ── 批成本計算（共用區 Excel 範本）設定 ────────────────────────
+BATCH_COST_FILE_PATH = r'\\192.168.1.99\共用區\品保加工共用平台\加工課自主巡檢表(空白)\【批成本計算】.xlsx'
+BATCH_COST_TOOL_SHEET    = '刀具資料'    # 單價/刃數對照
+BATCH_COST_TOOLMAP_SHEET = '刀表'        # 品號→T1~T39 刀具配置
+BATCH_COST_RECORD_SHEET  = '批成本計算'  # 結果輸出（不存在時自動建立）
+BATCH_COST_LIFESPAN_SHEET = '製令與刀具壽命'  # 每把刀具使用次數明細（不存在時自動建立）
+
 # ── 管理頁面：治檢具清單（PDM 資料夾）設定 ────────────────────────
 JIG_VAULT_PATH = r'C:\MAXCLAW\06-生技課\01-模檢治具(2026後)'
 JIG_SUBMITTERS = ['楊良捷', '陳銘仁', '林昭佑']

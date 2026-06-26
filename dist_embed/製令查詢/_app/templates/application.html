@@ -34,9 +34,11 @@
       --radius-sm:   5px;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body, * {
+      font-family: 'Noto Sans TC', 'Source Han Sans TC', sans-serif;
+    }
     body {
       background: var(--bg);
-      font-family: 'Noto Sans TC', 'Source Han Sans TC', sans-serif;
       font-size: 0.95rem;
       color: var(--text);
       display: flex;
@@ -55,6 +57,7 @@
       z-index: 100;
     }
     .header-inner { display:flex; align-items:flex-end; padding:.4rem 1rem 0; }
+    .header-logo { margin-left:auto; align-self:center; font-size:1.15rem; font-weight:800; font-style:italic; letter-spacing:.03em; color:#F5A623; }
     .header-title { font-size:1.1rem; font-weight:700; padding-bottom:.45rem; white-space:nowrap; margin-right:.5rem; }
     .header-tabs { display:flex; align-items:flex-end; gap:2px; }
     .header-tab {
@@ -584,8 +587,10 @@
       <a href="/equipment"  class="header-tab">設備稼動</a>
       <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
       <a href="/routing"    class="header-tab">產品途程查詢</a>
+      <a href="/batch_cost" class="header-tab">批成本</a>
       <a href="/management" class="header-tab active">管理</a>
     </div>
+    <span class="header-logo">MAXCLAW</span>
   </div>
 </div>
 
