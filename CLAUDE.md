@@ -97,6 +97,7 @@ dist_embed/製令查詢/
 | `docs/dcn-index.md` | 修改設計變更通知單（build_dcn_index.py）相關邏輯 |
 | `docs/zumen.md` | 修改 ZUMEN 圖面子頁或 `/api/zume/*` |
 | `docs/nav-design.md` | 新增頂層分頁或修改導覽列樣式 |
+| `docs/dev-workflow.md` | 要 push GitHub，或用 preview 工具驗證前端改動時 |
 
 ## 搜尋語法
 

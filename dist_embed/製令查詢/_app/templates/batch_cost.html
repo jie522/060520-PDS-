@@ -122,9 +122,11 @@
     }
     table.bc-table th:last-child { border-right:none; }
     table.bc-table th.center { text-align:center; }
-    table.bc-table td { padding:.45rem .75rem; border-bottom:1px solid #EDF1F5; vertical-align:middle; white-space:nowrap; font-size:.93rem; color:var(--text-2); }
+    table.bc-table td { padding:.45rem .75rem; border-bottom:1px solid #EDF1F5; vertical-align:middle; white-space:nowrap; font-size:.93rem; color:var(--text-2); font-variant-numeric:tabular-nums; }
+    table.bc-table td.bc-col-num { text-align:right; }
     table.bc-table tbody tr:nth-child(even) td { background:#FAF9F5; }
     table.bc-table tbody tr:hover td { background:rgba(21,101,192,.05) !important; color:var(--text); }
+    table.bc-table tbody tr:hover { box-shadow: inset 3px 0 0 var(--blue-mid); }
     table.bc-table tfoot td { font-weight:700; background:var(--blue-pale); border-top:2px solid var(--blue); }
     table.bc-table-compact th { padding:.4rem .55rem; font-size:.78rem; }
     table.bc-table-compact td { padding:.35rem .55rem; font-size:.78rem; white-space:normal; word-break:break-word; }
@@ -132,6 +134,29 @@
     table.bc-table-nested tbody tr:nth-child(even) td { background:#EFF3F4; }
     table.bc-table-nested tbody tr:hover td { background:rgba(55,71,79,.08) !important; }
     .bc-slot-badge { display:inline-block; min-width:38px; text-align:center; background:var(--blue-d); color:#fff; border-radius:5px; padding:.15rem .4rem; font-size:.78rem; font-weight:700; }
+
+    /* 展開按鈕：旋轉圖示而非切換字元，附鍵盤可視焦點 */
+    .bc-expand-btn {
+      width:22px; height:22px; border:none; background:transparent; cursor:pointer; border-radius:5px;
+      display:inline-flex; align-items:center; justify-content:center; color:var(--muted);
+      transition:transform .18s ease, background .15s, color .15s;
+    }
+    .bc-expand-btn:hover { background:rgba(21,101,192,.1); color:var(--blue-d); }
+    .bc-expand-btn:focus-visible { outline:2px solid var(--blue-mid); outline-offset:1px; }
+    .bc-expand-btn.is-open { transform:rotate(90deg); color:var(--blue-d); }
+    .bc-expand-btn svg { width:11px; height:11px; fill:currentColor; }
+
+    /* 展開列：左側細直條把明細跟所屬列視覺上連起來 */
+    .bc-detail-rail { border-left:3px solid var(--blue-pale); }
+
+    /* 「加工費用(含刀具成本)」欄：用相對量級的內嵌條取代整格平鋪底色，掃描異常值更直觀 */
+    table.bc-table td.bc-cost-cell { position:relative; font-weight:700; color:#A8431D; }
+    table.bc-table tbody tr:hover td.bc-cost-cell { color:#A8431D; }
+    td.bc-cost-cell .bc-cost-bar {
+      position:absolute; left:0; top:.3rem; bottom:.3rem; right:0; background:rgba(168,67,29,.1);
+      border-radius:0 3px 3px 0; z-index:0;
+    }
+    td.bc-cost-cell .bc-cost-num { position:relative; z-index:1; }
     .bc-qty-input { width:70px; text-align:right; }
     .bc-tool-name-missing { color:var(--warn); font-weight:700; }
     .bc-empty { color:var(--muted); font-size:.85rem; padding:1rem; text-align:center; }
@@ -883,6 +908,53 @@ function bcRecordsKeywordFiltered() {
   return _bcRecordsItems.filter(r => _bcRecordsColumns.some(c => (r[c] || '').toLowerCase().includes(kw)));
 }
 
+// 月份成本趨勢用面積折線圖：折線比柱狀更能表達「走勢」，最新一個月用實心大點＋粗體數字強調「現在在哪裡」
+function bcBuildTrendChart(entries) {
+  const n = entries.length;
+  if (!n) return '<div class="bc-empty">查無資料</div>';
+  const W = Math.max(360, n * 68);
+  const H = 150, padTop = 30, padBottom = 24, padX = 24;
+  const vals = entries.map(e => e[1]);
+  const max = Math.max(...vals, 1);
+  const min = Math.min(...vals, 0);
+  const range = Math.max(max - min, 1);
+  const xAt = i => n === 1 ? W / 2 : padX + (i / (n - 1)) * (W - padX * 2);
+  const yAt = v => padTop + (1 - (v - min) / range) * (H - padTop - padBottom);
+
+  const pts = entries.map(([m, v], i) => ({ x: xAt(i), y: yAt(v), m, v }));
+  const linePts = pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const areaPts = `${pts[0].x.toFixed(1)},${H - padBottom} ${linePts} ${pts[n - 1].x.toFixed(1)},${H - padBottom}`;
+
+  const circles = pts.map((p, i) => {
+    const isLast = i === n - 1;
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isLast ? 5 : 3}" fill="${isLast ? '#A8431D' : '#fff'}" stroke="#A8431D" stroke-width="2"/>`;
+  }).join('');
+
+  const valueLabels = pts.map((p, i) => {
+    const isLast = i === n - 1;
+    return `<text x="${p.x.toFixed(1)}" y="${(p.y - 10).toFixed(1)}" text-anchor="middle" font-size="11"
+      font-weight="${isLast ? 700 : 500}" fill="${isLast ? '#A8431D' : '#7A8FA3'}" opacity="${isLast ? 1 : .65}">${esc(p.v.toLocaleString('zh-TW', {maximumFractionDigits: 2}))}</text>`;
+  }).join('');
+
+  const monthLabels = pts.map(p =>
+    `<text x="${p.x.toFixed(1)}" y="${H - 7}" text-anchor="middle" font-size="11" fill="#7A8FA3">${esc(p.m)}</text>`).join('');
+
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">
+    <defs>
+      <linearGradient id="bcTrendFill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#A8431D" stop-opacity="0.16"/>
+        <stop offset="100%" stop-color="#A8431D" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <line x1="${padX}" y1="${H - padBottom}" x2="${W - padX}" y2="${H - padBottom}" stroke="#E2E7EC" stroke-width="1"/>
+    <polygon points="${areaPts}" fill="url(#bcTrendFill)"/>
+    <polyline points="${linePts}" fill="none" stroke="#A8431D" stroke-width="2"/>
+    ${circles}
+    ${valueLabels}
+    ${monthLabels}
+  </svg>`;
+}
+
 function bcRenderRecordsStats(filtered) {
   const box = document.getElementById('bc-records-stats-content');
   if (!filtered.length) { box.innerHTML = '<div class="bc-empty">查無資料</div>'; return; }
@@ -944,27 +1016,27 @@ function bcRenderRecordsStats(filtered) {
 
     <div class="bc-card" style="margin-bottom:1rem">
       <div class="bc-card-header">📈 月份成本趨勢（加工費用含刀具成本，平均值）</div>
-      <div class="bc-card-body" style="display:flex;align-items:flex-end;gap:.4rem;min-height:160px;padding-top:1.5rem">
-        ${monthEntries.map(([m, val]) => `
-          <div style="display:flex;flex-direction:column;align-items:center;gap:.4rem;flex:0 0 auto;width:60px">
-            <div style="font-size:.78rem;font-weight:700;color:var(--blue-d)">${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>
-            <div style="width:36px;background:linear-gradient(180deg,var(--blue-mid),var(--blue-d));border-radius:4px 4px 0 0;height:${(val/monthMax*110).toFixed(0)}px;min-height:3px"></div>
-            <div style="font-size:.78rem;color:var(--text-2)">${esc(m)}</div>
-          </div>`).join('')}
+      <div class="bc-card-body" style="overflow-x:auto">
+        ${bcBuildTrendChart(monthEntries)}
       </div>
     </div>
 
     <div class="bc-card">
       <div class="bc-card-header">📊 平均加工成本比較（依品名，加工費用含刀具成本）</div>
       <div class="bc-card-body">
-        ${nameEntries.map(([name, val]) => `
-          <div style="display:flex;align-items:center;gap:.7rem;margin-bottom:.55rem">
-            <div style="width:220px;font-size:.8rem;color:var(--text-2);text-align:right;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(name)}">${esc(name)}</div>
-            <div style="width:280px;max-width:50%;background:#F1F5F9;border-radius:5px;overflow:hidden;height:22px">
-              <div style="height:100%;background:linear-gradient(90deg,var(--blue-mid),var(--blue));border-radius:5px;width:${(val/nameMax*100).toFixed(1)}%;min-width:2px"></div>
+        ${nameEntries.map(([name, val], i) => {
+          const rank = i + 1;
+          const isTop3 = rank <= 3;
+          return `
+          <div style="display:flex;align-items:center;gap:.7rem;margin-bottom:.5rem">
+            <div style="width:18px;font-size:.74rem;font-weight:700;color:${isTop3 ? '#A8431D' : 'var(--muted)'};text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums">${rank}</div>
+            <div style="width:200px;font-size:.8rem;color:var(--text-2);text-align:right;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(name)}">${esc(name)}</div>
+            <div style="flex:1;max-width:320px;background:#F4ECE8;border-radius:5px;overflow:hidden;height:22px">
+              <div style="height:100%;background:linear-gradient(90deg,#D97A4D,#A8431D);border-radius:5px;width:${(val/nameMax*100).toFixed(1)}%;min-width:2px"></div>
             </div>
-            <div style="width:100px;font-size:.82rem;font-weight:700;text-align:right">${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>
-          </div>`).join('')}
+            <div style="width:90px;font-size:.82rem;font-weight:700;text-align:right;color:#A8431D;font-variant-numeric:tabular-nums">${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>
+          </div>`;
+        }).join('')}
       </div>
     </div>`;
 
@@ -1051,20 +1123,31 @@ function bcRenderRecordsList() {
   const box = document.getElementById('bc-records-table-wrap');
   if (!filtered.length) { box.innerHTML = '<div class="bc-empty">查無資料</div>'; return; }
   const colCount = _bcRecordsColumns.length + 2;
+
+  // 偵測哪些欄位是數字欄（該欄非空值全部能解析成數字），用於右對齊+量級條
+  const numericCols = new Set(_bcRecordsColumns.filter(c => {
+    const vals = filtered.map(r => (r[c] || '').trim()).filter(Boolean);
+    return vals.length > 0 && vals.every(v => !isNaN(parseFloat(v)) && isFinite(v));
+  }));
+  const costCol = '加工費用(含刀具成本)';
+  const costMax = Math.max(...filtered.map(r => parseFloat(r[costCol]) || 0), 1);
+
   box.innerHTML = `<table class="bc-table bc-table-compact">
-    <thead><tr><th style="width:30px"></th>${_bcRecordsColumns.map(c => `<th>${esc(c)}</th>`).join('')}<th style="width:64px">操作</th></tr></thead>
+    <thead><tr><th style="width:30px"></th>${_bcRecordsColumns.map(c => `<th${numericCols.has(c) ? ' style="text-align:right"' : ''}>${esc(c)}</th>`).join('')}<th style="width:64px">操作</th></tr></thead>
     <tbody>${filtered.map((r, i) => {
       const tools = _bcLifespanByKey[bcRecordsKey(r)] || [];
       const expandId = `bc-rec-expand-${r.row}`;
       const toggleCell = tools.length
-        ? `<td style="cursor:pointer;text-align:center" onclick="bcToggleRecordExpand('${expandId}', this)">▶</td>`
+        ? `<td style="text-align:center"><button type="button" class="bc-expand-btn" aria-expanded="false" aria-controls="${expandId}" onclick="bcToggleRecordExpand('${expandId}', this)" title="展開/收合刀具明細">
+             <svg viewBox="0 0 16 16"><path d="M5 2l7 6-7 6z"/></svg>
+           </button></td>`
         : `<td></td>`;
       const detailRow = tools.length ? `
         <tr id="${expandId}" style="display:none">
-          <td colspan="${colCount}" style="background:#F6F9FC;padding:.7rem 1rem">
+          <td colspan="${colCount}" class="bc-detail-rail" style="background:#F6F9FC;padding:.7rem 1rem">
             <table class="bc-table bc-table-compact bc-table-nested" style="background:#fff;width:auto">
               <thead><tr>
-                <th style="width:60px">刀號</th><th style="width:220px">刀具名稱</th>
+                <th style="width:60px">刀號</th><th style="width:340px">刀具名稱</th>
                 <th style="width:90px">項目</th><th style="width:90px">供應商</th>
                 <th style="width:80px;text-align:right">單價</th><th style="width:80px;text-align:right">使用次數</th><th style="width:90px;text-align:right">小計</th>
               </tr></thead>
@@ -1077,8 +1160,12 @@ function bcRenderRecordsList() {
           </td>
         </tr>` : '';
       return `<tr>${toggleCell}${_bcRecordsColumns.map(c => {
-        const isHighlight = c === '加工費用(含刀具成本)';
-        return `<td${isHighlight ? ' style="font-weight:700;color:var(--accent-d, #C5613F);background:#FFF7F2"' : ''}>${esc(r[c] || '')}</td>`;
+        const val = r[c] || '';
+        if (c === costCol) {
+          const pct = Math.min(100, (parseFloat(val) || 0) / costMax * 100);
+          return `<td class="bc-cost-cell"><div class="bc-cost-bar" style="width:${pct.toFixed(0)}%"></div><span class="bc-cost-num">${esc(val)}</span></td>`;
+        }
+        return `<td${numericCols.has(c) ? ' class="bc-col-num"' : ''}>${esc(val)}</td>`;
       }).join('')}
         <td><button class="bc-btn danger" onclick="bcDeleteRecord(${r.row})">刪除</button></td>
       </tr>${detailRow}`;
@@ -1086,11 +1173,12 @@ function bcRenderRecordsList() {
   </table>`;
 }
 
-function bcToggleRecordExpand(expandId, cell) {
+function bcToggleRecordExpand(expandId, btn) {
   const row = document.getElementById(expandId);
   const showing = row.style.display !== 'none';
   row.style.display = showing ? 'none' : '';
-  cell.textContent = showing ? '▶' : '▼';
+  btn.classList.toggle('is-open', !showing);
+  btn.setAttribute('aria-expanded', String(!showing));
 }
 
 async function bcDeleteRecord(rowNo) {

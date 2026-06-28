@@ -621,7 +621,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260626b'
+APP_VERSION = 'V20260626d'
 
 @app.route('/ver')
 def ver_check():
