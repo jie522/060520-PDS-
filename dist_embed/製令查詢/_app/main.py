@@ -164,6 +164,7 @@ def _open_app_window():
             browser,
             f'--app={URL}?_t={cache_bust}',
             f'--window-size=1400,900',
+            '--start-maximized',
             f'--user-data-dir={user_data}',
             '--no-first-run',
             '--no-default-browser-check',

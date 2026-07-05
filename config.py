@@ -45,11 +45,9 @@ SCRAP_SHEET_ID  = '1v8mKx0m7RyUSjzOeBJMy576hqvGKyerxyNQo4pfVw04'
 SCRAP_SHEET_GID = '0'
 
 # ── 管理頁面：Google 試算表（生產日報表）設定 ────────────────────
-# 明細與圖表皆使用 P5.3生產日報表data_ref 分頁（gid 567727173，全分類完整歷史）
 # 注意：此分頁無「機台名稱」「備註」欄位
-PROD_REPORT_SHEET_ID  = '1U_fY-DuNyTPa54PrSy2q9c_JGWqHa48R1fUmA6XBzU4'
-PROD_REPORT_SHEET_GID = '567727173'           # 明細分頁：P5.3生產日報表data_ref
-PROD_REPORT_CHART_GID = '567727173'           # 圖表來源分頁：P5.3生產日報表data_ref
+PROD_REPORT_SHEET_ID   = '1U_fY-DuNyTPa54PrSy2q9c_JGWqHa48R1fUmA6XBzU4'
+PROD_REPORT_SHEET_NAME = 'P5.3生產日報表data_ref'  # 明細與圖表共用同一分頁，用名稱比 GID 穩定
 
 # ── 管理頁面：Google 試算表（ABC 分類）設定 ──────────────────────
 # 以品號+製程代號為 key，Q欄 = A/B/C 分類
@@ -82,9 +80,15 @@ BATCH_COST_LIFESPAN_SHEET = '製令與刀具壽命'  # 每把刀具使用次數�
 # ── 管理頁面：治檢具清單（PDM 資料夾）設定 ────────────────────────
 JIG_VAULT_PATH = r'C:\MAXCLAW\06-生技課\01-模檢治具(2026後)'
 JIG_SUBMITTERS = ['楊良捷', '陳銘仁', '林昭佑']
+# 新增申請單用的空白 Excel 範本（vault 內路徑）
+JIG_APPLY_TEMPLATE_XLSM = r'C:\MAXCLAW\06-生技課\00-空白範本\PP-M-041機器模檢治具申請單(2026後).xlsm'
 
 # ── 管理頁面：設計變更通知單（PDM 資料夾）設定 ──────────────────────
 DCN_VAULT_PATH = r'C:\MAXCLAW\00-研發部\02-文件資料\02-設計變更通知單'
+
+# ── CNC 程式管理（網路資料夾）設定 ────────────────────────────────
+CNC_PROGRAM_ROOT_PATH = r'\\192.168.1.99\加工部-資料夾\【技術資料】\P.程式'
+CNC_PROGRAM_TEMPLATE_PATH = CNC_PROGRAM_ROOT_PATH + r'\【空白範本】'
 
 # ── ERP SQL Server 連線設定（BOM查詢用）──────────────────────────
 # 連線至 192.168.1.140 的 Computech ERP YC01 資料庫

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>加工部查詢系統PDS</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='4' fill='%230f62fe'/><polygon fill='white' points='8.5,5.94 10.44,3.13 13.56,3.13 15.5,5.94 18.89,6.21 20.46,8.92 19,12 20.46,15.08 18.89,17.79 15.5,18.06 13.56,20.87 10.44,20.87 8.5,18.06 5.11,17.79 3.54,15.08 5,12 3.54,8.92 5.11,6.21'/><circle cx='12' cy='12' r='4' fill='%230f62fe'/></svg>">
+  <link rel="icon" type="image/png" href="/static/app-icon.png">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -44,7 +44,9 @@
       background:rgba(255,255,255,.15);cursor:pointer;transition:background .15s}
     .header-tab.active,.header-tab:hover{background:#fff;color:var(--blue-d)}
 
-    /* ── Layout ── */
+    
+        .header-tab-mgmt{background:#06C755;color:#fff}
+        .header-tab-mgmt.active,.header-tab-mgmt:hover{background:#05A649;color:#fff}/* ── Layout ── */
     .page-body {
       display: flex;
       gap: 0.5rem;
@@ -364,7 +366,8 @@
       <a href="/routing"     class="header-tab">產品途程查詢</a>
       <span                 class="header-tab active">BOM查詢</span>
       <a href="/batch_cost" class="header-tab">批成本</a>
-      <a href="/management" class="header-tab">管理</a>
+      <a href="/cnc_program" class="header-tab">程式管理</a>
+      <a href="/management" class="header-tab header-tab-mgmt">管理</a>
     </div>
     <span class="header-logo">MAXCLAW</span>
   </div>

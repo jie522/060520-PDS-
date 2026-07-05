@@ -11,7 +11,7 @@ import uuid
 import webbrowser
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, redirect
 import requests
@@ -65,6 +65,9 @@ if not os.path.exists(PDM_DB_PATH):
 
 # ── 技術資料清單資料庫（zume-n.com 圖號↔URL 對照表）──────────────────────
 ZUME_DB_PATH = os.path.join(_APP_DIR, 'zume_drawings.db')
+
+# ── CNC 程式索引資料庫（build_cnc_program_index.py 建立）──────────────────
+CNC_DB_PATH = os.path.join(_APP_DIR, 'cnc_program_index.db')
 
 # ZUMEN 圖面欄位 → CSV 標題關鍵字對照（依關鍵字動態偵測欄位，缺的留空）
 _ZUME_EXTRA_COLS = ['line', 'prod_group', 'category', 'vendor']
@@ -292,19 +295,25 @@ def match_and_not(query, text):
     return True
 
 
-def fetch_all_unfinished():
-    """取得所有未完工製令（帶 TTL 快取）"""
-    cached = cache_get('unfinished')
+def fetch_all_unfinished(release_status='已發放'):
+    """取得所有未完工製令（帶 TTL 快取）
+    release_status: '已發放'（預設，產線上已在跑的）／'未發放'（ERP製令發放作業裡還沒發放的）／'all'（兩者都查再合併）
+    """
+    if release_status == 'all':
+        return fetch_all_unfinished('已發放') + fetch_all_unfinished('未發放')
+
+    cache_key = f'unfinished_{release_status}'
+    cached = cache_get(cache_key)
     if cached is not None:
         return cached
     params = {
-        '發放情況': '已發放',
+        '發放情況': release_status,
         'SFT完工碼': '尚未',
         '加工單位': '*',
     }
     csv_text = fetch_report_csv(config.REPORT_PATHS['unfinished'], params)
     data = parse_csv(csv_text)
-    cache_set('unfinished', data)
+    cache_set(cache_key, data)
     return data
 
 
@@ -323,13 +332,21 @@ def get_ssrs_session():
 
 
 def fetch_report_csv(report_path, params=None):
-    """從 SSRS 取得報表 CSV 資料"""
-    session = get_ssrs_session()
+    """從 SSRS 取得報表 CSV 資料
+    NTLM 連線在多執行緒並行（ThreadPoolExecutor）冷啟動時偶發 401（共用 session 的已知問題），
+    遇到 401 時丟掉舊 session 重建一次再試，避免偶發失敗"""
+    global _ssrs_session
     url = f'{config.SSRS_BASE_URL}?{quote(report_path)}&rs:Command=Render&rs:Format=CSV'
     if params:
         param_str = '&'.join(f'{quote(k)}={quote(str(v))}' for k, v in params.items())
         url += f'&{param_str}'
+    session = get_ssrs_session()
     resp = session.get(url, timeout=30)
+    if resp.status_code == 401:
+        with _ssrs_session_lock:
+            _ssrs_session = None
+        session = get_ssrs_session()
+        resp = session.get(url, timeout=30)
     resp.raise_for_status()
     return resp.content.decode('utf-8-sig')
 
@@ -462,11 +479,12 @@ UNIT_OPTIONS = {
 KNOWN_UNITS = set(UNIT_OPTIONS.keys())
 
 
-def search_orders(order_id='', product_name='', unit='000-1'):
+def search_orders(order_id='', product_name='', unit='000-1', release_status='已發放'):
     """從未完工製令報表搜尋，支援製令號碼、品名模糊搜尋和生產線篩選
     unit: '000-1'/'000-2'/'000-3'/'other'/'*'
+    release_status: '已發放'（預設）／'未發放'／'all'
     """
-    all_records = fetch_all_unfinished()
+    all_records = fetch_all_unfinished(release_status)
     filtered = []
     for r in all_records:
         if order_id and order_id.upper() not in r.get('單別', '').upper():
@@ -621,7 +639,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260626d'
+APP_VERSION = 'V20260703'
 
 @app.route('/ver')
 def ver_check():
@@ -688,14 +706,12 @@ def query():
     order_id = request.args.get('order_id', '').strip()
     product_name_q = request.args.get('product_name', '').strip()
     unit = request.args.get('unit', '000-1').strip()
-
-    if not order_id and not product_name_q:
-        return jsonify({'success': False, 'error': '請輸入製令號碼或品名'}), 400
+    release_status = request.args.get('release', '已發放').strip() or '已發放'
 
     try:
         # ── 第 1 步：取未完工製令 + 效率報表（並行） ──
         with ThreadPoolExecutor(max_workers=2) as pool:
-            fut_orders = pool.submit(search_orders, order_id, product_name_q, unit)
+            fut_orders = pool.submit(search_orders, order_id, product_name_q, unit, release_status)
             fut_eff = pool.submit(fetch_efficiency_data)
             records = fut_orders.result()
             eff_data = fut_eff.result()
@@ -745,9 +761,9 @@ def query():
             std_time = daily_info.get('std_time', '')
             if not std_time and eff_info.get('標工_秒'):
                 std_time = eff_info['標工_秒'] + ' 秒'
-            # 標工：移除 "/H"，若只有 "- PCS" 等無數字則顯示空白
+            # 標工：原始格式為 "105 PCS/H"（每小時產出件數），去掉 "PCS" 避免看起來像數量欄，保留 "/H" 標示這是速率
             if std_time:
-                std_time = std_time.replace('/H', '').strip()
+                std_time = re.sub(r'\s*PCS\s*/\s*H', '/H', std_time, flags=re.IGNORECASE).strip()
                 if not re.search(r'\d', std_time):
                     std_time = ''
 
@@ -760,6 +776,7 @@ def query():
                 '加工順序': r.get('加工順序', ''),
                 '製程代號': proc_code,
                 '製程名稱': daily_info.get('process_name', ''),
+                '發放狀態': r.get('情況', ''),
                 '標工': std_time,
                 '預計生產量': r.get('預計生產數', ''),
                 '預計開工日': eff_info.get('SFT預計開工日', '') or r.get('製程預計開工日', ''),
@@ -1345,7 +1362,7 @@ def _run_reindex(update_only: bool):
             except Exception:
                 cnt = _reindex_state['indexed']
 
-            ts_done = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            ts_done = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             with _reindex_lock:
                 _reindex_state.update(
                     running=False, phase='done', last_count=cnt,
@@ -2997,7 +3014,7 @@ def batch_cost_lookup_order():
     # 從『生產日報表P5.3』查機台名稱/機台代號（依製令+製程代號比對；P5.3 的製令欄位帶序號尾碼如 -0010，需先去除才能比對）
     p53_map = {}
     try:
-        p53_rows = fetch_google_sheet_csv(config.PROD_REPORT_SHEET_ID, gid=config.PROD_REPORT_SHEET_GID)
+        p53_rows = fetch_google_sheet_csv(config.PROD_REPORT_SHEET_ID, sheet_name=config.PROD_REPORT_SHEET_NAME)
         for p53r in p53_rows:
             wo_full = (p53r.get('製令') or '').strip()
             wo = wo_full.rsplit('-', 1)[0] if wo_full.count('-') >= 2 else wo_full
@@ -3494,6 +3511,282 @@ def batch_cost_page():
     return render_template('batch_cost.html', app_version=APP_VERSION)
 
 
+# ══════════════════════════════════════════════════════════
+#  CNC 程式管理
+# ══════════════════════════════════════════════════════════
+
+def _cnc_safe_path(relpath):
+    """將相對路徑轉成絕對路徑，並確保仍在 CNC_PROGRAM_ROOT_PATH 底下（防止路徑跳脫）"""
+    root = os.path.normpath(config.CNC_PROGRAM_ROOT_PATH)
+    full = os.path.normpath(os.path.join(root, relpath or ''))
+    if full.lower() != root.lower() and not full.lower().startswith(root.lower() + os.sep):
+        return None
+    return full
+
+
+def _cnc_safe_filename(name):
+    """保留中文字元，只移除路徑分隔符與 Windows 不允許的字元"""
+    name = os.path.basename(name or '').strip()
+    name = re.sub(r'[\\/:*?"<>|]', '_', name)
+    return name or 'upload.txt'
+
+
+@app.route('/cnc_program')
+def cnc_program_page():
+    """CNC 程式管理頁面"""
+    return render_template('cnc_program.html', app_version=APP_VERSION)
+
+
+@app.route('/api/cnc_program/search')
+def cnc_program_search():
+    """搜尋 CNC 程式索引（空格=AND，-前綴=NOT，比對系列/品號/機台/檔名/備註）"""
+    if not os.path.exists(CNC_DB_PATH):
+        return jsonify({'success': False, 'error': '索引尚未建立，請先按「重建索引」'}), 500
+
+    q = request.args.get('q', '').strip()
+    conn = sqlite3.connect(CNC_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = [dict(r) for r in conn.execute(
+            'SELECT * FROM cnc_program_index ORDER BY mtime DESC').fetchall()]
+    finally:
+        conn.close()
+
+    if q:
+        must, must_not = [], []
+        for tok in q.split():
+            if tok.startswith('-') and len(tok) > 1:
+                must_not.append(tok[1:].lower())
+            else:
+                must.append(tok.lower())
+
+        def haystack(r):
+            return ' '.join([r.get('top_folder') or '', r.get('model') or '',
+                              r.get('machine') or '', r.get('filename') or '',
+                              r.get('remark') or '']).lower()
+
+        rows = [r for r in rows if all(m in haystack(r) for m in must)
+                and not any(m in haystack(r) for m in must_not)]
+
+    truncated = len(rows) > 300
+    return jsonify({'success': True, 'count': len(rows), 'truncated': truncated,
+                    'data': rows[:300]})
+
+
+@app.route('/api/cnc_program/tree')
+def cnc_program_tree():
+    """回傳系列→品號→機台的階層結構，供上傳/新增範本選單使用"""
+    if not os.path.exists(CNC_DB_PATH):
+        return jsonify({'success': True, 'tree': {}})
+
+    conn = sqlite3.connect(CNC_DB_PATH)
+    try:
+        rows = conn.execute(
+            'SELECT DISTINCT top_folder, model, machine FROM cnc_program_index').fetchall()
+    finally:
+        conn.close()
+
+    tree = {}
+    for top, model, machine in rows:
+        top = top or ''
+        model = model or ''
+        machine = machine or ''
+        bucket = tree.setdefault(top, {})
+        if model:
+            machines = bucket.setdefault(model, set())
+            if machine:
+                machines.add(machine)
+    result = {t: {m: sorted(ms) for m, ms in models.items()} for t, models in tree.items()}
+    return jsonify({'success': True, 'tree': result})
+
+
+@app.route('/api/cnc_program/rebuild', methods=['POST'])
+def cnc_program_rebuild():
+    """重建 CNC 程式索引（在背景執行 build_cnc_program_index.py --deploy）"""
+    import subprocess, re as _re
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'build_cnc_program_index.py')
+    if not os.path.exists(script):
+        return jsonify({'success': False, 'error': 'build_cnc_program_index.py 不存在'}), 500
+    try:
+        result = subprocess.run(
+            [sys.executable, script, '--deploy'],
+            capture_output=True, text=True, timeout=600,
+            cwd=os.path.dirname(script)
+        )
+        if result.returncode != 0:
+            err = (result.stderr or result.stdout)[-500:]
+            return jsonify({'success': False, 'error': err}), 500
+        m = _re.search(r'索引 (\d+) 筆', result.stdout)
+        count = int(m.group(1)) if m else 0
+        return jsonify({'success': True, 'count': count})
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'error': '更新逾時（超過 10 分鐘）'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cnc_program/view')
+def cnc_program_view():
+    """檢視程式內容（.txt 純文字 / 圖片轉 base64）"""
+    full = _cnc_safe_path(request.args.get('relpath', ''))
+    if not full or not os.path.isfile(full):
+        return jsonify({'success': False, 'error': '檔案不存在'}), 404
+
+    ext = os.path.splitext(full)[1].lower()
+    if ext in ('.jpg', '.jpeg', '.png', '.bmp'):
+        import base64
+        mime = 'image/jpeg' if ext in ('.jpg', '.jpeg') else f'image/{ext[1:]}'
+        with open(full, 'rb') as f:
+            b64 = base64.b64encode(f.read()).decode('ascii')
+        return jsonify({'success': True, 'type': 'image', 'data': f'data:{mime};base64,{b64}'})
+
+    with open(full, 'rb') as f:
+        raw = f.read()
+    try:
+        text = raw.decode('utf-8')
+    except UnicodeDecodeError:
+        text = raw.decode('cp950', errors='replace')
+    return jsonify({'success': True, 'type': 'text', 'data': text})
+
+
+@app.route('/api/cnc_program/download')
+def cnc_program_download():
+    """下載程式檔案"""
+    from flask import send_file
+    full = _cnc_safe_path(request.args.get('relpath', ''))
+    if not full or not os.path.isfile(full):
+        return jsonify({'success': False, 'error': '檔案不存在'}), 404
+    return send_file(full, as_attachment=True, download_name=os.path.basename(full))
+
+
+@app.route('/api/cnc_program/upload', methods=['POST'])
+def cnc_program_upload():
+    """上傳程式檔到指定 系列/品號[/機台] 資料夾"""
+    top_folder = request.form.get('top_folder', '').strip()
+    model = request.form.get('model', '').strip()
+    machine = request.form.get('machine', '').strip()
+    f = request.files.get('file')
+
+    if not f or not f.filename:
+        return jsonify({'success': False, 'error': '請選擇檔案'}), 400
+    if not top_folder or not model:
+        return jsonify({'success': False, 'error': '請選擇系列與品號'}), 400
+
+    root = config.CNC_PROGRAM_ROOT_PATH
+    folder = os.path.join(root, top_folder, f'[{model}]')
+    if machine:
+        folder = os.path.join(folder, f'【{machine}】')
+
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except OSError as e:
+        return jsonify({'success': False, 'error': f'無法建立資料夾：{e}'}), 500
+
+    filename = _cnc_safe_filename(f.filename)
+    dest = os.path.join(folder, filename)
+    if os.path.exists(dest):
+        return jsonify({'success': False,
+                         'error': f'檔案已存在：{filename}，請改檔名後再上傳（例如加上日期）'}), 409
+
+    f.save(dest)
+    relpath = os.path.relpath(dest, root).replace(os.sep, '/')
+
+    # 立即補進索引，不用等下次重建
+    try:
+        conn = sqlite3.connect(CNC_DB_PATH)
+        conn.execute(
+            'INSERT OR REPLACE INTO cnc_program_index '
+            '(top_folder, model, machine, filename, remark, relpath, ext, size, mtime) '
+            'VALUES (?,?,?,?,?,?,?,?,datetime("now","localtime"))',
+            (top_folder, model, machine, filename, '', relpath,
+             os.path.splitext(filename)[1].lower(), os.path.getsize(dest))
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+    return jsonify({'success': True, 'relpath': relpath})
+
+
+@app.route('/api/cnc_program/delete', methods=['POST'])
+def cnc_program_delete():
+    """軟刪除：移到同層的「已刪除」子資料夾，並從索引移除"""
+    data = request.get_json(silent=True) or {}
+    relpath = data.get('relpath', '')
+    full = _cnc_safe_path(relpath)
+    if not full or not os.path.isfile(full):
+        return jsonify({'success': False, 'error': '檔案不存在'}), 404
+
+    import shutil
+    parent = os.path.dirname(full)
+    trash = os.path.join(parent, '已刪除')
+    try:
+        os.makedirs(trash, exist_ok=True)
+        fn = os.path.basename(full)
+        dest = os.path.join(trash, fn)
+        if os.path.exists(dest):
+            stem, ext = os.path.splitext(fn)
+            dest = os.path.join(trash, f'{stem}_{int(time.time())}{ext}')
+        shutil.move(full, dest)
+    except OSError as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    try:
+        conn = sqlite3.connect(CNC_DB_PATH)
+        conn.execute('DELETE FROM cnc_program_index WHERE relpath=?', (relpath,))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+    return jsonify({'success': True})
+
+
+@app.route('/api/cnc_program/open_folder', methods=['POST'])
+def cnc_program_open_folder():
+    """用 Shell 開啟程式檔所在的資料夾"""
+    data = request.get_json(silent=True) or {}
+    relpath = data.get('relpath', '')
+    full = _cnc_safe_path(relpath)
+    if not full or not os.path.isfile(full):
+        return jsonify({'success': False, 'error': '檔案不存在'}), 404
+    try:
+        os.startfile(os.path.dirname(full))
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cnc_program/new_model', methods=['POST'])
+def cnc_program_new_model():
+    """新增範本：在指定系列底下建立新品號資料夾，複製【空白範本】整套機台子資料夾"""
+    data = request.get_json(silent=True) or {}
+    top_folder = data.get('top_folder', '').strip()
+    model = data.get('model', '').strip()
+    if not top_folder or not model:
+        return jsonify({'success': False, 'error': '請輸入系列與品號'}), 400
+
+    root = config.CNC_PROGRAM_ROOT_PATH
+    series_dir = os.path.join(root, top_folder)
+    target = os.path.join(series_dir, f'[{model}]')
+    if os.path.exists(target):
+        return jsonify({'success': False, 'error': '此品號資料夾已存在'}), 409
+
+    template = config.CNC_PROGRAM_TEMPLATE_PATH
+    if not os.path.isdir(template):
+        return jsonify({'success': False, 'error': '範本資料夾不存在：' + template}), 500
+
+    import shutil
+    try:
+        os.makedirs(series_dir, exist_ok=True)
+        shutil.copytree(template, target)
+    except OSError as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    return jsonify({'success': True, 'path': target})
+
+
 @app.route('/api/scrap/list')
 def scrap_list():
     """讀取 Google 試算表『報廢統計』資料"""
@@ -3584,7 +3877,7 @@ def prod_report_list():
         return jsonify(cached)
 
     try:
-        rows = fetch_google_sheet_csv(config.PROD_REPORT_SHEET_ID, gid=config.PROD_REPORT_SHEET_GID)
+        rows = fetch_google_sheet_csv(config.PROD_REPORT_SHEET_ID, sheet_name=config.PROD_REPORT_SHEET_NAME)
     except Exception:
         return jsonify({'success': False, 'error': '無法連線至 Google 試算表，請確認網路狀態'}), 502
 
@@ -3647,6 +3940,156 @@ def prod_report_list():
     return jsonify(result)
 
 
+@app.route('/api/sfcr06/list')
+def sfcr06_list():
+    """製令製程明細表（SFCR06）：直連 ERP SQL Server 查 SFCTA（製令途程交易檔），
+    含投入/完成數量、標準人時、實際開完工日等 ERP 原生報表才有的明細，
+    補上產品品號/品名/預計開工日/預計產量（沿用既有未完工製令清單，避免另外重查 ERP）。"""
+    date_from = request.args.get('date_from', '').replace('-', '')
+    date_to = request.args.get('date_to', '').replace('-', '')
+    keyword = request.args.get('keyword', '').strip()
+    line = request.args.get('line', '').strip()
+
+    if not date_from and not date_to and not keyword:
+        today = date.today()
+        date_from = today.replace(day=1).strftime('%Y%m%d')
+        date_to = today.strftime('%Y%m%d')
+
+    sql = """
+        SELECT a.TA001, a.TA002, a.TA003, a.TA004,
+               RTRIM(ISNULL(w.MW002,'')),
+               RTRIM(ISNULL(a.TA005,'')), RTRIM(ISNULL(a.TA006,'')), RTRIM(ISNULL(a.TA007,'')),
+               a.TA008, a.TA009, a.TA010, a.TA011,
+               a.TA022, a.TA023, a.TA030, a.TA031, RTRIM(ISNULL(a.TA032,'')),
+               RTRIM(ISNULL(a.TA024,''))
+        FROM SFCTA a
+        LEFT JOIN CMSMW w ON RTRIM(w.MW001) = RTRIM(a.TA004)
+        WHERE 1=1
+    """
+    params = []
+    if date_from:
+        sql += ' AND a.TA009 >= ?'
+        params.append(date_from)
+    if date_to:
+        sql += ' AND a.TA009 <= ?'
+        params.append(date_to)
+    if keyword:
+        sql += " AND (a.TA001 + '-' + a.TA002 LIKE ?)"
+        params.append(f'%{keyword}%')
+    if line:
+        sql += ' AND RTRIM(a.TA007) = ?'
+        params.append(line)
+    sql += ' ORDER BY a.TA009 DESC, a.TA001, a.TA002, a.TA003'
+
+    try:
+        conn = get_erp_conn()
+        cur = conn.cursor()
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+        conn.close()
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'ERP 資料庫查詢失敗：{e}'}), 500
+
+    def fmt_date(s):
+        s = (s or '').strip()
+        return f'{s[:4]}/{s[4:6]}/{s[6:8]}' if len(s) == 8 else ''
+
+    def fmt_hms(seconds):
+        try:
+            sec = int(float(seconds or 0))
+        except (TypeError, ValueError):
+            return ''
+        if sec <= 0:
+            return ''
+        h, rem = divmod(sec, 3600)
+        m, s = divmod(rem, 60)
+        return f'{h}:{m:02d}:{s:02d}'
+
+    data = []
+    for r in rows:
+        oid = f'{r[0]}-{r[1]}'
+        data.append({
+            '製令單號': oid,
+            '加工順序': r[2],
+            '製程代號': r[3],
+            '製程名稱': r[4],
+            '性質': {'1': '廠內製程', '2': '外包'}.get(r[5], r[5]),
+            '線別/廠商代號': r[6],
+            '線別/廠商名稱': r[7],
+            '製程開工日': fmt_date(r[8]),
+            '製程完工日': fmt_date(r[9]),
+            '投入數量': float(r[10]) if r[10] else 0,
+            '完成數量': float(r[11]) if r[11] else 0,
+            '標準人時': fmt_hms(r[12]),
+            '標準機時': fmt_hms(r[13]),
+            '實際開工日': fmt_date(r[14]),
+            '實際完工日': fmt_date(r[15]),
+            '完工碼': r[16],
+            '製程敘述': r[17],
+        })
+
+    # 補上產品品號/品名（先查未完工製令清單，已完工的舊製令改查 SFCTC 移轉單明細補齊）
+    info_map = {}
+    try:
+        for u in fetch_all_unfinished('all'):
+            oid = u.get('單別', '').strip()
+            if oid and oid not in info_map:
+                info_map[oid] = {
+                    '產品品號': u.get('品號', '').strip(),
+                    '產品品名': u.get('品名', '').strip(),
+                    '預計開工日': u.get('製令預計開工日', '').strip(),
+                    '預計產量': u.get('預計生產數', '').strip(),
+                }
+    except Exception:
+        pass
+
+    # SFCTC 分批 OR 查詢（每批 200 筆），移除 500 筆上限，避免全年查詢遺漏品名
+    missing_oids = list({d['製令單號'] for d in data if d['製令單號'] not in info_map})
+    if missing_oids:
+        try:
+            conn2 = get_erp_conn()
+            cur2 = conn2.cursor()
+            CHUNK = 200
+            for i in range(0, len(missing_oids), CHUNK):
+                chunk = missing_oids[i:i+CHUNK]
+                pairs = [oid.split('-', 1) for oid in chunk]
+                where = ' OR '.join('(TC004=? AND TC005=?)' for _ in pairs)
+                params2 = [v for p in pairs for v in p]
+                cur2.execute(
+                    f"SELECT TC004, TC005, RTRIM(ISNULL(TC047,'')), RTRIM(ISNULL(TC048,'')) "
+                    f"FROM SFCTC WHERE {where}", params2
+                )
+                for row in cur2.fetchall():
+                    oid = f'{row[0]}-{row[1]}'
+                    if oid not in info_map and row[2]:
+                        info_map[oid] = {
+                            '產品品號': row[2],
+                            '產品品名': row[3].rstrip('|').strip(),
+                            '預計開工日': '', '預計產量': '',
+                        }
+            conn2.close()
+        except Exception:
+            pass
+
+    order_finish = {}
+    for d in data:
+        if d['製程完工日']:
+            order_finish[d['製令單號']] = max(order_finish.get(d['製令單號'], ''), d['製程完工日'])
+
+    cat_map = _build_category_map()
+
+    for d in data:
+        info = info_map.get(d['製令單號'], {})
+        d['產品品號'] = info.get('產品品號', '')
+        d['產品品名'] = info.get('產品品名', '')
+        d['預計開工日'] = info.get('預計開工日', '')
+        d['預計產量'] = info.get('預計產量', '')
+        d['預計完工日'] = order_finish.get(d['製令單號'], '')
+        d['分類'] = cat_map.get(d['產品品號'] + d['製程代號'], '')
+
+    return jsonify({'success': True, 'count': len(data), 'data': data})
+
+
 @app.route('/api/prod_report/monthly_stats')
 def prod_report_monthly_stats():
     """生產日報表圖表資料：讀『P5.3生產日報表data_ref』分頁，
@@ -3659,7 +4102,7 @@ def prod_report_monthly_stats():
         return jsonify(cached)
 
     try:
-        rows = fetch_google_sheet_csv(config.PROD_REPORT_SHEET_ID, gid=config.PROD_REPORT_CHART_GID)
+        rows = fetch_google_sheet_csv(config.PROD_REPORT_SHEET_ID, sheet_name=config.PROD_REPORT_SHEET_NAME)
     except Exception:
         return jsonify({'success': False, 'error': '無法連線至 Google 試算表，請確認網路狀態'}), 502
 
@@ -3969,6 +4412,501 @@ def jig_open_folder():
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/jig/open-file', methods=['POST'])
+def jig_open_file():
+    """開啟治檢具資料夾內的申請單 Excel（優先找『申請單』xlsm，否則第一個 xlsm）"""
+    data = request.get_json(silent=True) or {}
+    path = data.get('path', '')
+    if not path:
+        return jsonify({'ok': False, 'error': '缺少 path 參數'}), 400
+
+    jig_root = os.path.normpath(config.JIG_VAULT_PATH)
+    norm_path = os.path.normpath(path)
+    if not norm_path.lower().startswith(jig_root.lower()):
+        return jsonify({'ok': False, 'error': '無效的路徑'}), 400
+    if not os.path.isdir(norm_path):
+        return jsonify({'ok': False, 'error': '資料夾不存在'}), 404
+
+    try:
+        xlsms = [f for f in os.listdir(norm_path) if f.lower().endswith('.xlsm')]
+        if not xlsms:
+            # 本機尚未快取：透過 PDM API 列出檔案並下載
+            import pythoncom
+            pythoncom.CoInitialize()
+            try:
+                import win32com.client
+                vault = _pdm_vault_login()
+                folder = vault.GetFolderFromPath(norm_path)
+                f5 = win32com.client.CastTo(folder, 'IEdmFolder5')
+                pos = f5.GetFirstFilePosition()
+                while not pos.IsNull:
+                    f = f5.GetNextFile(pos)
+                    if f.Name.lower().endswith('.xlsm'):
+                        win32com.client.CastTo(f, 'IEdmFile5').GetFileCopy(0)
+                        xlsms.append(f.Name)
+            finally:
+                pythoncom.CoUninitialize()
+        if not xlsms:
+            return jsonify({'ok': False, 'error': '此資料夾沒有 Excel 申請單'}), 404
+        target = next((f for f in xlsms if '申請單' in f), xlsms[0])
+        os.startfile(os.path.join(norm_path, target))
+        return jsonify({'ok': True, 'file': target})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ══════════════════════════════════════════════════════════
+#  治檢具申請單：直接寫入 PDM（建立 PT 專案資料夾 + 資料卡）
+# ══════════════════════════════════════════════════════════
+
+JIG_APPLY_SERNO = 'PT_PT專案序號(2026後)'   # PDM 序號產生器名稱（與檔案總管範本同一個，確保不撞號）
+_jig_apply_opts_cache = {'ts': 0, 'data': None}
+
+
+def _pdm_vault_login():
+    """登入 PDM Vault（LoginAuto：沿用本機已登入的 PDM 工作階段，不需帳密）"""
+    import win32com.client
+    from win32com.client import gencache
+    try:
+        v = gencache.EnsureDispatch('ConisioLib.EdmVault')
+    except Exception:
+        v = win32com.client.Dispatch('ConisioLib.EdmVault')
+    v.LoginAuto('MAXCLAW', 0)
+    return v
+
+
+# 範本建立時要一併產生的標準子資料夾
+JIG_APPLY_SUBFOLDERS = (
+    '01-模具圖檔(機型+品名+類別-00流水號)',
+    '02-模具照片(模具編碼-機型+品名-00流水號)',
+    '03-單據掃描檔備存(專案代號+供應商-00流水號)',
+    '04-其他(日期_檔案內容)',
+)
+
+
+def _fill_xlsm_custom_vars(src_path, dst_path, vals):
+    """複製 xlsm 並改寫 docProps/custom.xml 內的 PDM 卡片變數值。
+    PDM 2021 的 Excel 卡片變數存在 custom.xml（attribute mapping），
+    檔案加入 vault 時 PDM 會直接從這裡讀出顯示在資料卡上。"""
+    import zipfile
+    from xml.sax.saxutils import escape
+    with zipfile.ZipFile(src_path, 'r') as zin:
+        xml = zin.read('docProps/custom.xml').decode('utf-8')
+        for k, v in vals.items():
+            xml = re.sub(
+                r'(name="%s"[^>]*>\s*<vt:lpwstr>)[^<]*(</vt:lpwstr>)' % re.escape(k),
+                lambda m, _v=v: m.group(1) + escape(str(_v)) + m.group(2),
+                xml, count=1)
+        with zipfile.ZipFile(dst_path, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                if item.filename == 'docProps/custom.xml':
+                    zout.writestr(item, xml.encode('utf-8'))
+                else:
+                    zout.writestr(item, zin.read(item.filename))
+
+
+def _write_xlsm_defined_names(xlsm_path, vals):
+    """依 Excel Defined Names 把值寫進工作表儲存格（Excel 開啟/列印時直接看得到，
+    治檢具索引也讀這些儲存格）。openpyxl 重寫會動到 custom.xml 的 PDM 卡片格式，
+    所以先備份、寫完再還原。"""
+    import zipfile
+    with zipfile.ZipFile(xlsm_path) as z:
+        custom_bak = z.read('docProps/custom.xml')
+    wb = openpyxl.load_workbook(xlsm_path, keep_vba=True)
+    for name, v in vals.items():
+        if name not in wb.defined_names:
+            continue
+        for sn, coord in wb.defined_names[name].destinations:
+            try:
+                wb[sn][coord] = v
+            except Exception:
+                pass
+    wb.save(xlsm_path)
+    tmp_zip = xlsm_path + '.tmpz'
+    with zipfile.ZipFile(xlsm_path, 'r') as zin, \
+         zipfile.ZipFile(tmp_zip, 'w', zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            zout.writestr(item, custom_bak if item.filename == 'docProps/custom.xml' else zin.read(item.filename))
+    os.replace(tmp_zip, xlsm_path)
+
+
+@app.route('/api/jig/apply/defaults')
+def jig_apply_defaults():
+    """新增治檢具申請單：取得預設值（下一個 PT 編號預覽、申請人、模具類型選項）"""
+    import pythoncom
+    pythoncom.CoInitialize()
+    try:
+        import win32com.client
+        vault = _pdm_vault_login()
+
+        # 下一號預覽：先配號再立即 Rollback 還回去，不佔號
+        sg = win32com.client.CastTo(vault, 'IEdmSerNoGen7')
+        sv = sg.AllocSerNoValue(JIG_APPLY_SERNO)
+        next_no = sv.Value
+        sv.Rollback()
+
+        # 申請人 = PDM 登入者名稱（FullName 在 IEdmUser6 介面上）
+        applicant = ''
+        try:
+            umgr = win32com.client.CastTo(vault, 'IEdmUserMgr5')
+            u = umgr.GetLoggedInUser()
+            try:
+                u6 = win32com.client.CastTo(u, 'IEdmUser6')
+                applicant = (u6.FullName or '').strip()
+            except Exception:
+                pass
+            if not applicant:
+                applicant = (u.Name or '').strip()
+        except Exception:
+            pass
+
+        # 模具類型選項：掃現有 PT 資料夾的 PT選單 值（快取 10 分鐘）
+        now = time.time()
+        if not _jig_apply_opts_cache['data'] or now - _jig_apply_opts_cache['ts'] > 600:
+            opts = set()
+            root = vault.GetFolderFromPath(config.JIG_VAULT_PATH)
+            f5 = win32com.client.CastTo(root, 'IEdmFolder5')
+            pos = f5.GetFirstSubFolderPosition()
+            while not pos.IsNull:
+                sub = f5.GetNextSubFolder(pos)
+                try:
+                    ev = win32com.client.CastTo(sub, 'IEdmEnumeratorVariable5')
+                    ok, val = ev.GetVar('PT選單', '')
+                    if ok and val:
+                        opts.add(str(val).strip())
+                except Exception:
+                    pass
+            _jig_apply_opts_cache.update(ts=now, data=sorted(opts))
+
+        return jsonify({'success': True, 'next_no': next_no, 'applicant': applicant,
+                        'today': datetime.now().strftime('%Y/%m/%d'),
+                        'mold_types': _jig_apply_opts_cache['data']})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'PDM 連線失敗：{e}'}), 502
+    finally:
+        pythoncom.CoUninitialize()
+
+
+# 模具特殊需求選項文字（照空白範本原始值；勾選=■ 前綴、未勾=□ 前綴）
+JIG_CARD_OPTIONS = {
+    1: ('□ 嚴禁夾傷  ',            '■嚴禁夾傷'),
+    2: ('□ 允許輕微夾痕',           '■允許輕微夾痕'),
+    3: ('□ 需快速換模機構 ',        '■需快速換模機構'),
+    4: ('□ 具備防呆機制 (避免反裝)', '■具備防呆機制 (避免反裝)'),
+    5: ('□ 易耗損零件(需備品) ',    '■易耗損零件(需備品)'),
+    6: ('□ 需易於清理排屑',         '■需易於清理排屑'),
+}
+
+
+@app.route('/api/jig/apply/card_save', methods=['POST'])
+def jig_apply_card_save():
+    """填寫申請單資料卡：對取出中的申請單 xlsm 寫入主要欄位（等同在 PDM 資料卡按儲存）"""
+    d = request.get_json(silent=True) or {}
+    folder_path = (d.get('folder') or '').strip()
+    jig_root = os.path.normpath(config.JIG_VAULT_PATH)
+    norm = os.path.normpath(folder_path)
+    if not folder_path or not norm.lower().startswith(jig_root.lower()):
+        return jsonify({'success': False, 'error': '無效的資料夾路徑'}), 400
+
+    import pythoncom
+    pythoncom.CoInitialize()
+    try:
+        import win32com.client
+        vault = _pdm_vault_login()
+
+        # 找資料夾內的申請單 xlsm
+        folder = vault.GetFolderFromPath(norm)
+        f5folder = win32com.client.CastTo(folder, 'IEdmFolder5')
+        target = None
+        pos = f5folder.GetFirstFilePosition()
+        while not pos.IsNull:
+            f = f5folder.GetNextFile(pos)
+            if f.Name.lower().endswith('.xlsm') and '申請單' in f.Name:
+                target = f
+                break
+        if target is None:
+            return jsonify({'success': False, 'error': '找不到申請單 Excel'}), 404
+
+        f5 = win32com.client.CastTo(target, 'IEdmFile5')
+        if not f5.IsLocked:
+            return jsonify({'success': False, 'error': '申請單未取出，請先在 PDM 取出檔案再填寫'}), 409
+
+        vals = {}
+        if d.get('urgency'):     vals['YC_緊急程度'] = d['urgency'].strip()
+        if d.get('nature'):      vals['YC_性質']     = d['nature'].strip()
+        if d.get('part_no'):     vals['PT_品號']     = d['part_no'].strip()
+        if d.get('proc_code'):   vals['YC_製程代號'] = d['proc_code'].strip()
+        if d.get('unit'):        vals['單位']        = d['unit'].strip()
+        if d.get('expect_date'): vals['YC_期望完成日'] = d['expect_date'].strip().replace('-', '/')
+        checked = set(d.get('options') or [])
+        for n, (off, on) in JIG_CARD_OPTIONS.items():
+            vals[f'YC_選項{n}'] = on if n in checked else off
+
+        # 取出中的檔案，資料卡顯示的是本機檔案內的屬性值：
+        # Flush 只寫資料庫，必須用 IEdmEnumeratorVariable8.CloseFile(True)
+        # 把值同步寫進檔案本體（custom.xml），卡片才會顯示、簽入時也不會被檔案舊值蓋回。
+        # 組態名稱用 ''（實測手動建立的申請單變數都在空名組態；用 '@' 會多出一個空白組態分頁）
+        ev = win32com.client.CastTo(f5.GetEnumeratorVariable(), 'IEdmEnumeratorVariable8')
+        for k, v in vals.items():
+            try:
+                ev.SetVar(k, '', v)
+            except Exception:
+                pass
+        ev.CloseFile(True)
+
+        # 工作表內容：卡片值同步寫進儲存格（Defined Names）＋示意圖（E7）＋其他需求文字（D15）
+        # 直接用 openpyxl 改取出中的本機 xlsm
+        img_b64    = d.get('image_b64') or ''
+        other_text = (d.get('other_text') or '').strip()
+        if True:
+            if not _OPENPYXL_OK:
+                return jsonify({'success': False, 'error': '伺服器未安裝 openpyxl'}), 500
+            import base64, tempfile, zipfile
+            xlsm_path = os.path.join(norm, target.Name)
+            try:
+                # 先備份 custom.xml（openpyxl 重寫時會丟失 PDM 卡片連結的 linkTarget 屬性）
+                with zipfile.ZipFile(xlsm_path) as z:
+                    custom_bak = z.read('docProps/custom.xml')
+
+                wb = openpyxl.load_workbook(xlsm_path, keep_vba=True)
+                ws = wb.worksheets[0]
+                # 卡片欄位值依 Defined Names 寫進儲存格（Excel 開啟/列印直接看得到，索引也讀這裡）
+                for name, v in vals.items():
+                    if name not in wb.defined_names:
+                        continue
+                    for sn, coord in wb.defined_names[name].destinations:
+                        try:
+                            wb[sn][coord] = v
+                        except Exception:
+                            pass
+                if other_text:
+                    from openpyxl.styles import Alignment
+                    cell = ws['D15']
+                    cell.value = other_text
+                    cell.alignment = Alignment(wrap_text=True, vertical='center',
+                                               horizontal=cell.alignment.horizontal)
+                    # 依行數放大列高（每行約 16pt，至少保留原高度）
+                    lines = other_text.count('\n') + 1
+                    cur_h = ws.row_dimensions[15].height or 16
+                    ws.row_dimensions[15].height = max(cur_h, lines * 16 + 4)
+                img_tmp = None
+                if img_b64:
+                    from openpyxl.drawing.image import Image as XLImage
+                    raw = base64.b64decode(img_b64.split(',')[-1])
+                    img_tmp = os.path.join(tempfile.gettempdir(), f'jig_sketch_{int(time.time())}.png')
+                    with open(img_tmp, 'wb') as fimg:
+                        fimg.write(raw)
+                    img = XLImage(img_tmp)
+                    # 等比縮放到示意圖區域（E7:H11 約 420x150）
+                    ratio = min(420 / img.width, 150 / img.height)
+                    img.width  = int(img.width * ratio)
+                    img.height = int(img.height * ratio)
+                    ws.add_image(img, 'E7')
+                wb.save(xlsm_path)
+                if img_tmp:
+                    try:
+                        os.remove(img_tmp)
+                    except Exception:
+                        pass
+
+                # 還原 custom.xml，保住 PDM 卡片變數與 linkTarget
+                tmp_zip = xlsm_path + '.tmp'
+                with zipfile.ZipFile(xlsm_path, 'r') as zin, \
+                     zipfile.ZipFile(tmp_zip, 'w', zipfile.ZIP_DEFLATED) as zout:
+                    for item in zin.infolist():
+                        if item.filename == 'docProps/custom.xml':
+                            zout.writestr(item, custom_bak)
+                        else:
+                            zout.writestr(item, zin.read(item.filename))
+                os.replace(tmp_zip, xlsm_path)
+            except PermissionError:
+                return jsonify({'success': False,
+                                'error': '卡片已儲存，但 Excel 檔案被開啟中，示意圖/文字無法寫入，請先關閉 Excel 再試一次'}), 409
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'卡片已儲存，但寫入示意圖/文字失敗：{e}'}), 502
+
+        # 自動存回（簽入）：把填好的申請單簽入 PDM
+        if d.get('checkin'):
+            try:
+                f5.Refresh()
+                if f5.IsLocked:
+                    f5.UnlockFile(0, '申請單填寫完成')
+            except Exception as e:
+                return jsonify({'success': True,
+                                'warning': f'卡片已儲存，但存回失敗（請在 PDM 手動存回）：{e}'})
+
+        # 提出申請：走 workflow 轉換「00-提出申請」到「單位主管審核」
+        if d.get('submit_flow'):
+            try:
+                comment = (d.get('comment') or '').strip() or '提出申請'
+                f5.Refresh()
+                f5.ChangeState('單位主管審核', f5folder.ID, comment, 0, 0)
+            except Exception as e:
+                return jsonify({'success': True,
+                                'warning': f'已存回，但提出申請失敗（請在 PDM 手動變更狀態）：{e}'})
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'儲存卡片失敗：{e}'}), 502
+    finally:
+        pythoncom.CoUninitialize()
+
+
+@app.route('/api/jig/apply', methods=['POST'])
+def jig_apply():
+    """新增治檢具申請單：配一個 PT 序號，在 PDM 建立資料夾並填寫資料卡"""
+    d = request.get_json(silent=True) or {}
+    machine    = (d.get('machine') or '').strip()
+    item       = (d.get('item') or '').strip()
+    mold       = (d.get('mold_type') or '').strip()
+    rd_no      = (d.get('rd_no') or '').strip() or '--'
+    applicant  = (d.get('applicant') or '').strip()
+    apply_date = (d.get('date') or '').strip() or datetime.now().strftime('%Y/%m/%d')
+    if not machine or not item or not mold:
+        return jsonify({'success': False, 'error': '機型、品名、模具類型為必填'}), 400
+    if not applicant:
+        return jsonify({'success': False, 'error': '申請人為必填'}), 400
+
+    import pythoncom
+    pythoncom.CoInitialize()
+    sv = None
+    new_folder = None
+    parent = None
+    try:
+        import win32com.client
+        vault = _pdm_vault_login()
+
+        # 1. 從 PDM 序號產生器配號（跟檔案總管範本同一個計數器）
+        sg = win32com.client.CastTo(vault, 'IEdmSerNoGen7')
+        sv = sg.AllocSerNoValue(JIG_APPLY_SERNO)
+        pt_no = str(sv.Value)
+
+        # 2. 建立 PT 專案資料夾（poData 必須明確傳 None，gen_py 預設值 0 會轉型失敗）
+        root = vault.GetFolderFromPath(config.JIG_VAULT_PATH)
+        parent = win32com.client.CastTo(root, 'IEdmFolder5')
+        new_folder = parent.AddFolder(0, pt_no, None)
+
+        # 3. 寫入資料夾資料卡變數（欄位對應實測自現有 PT 資料夾）
+        ev = win32com.client.CastTo(new_folder, 'IEdmEnumeratorVariable5')
+        for k, v in {
+            'PT_專案代號': pt_no,
+            'PT選單':      mold,
+            'YC_專案代號': rd_no,
+            'YC_機型':     machine,
+            'YC_品名':     item,
+            'YC_提出人員': applicant,
+            'YC_日期':     apply_date,
+            'YC_狀態':     'PT設計發包',
+        }.items():
+            ev.SetVar(k, '', v)
+        ev.Flush()
+
+        # 4. 建立 4 個標準子資料夾（照檔案總管範本的結構）
+        nf5 = win32com.client.CastTo(new_folder, 'IEdmFolder5')
+        warnings = []
+        for sub in JIG_APPLY_SUBFOLDERS:
+            try:
+                nf5.AddFolder(0, sub, None)
+            except Exception as e:
+                warnings.append(f'子資料夾 {sub} 建立失敗：{e}')
+
+        # 5. 複製空白申請單範本 → 改寫卡片變數 → 加入 PDM → 入庫
+        xlsm_name = f'{pt_no}機器模檢治具申請單.xlsm'
+        try:
+            # 5a. 確保範本檔本機快取是最新版（第二參數必須明確傳 None，gen_py 預設值會轉型失敗）
+            ret = vault.GetFileFromPath(config.JIG_APPLY_TEMPLATE_XLSM, None)
+            tpl_file = ret[0] if isinstance(ret, tuple) else ret
+            try:
+                win32com.client.CastTo(tpl_file, 'IEdmFile5').GetFileCopy(0)
+            except Exception:
+                pass  # 快取已存在時可略過
+            if not os.path.isfile(config.JIG_APPLY_TEMPLATE_XLSM):
+                raise RuntimeError(f'找不到範本檔：{config.JIG_APPLY_TEMPLATE_XLSM}')
+
+            # 5b. 在暫存目錄產生已填值的 xlsm
+            import tempfile
+            fill_vals = {
+                'PT_專案代號':  pt_no,
+                'YC_機型':      machine,
+                'YC_品名':      item,
+                'YC_提出人員':  applicant,
+                'YC_日期':      apply_date,
+                'YC_專案代號':  rd_no,
+                'PT選單':       mold,
+                'YC_部門':      '加工部',
+                '單位':         '加工部',
+                '版別':         '--',
+                '00文件狀態':   '申請單建立',
+                '00文件分類':   '機器模檢治具申請單(2026後)',
+            }
+            tmp_xlsm = os.path.join(tempfile.gettempdir(), xlsm_name)
+            _fill_xlsm_custom_vars(config.JIG_APPLY_TEMPLATE_XLSM, tmp_xlsm, fill_vals)
+            # 同步寫進工作表儲存格（Excel 開啟直接看得到，治檢具索引也讀儲存格）
+            try:
+                _write_xlsm_defined_names(tmp_xlsm, fill_vals)
+            except Exception as e:
+                warnings.append(f'工作表儲存格寫入失敗（卡片資料不受影響）：{e}')
+
+            # 5c. 加入 PDM → 變數寫入資料庫 → 簽入 → 自動分派後再取出給使用者。
+            # 工作流程的自動轉換靠「00文件分類」等 DB 變數判斷分派；只寫在 custom.xml 裡的值
+            # 在簽入當下還沒進資料庫，條件不成立會掉進「其他文件歸檔」死路（實測），
+            # 所以必須先 SetVar 寫 DB 再簽入，分派到「申請單建立」後再 LockFile 取出讓使用者續填。
+            file_id = nf5.AddFile(0, tmp_xlsm, xlsm_name)
+            try:
+                os.remove(tmp_xlsm)
+            except Exception:
+                pass
+            fobj = vault.GetObject(1, file_id)  # 1 = EdmObject_File
+            f5 = win32com.client.CastTo(fobj, 'IEdmFile5')
+            # 組態名稱用 ''（跟手動建立一致；用 '@' 會在卡片上多出一個空白組態分頁）
+            ev2 = f5.GetEnumeratorVariable()
+            for k, v in fill_vals.items():
+                try:
+                    ev2.SetVar(k, '', v)
+                except Exception:
+                    pass
+            ev2.Flush()
+            f5.UnlockFile(0, '系統建立申請單')
+
+            # 等待自動分派完成（實測約 2 秒）
+            final_state = ''
+            for _ in range(5):
+                time.sleep(2)
+                f5.Refresh()
+                final_state = f5.CurrentState.Name
+                if final_state == '申請單建立':
+                    break
+            if final_state == '申請單建立':
+                try:
+                    f5.LockFile(new_folder.ID, 0)
+                except Exception as e:
+                    warnings.append(f'申請單已建立但自動取出失敗（可手動取出）：{e}')
+            else:
+                warnings.append(f'申請單流程狀態異常（目前：{final_state or "未知"}），請聯絡 PDM 管理員')
+        except Exception as e:
+            warnings.append(f'申請單 Excel 建立失敗：{e}')
+
+        sv = None  # 序號已正式使用，不再 rollback
+        return jsonify({'success': True, 'pt_no': pt_no,
+                        'folder': os.path.join(config.JIG_VAULT_PATH, pt_no),
+                        'warning': '；'.join(warnings) if warnings else None})
+    except Exception as e:
+        # 失敗善後：刪除半成品資料夾、把序號還回去
+        try:
+            if new_folder is not None and parent is not None:
+                parent.DeleteFolder(0, new_folder.ID, True)
+        except Exception:
+            pass
+        try:
+            if sv is not None:
+                sv.Rollback()
+        except Exception:
+            pass
+        return jsonify({'success': False, 'error': f'建立失敗：{e}'}), 502
+    finally:
+        pythoncom.CoUninitialize()
 
 
 @app.route('/api/dcn/list')

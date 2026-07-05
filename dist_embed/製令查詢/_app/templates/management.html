@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>加工部查詢系統PDS</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='4' fill='%230f62fe'/><polygon fill='white' points='8.5,5.94 10.44,3.13 13.56,3.13 15.5,5.94 18.89,6.21 20.46,8.92 19,12 20.46,15.08 18.89,17.79 15.5,18.06 13.56,20.87 10.44,20.87 8.5,18.06 5.11,17.79 3.54,15.08 5,12 3.54,8.92 5.11,6.21'/><circle cx='12' cy='12' r='4' fill='%230f62fe'/></svg>">
+  <link rel="icon" type="image/png" href="/static/app-icon.png">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     /* ══════════════════════════════════════════════
@@ -81,7 +81,9 @@
     }
     .header-tab.active,.header-tab:hover { background:#fff; color:#1565C0; }
 
-    /* ══ Page Layout（左側選單 + 內容） ══ */
+    
+        .header-tab-mgmt{background:#06C755;color:#fff}
+        .header-tab-mgmt.active,.header-tab-mgmt:hover{background:#05A649;color:#fff}/* ══ Page Layout（左側選單 + 內容） ══ */
     .page-layout {
       flex: 1;
       display: flex;
@@ -92,7 +94,7 @@
     /* ══ Sub Navigation（管理 左側選單） ══ */
     .page-sub-nav {
       display: flex; flex-direction: column; gap: 0;
-      width: 190px; flex-shrink: 0;
+      width: 230px; flex-shrink: 0;
       padding: .6rem .5rem; background: var(--bg);
       border-right: 1px solid var(--border); overflow-y: auto;
     }
@@ -429,6 +431,18 @@
     #p2-content td.pr-cat   { padding:0; }
     #p2-content td.p2-procname { color:var(--text); font-size:.9rem; }
     .cat-badge { display:inline-block; padding:.15rem .45rem; border-radius:4px; font-size:.82rem; font-weight:700; letter-spacing:.04em; background:#F1F5F9; color:#475569; }
+    #sfcr06-content table.pro-table thead th { background: linear-gradient(180deg, var(--blue-mid), var(--blue-d)); font-size:.8rem; letter-spacing:.03em; white-space:nowrap; }
+    #sfcr06-content table.pro-table tbody tr { cursor:pointer; }
+    #sfcr06-content table.pro-table tbody tr:hover td { background: rgba(21,101,192,.06) !important; }
+    #sfcr06-content td.td-code { color: var(--blue-d); font-size:.82rem; font-weight:600; white-space:nowrap; }
+    #sfcr06-content td.td-name { white-space:nowrap; max-width:160px; overflow:hidden; text-overflow:ellipsis; }
+    #sfc-popup { position:fixed; z-index:9999; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,.18); padding:1rem 1.2rem; min-width:280px; max-width:400px; display:none; }
+    #sfc-popup .sp-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:.7rem; }
+    #sfc-popup .sp-wo { font-size:.95rem; font-weight:700; color:var(--blue-d); }
+    #sfc-popup .sp-close { cursor:pointer; color:var(--muted); font-size:1.1rem; line-height:1; padding:2px 6px; border-radius:4px; }
+    #sfc-popup .sp-close:hover { background:#F1F5F9; }
+    #sfc-popup .sp-name { font-size:.88rem; font-weight:600; color:var(--text); margin-bottom:.5rem; }
+    #sfc-popup .sp-desc { font-size:.84rem; color:#475569; line-height:1.6; white-space:pre-wrap; word-break:break-all; border-top:1px solid #E2E8F0; padding-top:.6rem; }
     .cat-badge.cat-A { background:#E3F2FD; color:#1565C0; }
     .cat-badge.cat-B { background:#E8F5E9; color:#2E7D32; }
     .cat-badge.cat-C { background:#FFF3E0; color:#E65100; }
@@ -1183,7 +1197,8 @@
       <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
       <a href="/routing"    class="header-tab">產品途程查詢</a>
       <a href="/batch_cost" class="header-tab">批成本</a>
-      <span                 class="header-tab active">管理</span>
+      <a href="/cnc_program" class="header-tab">程式管理</a>
+      <span                 class="header-tab header-tab-mgmt active">管理</span>
     </div>
     <span class="header-logo">MAXCLAW</span>
   </div>
@@ -1211,6 +1226,7 @@
     </div>
     <span class="page-sub-tab" onclick="switchSubPage('prod')">📅 生產日報表P5.3</span>
     <span class="page-sub-tab" onclick="switchSubPage('p2')">📈 生產報工統計P2</span>
+    <span class="page-sub-tab" onclick="switchSubPage('sfcr06')">🧾 製程明細表(SFCR06)</span>
     <span class="page-sub-tab" onclick="switchSubPage('scrap')">📉 報廢統計</span>
     <span class="page-sub-tab" onclick="switchSubPage('purchase')">🛒 採購登入表</span>
   </div>
@@ -1280,7 +1296,7 @@
         <label>假別</label>
         <select id="f-type"><option value="">全部</option></select>
         <label>員工編號</label>
-        <input type="text" id="f-employee" placeholder="輸入工號或姓名搜尋…">
+        <input type="text" id="f-employee" placeholder="輸入工號或姓名搜尋…" autocomplete="off">
         <div class="view-switch">
           <button class="view-btn active" data-view="table" onclick="switchView('table')">📋 列表</button>
           <button class="view-btn" data-view="calendar" onclick="switchView('calendar')">📅 日曆</button>
@@ -1355,7 +1371,7 @@
         <label>月份</label>
         <select id="ot-f-month"><option value="">全部</option></select>
         <label>員工編號</label>
-        <input type="text" id="ot-f-employee" placeholder="輸入工號或姓名搜尋…">
+        <input type="text" id="ot-f-employee" placeholder="輸入工號或姓名搜尋…" autocomplete="off">
         <div class="view-switch">
           <button class="view-btn active" data-view="table" onclick="switchOtView('table')">📋 列表</button>
           <button class="view-btn" data-view="chart" onclick="switchOtView('chart')">📊 統計</button>
@@ -1392,6 +1408,7 @@
         <label>狀態</label>
         <select id="jig-f-status" onchange="renderJigTable()"><option value="">全部</option></select>
         <input type="text" id="jig-f-kw" placeholder="搜尋名稱/品名/產品機型/備註…" oninput="renderJigTable()" style="width:200px">
+        <button class="jig-rebuild-btn" style="background:#06C755;border-color:#05A649;color:#fff;font-weight:700" onclick="openJigApplyModal()">➕ 新增申請單</button>
         <button id="jig-rebuild-btn" class="jig-rebuild-btn" onclick="rebuildJigIndex()">⟳ 重新整理</button>
         <span id="jig-last-updated" class="jig-last-updated"></span>
         <span class="filter-count"><strong id="jig-f-count">0</strong> 筆</span>
@@ -1411,7 +1428,7 @@
         <label>年份</label>
         <select id="dcn-f-year" onchange="renderDcnTable()"><option value="">全部</option></select>
         <label>提出人員</label>
-        <input type="text" id="dcn-f-submitter" value="楊良捷" oninput="renderDcnTable()" style="width:100px">
+        <input type="text" id="dcn-f-submitter" autocomplete="off" oninput="renderDcnTable()" style="width:100px">
         <label>狀態</label>
         <select id="dcn-f-status" onchange="renderDcnTable()"><option value="">全部</option></select>
         <input type="text" id="dcn-f-keyword" placeholder="搜尋通知單號/機型…" oninput="renderDcnTable()" style="width:180px">
@@ -1699,6 +1716,54 @@
       <!-- 管理指標 -->
       <div id="p2-view-targets" style="display:none;flex:1;overflow-y:auto;padding:1rem 1.2rem;background:#F1F5F9;flex-direction:column;gap:1rem;">
         <div id="p2-tgt-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sub-page-sfcr06" class="sub-page-container" style="display:none">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+      <div class="card-header today-leave-header">🧾 製令製程明細表(SFCR06)</div>
+      <div class="filter-bar">
+        <label>日期區間</label>
+        <input type="date" id="sfc-date-from" style="width:130px">
+        <span style="color:var(--muted);font-size:.85rem;padding:0 2px">～</span>
+        <input type="date" id="sfc-date-to" style="width:130px">
+        <input type="text" id="sfc-f-keyword" placeholder="製令單號關鍵字…" style="width:180px" onkeydown="if(event.key==='Enter')loadSfcr06Data()">
+        <select id="sfc-f-line" style="width:90px" onchange="loadSfcr06Data(true)">
+          <option value="加工課" selected>加工課</option>
+          <option value="成品部">成品部</option>
+          <option value="">全部線別</option>
+        </select>
+        <label id="sfc-delay-pill" style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:4px 12px;border-radius:20px;border:1.5px solid #b71c1c;font-size:.85rem;font-weight:700;color:#b71c1c;background:#fff;transition:background .15s,color .15s;user-select:none" onmouseenter="this.style.background='#FEF2F2'" onmouseleave="this.style.background=document.getElementById('sfc-f-delay-only').checked?'#b71c1c':'#fff'">
+          <input type="checkbox" id="sfc-f-delay-only" onchange="(function(){const p=document.getElementById('sfc-delay-pill');const c=document.getElementById('sfc-f-delay-only').checked;p.style.background=c?'#b71c1c':'#fff';p.style.color=c?'#fff':'#b71c1c';renderSfcr06Table(_sfcr06LastRows);})()" style="display:none">
+          <span>⚠ Delay</span>
+        </label>
+        <button id="sfc-search-btn" class="jig-rebuild-btn" onclick="loadSfcr06Data(true)">🔍 查詢</button>
+        <button class="jig-rebuild-btn" style="background:#1565C0;color:#fff;margin-left:6px" onclick="switchSubPage('achieve')">📊 加工達成率</button>
+        <span class="filter-count">
+          <strong id="sfc-f-count">0</strong> 筆
+        </span>
+      </div>
+      <div class="table-wrap" id="sfcr06-content">
+        <div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sub-page-achieve" class="sub-page-container" style="display:none">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+      <div class="card-header today-leave-header">📊 加工達成率（月度延誤統計）</div>
+      <div class="filter-bar">
+        <button class="jig-rebuild-btn" onclick="switchSubPage('sfcr06')" style="margin-right:.6rem">← 返回製程明細表</button>
+        <label>年度</label>
+        <select id="achieve-year" onchange="loadAchieveData()"
+          style="background:#fff;border:1px solid #d0d5dd;border-radius:6px;padding:.25rem .5rem;font-size:.88rem"></select>
+        <span id="achieve-info" style="margin-left:.8rem;font-size:.78rem;color:var(--muted)"></span>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:1.2rem 1.4rem">
+        <div id="achieve-content">
+          <div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>
+        </div>
       </div>
     </div>
   </div>
@@ -2270,7 +2335,7 @@ function closeJigRemarks() {
 }
 
 function switchSubPage(page) {
-  const pages = ['employee','leave','attendance','application','overtime','jig','dcn','zume','scrap','purchase','prod','p2'];
+  const pages = ['employee','leave','attendance','application','overtime','jig','dcn','zume','scrap','purchase','prod','p2','sfcr06','achieve'];
   pages.forEach(p => {
     const el = document.getElementById('sub-page-' + p);
     if (el) el.style.display = 'none';
@@ -2294,6 +2359,8 @@ function switchSubPage(page) {
   else if (page === 'purchase') loadPurchaseData();
   else if (page === 'prod')  loadProdData();
   else if (page === 'p2')   loadP2Data();
+  else if (page === 'sfcr06') loadSfcr06Data();
+  else if (page === 'achieve') loadAchieveData();
 }
 
 // ── 員工名冊 ──────────────────────────────────────────────────────
@@ -4407,9 +4474,9 @@ function getFilteredProd() {
 }
 
 function getProdEmpMap() {
-  // 從加班統計資料建立工號→姓名對照（已載入時即可用）
+  // 從員工名冊（員工登錄系統試算表）建立工號→姓名對照
   const map = {};
-  _overtimes.forEach(o => { if (o.employee && o.name) map[o.employee] = o.name; });
+  _empData.forEach(e => { if (e.emp_id && e.name) map[e.emp_id] = e.name; });
   return map;
 }
 
@@ -4763,9 +4830,9 @@ async function loadCatMap() {
 
 async function loadProdData() {
   if (_prodLoaded) { renderProdCurrent(); return; }
-  // 確保加班資料已載入（工號→姓名對照）
-  if (!_overtimesLoaded) {
-    try { await loadOvertimeData(); } catch(e) {}
+  // 確保員工名冊已載入（工號→姓名對照）
+  if (!_empLoaded) {
+    try { await loadEmployeeData(); } catch(e) {}
   }
   const cached = localStorage.getItem(PROD_CACHE_KEY);
   if (cached) {
@@ -5448,6 +5515,516 @@ async function renderP2Chart() {
   );
 }
 
+// ── 加工達成率 ────────────────────────────────────────────────────
+let _achieveCache   = {};  // key = year
+let _achieveMonthMap = {};
+let _achieveYear    = null;
+
+async function loadAchieveData() {
+  const content = document.getElementById('achieve-content');
+  const infoEl  = document.getElementById('achieve-info');
+  const sel = document.getElementById('achieve-year');
+  if (!sel.options.length) {
+    const curY = String(new Date().getFullYear());
+    const years = [curY, String(+curY-1), String(+curY-2)];
+    sel.innerHTML = years.map(y => `<option value="${y}"${y===curY?' selected':''}>${y} 年</option>`).join('');
+  }
+  const selYear = sel.value;
+  _achieveYear = selYear;
+  if (!_achieveCache[selYear]) {
+    content.innerHTML = '<div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>';
+    infoEl.textContent = '';
+    try {
+      const res  = await fetch(`/api/sfcr06/list?date_from=${selYear}0101&date_to=${selYear}1231&line=加工課`);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      _achieveCache[selYear] = data.data;
+    } catch(e) {
+      content.innerHTML = `<div class="msg-empty">載入失敗：${esc(e.message)}</div>`;
+      return;
+    }
+  }
+  renderAchieveChart(selYear);
+}
+
+function renderAchieveChart(selYear) {
+  const content = document.getElementById('achieve-content');
+  const infoEl  = document.getElementById('achieve-info');
+  const allRows = _achieveCache[selYear] || [];
+
+  const now = new Date();
+  const curYear  = String(now.getFullYear());
+  const curMonth = now.getMonth() + 1;
+
+  const isDelayR  = r => r['完工碼'] === 'Y' && r['實際完工日'] && r['製程完工日'] && r['實際完工日'] > r['製程完工日'];
+  const calcDays  = r => Math.round((new Date(r['實際完工日'].replace(/\//g,'-')) - new Date(r['製程完工日'].replace(/\//g,'-'))) / 86400000);
+
+  _achieveMonthMap = {};
+  allRows.forEach(r => {
+    if (r['完工碼'] !== 'Y' || !r['製程完工日']) return;
+    const mKey = r['製程完工日'].slice(0, 7);
+    const mNum = parseInt(mKey.slice(5));
+    if (selYear === curYear && mNum > curMonth) return;
+    if (!_achieveMonthMap[mKey]) _achieveMonthMap[mKey] = { total: 0, delay: 0, delayRows: [] };
+    _achieveMonthMap[mKey].total++;
+    if (isDelayR(r)) {
+      _achieveMonthMap[mKey].delay++;
+      _achieveMonthMap[mKey].delayRows.push(Object.assign({}, r, { _days: calcDays(r) }));
+    }
+  });
+
+  const months = Object.keys(_achieveMonthMap).sort();
+  if (!months.length) {
+    content.innerHTML = '<div class="msg-empty">該年度無加工課完工製程資料</div>';
+    infoEl.textContent = ''; return;
+  }
+
+  const allTotal = months.reduce((s,m) => s + _achieveMonthMap[m].total, 0);
+  const allDelay = months.reduce((s,m) => s + _achieveMonthMap[m].delay, 0);
+  const allAch   = allTotal ? ((allTotal-allDelay)/allTotal*100).toFixed(1) : '0.0';
+  const sumClr   = parseFloat(allAch)>=90?'#059669':parseFloat(allAch)>=70?'#D97706':'#DC2626';
+  infoEl.textContent = '加工課・已完工製程';
+
+  // ── KPI 卡片 ──
+  const kpiHtml = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1.4rem">
+    <div style="flex:1;min-width:130px;background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:14px 18px;border-top:3px solid ${sumClr}">
+      <div style="font-size:.72rem;font-weight:700;color:#94a3b8;letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">全年達成率</div>
+      <div style="font-size:2.2rem;font-weight:800;color:${sumClr};line-height:1">${allAch}%</div>
+      <div style="font-size:.77rem;color:#94a3b8;margin-top:6px">${(allTotal-allDelay).toLocaleString()} 準時 / ${allTotal.toLocaleString()} 完工</div>
+    </div>
+    <div style="flex:1;min-width:130px;background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:14px 18px;border-top:3px solid #DC2626">
+      <div style="font-size:.72rem;font-weight:700;color:#94a3b8;letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">全年延誤件數</div>
+      <div style="font-size:2.2rem;font-weight:800;color:#DC2626;line-height:1">${allDelay.toLocaleString()}</div>
+      <div style="font-size:.77rem;color:#94a3b8;margin-top:6px">延誤率 ${allTotal?(allDelay/allTotal*100).toFixed(1):0}%</div>
+    </div>
+    <div style="flex:1;min-width:130px;background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:14px 18px;border-top:3px solid #3B82F6">
+      <div style="font-size:.72rem;font-weight:700;color:#94a3b8;letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">統計月份</div>
+      <div style="font-size:2.2rem;font-weight:800;color:#3B82F6;line-height:1">${months.length}</div>
+      <div style="font-size:.77rem;color:#94a3b8;margin-top:6px">${months[0].slice(0,4)}/${parseInt(months[0].slice(5))}月 ～ ${parseInt(months[months.length-1].slice(5))}月</div>
+    </div>
+  </div>`;
+
+  // ── 堆疊長條圖（準時＋延誤，絕對件數為高度）──
+  const BAR_W=70, GAP=96, MT=58, MB=50, CH=190;
+  const W=24+months.length*GAP, H=MT+CH+MB;
+  const FF="'Noto Sans TC',sans-serif";
+  const maxVal = Math.max(...months.map(m=>_achieveMonthMap[m].total), 1);
+  const sc = v => Math.max(2, Math.round(v/maxVal*CH));
+
+  let svg=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible"><defs>`;
+  // 每個月份的 clipPath（讓堆疊長條整體有圓角）
+  months.forEach((m,i) => {
+    const s    = _achieveMonthMap[m];
+    const oH   = sc(s.total-s.delay);
+    const dH   = sc(s.delay);
+    const totH = oH+dH;
+    const x    = 12+i*GAP;
+    const baseY= MT+CH;
+    svg+=`<clipPath id="cp-${i}"><rect x="${x}" y="${baseY-totH}" width="${BAR_W}" height="${totH+10}" rx="8"/></clipPath>`;
+  });
+  svg+=`</defs>`;
+  svg+=`<line x1="0" y1="${MT+CH}" x2="${W}" y2="${MT+CH}" stroke="#CBD5E1" stroke-width="1.5"/>`;
+
+  months.forEach((m,i) => {
+    const s    = _achieveMonthMap[m];
+    const ach  = s.total ? (s.total-s.delay)/s.total*100 : 100;
+    const achS = ach.toFixed(1);
+    const clr  = ach>=90?'#059669':ach>=70?'#D97706':'#DC2626';
+    const oH   = sc(s.total-s.delay);   // 準時段高度
+    const dH   = sc(s.delay);            // 延誤段高度
+    const totH = oH + dH;
+    const x    = 12+i*GAP;
+    const baseY= MT+CH;                  // 底線 Y
+    const mo   = parseInt(m.slice(5));
+
+    svg+=`<g onclick="showAchieveMonth('${m}')" style="cursor:pointer">`;
+    // 延誤段（上，紅）— 以 clipPath 裁切確保圓角
+    if(s.delay>0){
+      svg+=`<rect x="${x}" y="${baseY-totH}" width="${BAR_W}" height="${dH}" fill="#EF4444" clip-path="url(#cp-${i})"/>`;
+      if(dH>16) svg+=`<text x="${x+BAR_W/2}" y="${baseY-totH+dH/2+4}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family=${FF}>${s.delay}</text>`;
+    }
+    // 準時段（下，綠）
+    if(s.total-s.delay>0){
+      const oy=baseY-oH;
+      svg+=`<rect x="${x}" y="${oy}" width="${BAR_W}" height="${oH}" fill="#10B981" clip-path="url(#cp-${i})"/>`;
+      if(oH>16) svg+=`<text x="${x+BAR_W/2}" y="${oy+oH/2+4}" text-anchor="middle" font-size="11" font-weight="600" fill="#fff" font-family=${FF}>${s.total-s.delay}</text>`;
+    }
+    // 總件數標籤（上方）
+    svg+=`<text x="${x+BAR_W/2}" y="${baseY-totH-18}" text-anchor="middle" font-size="13" font-weight="700" fill="#334155" font-family=${FF}>${s.total.toLocaleString()}</text>`;
+    // 達成率%
+    svg+=`<text x="${x+BAR_W/2}" y="${baseY-totH-5}" text-anchor="middle" font-size="11" font-weight="700" fill="${clr}" font-family=${FF}>${achS}%</text>`;
+    // 月份標籤
+    svg+=`<text x="${x+BAR_W/2}" y="${baseY+18}" text-anchor="middle" font-size="13" font-weight="600" fill="#334155" font-family=${FF}>${mo}月</text>`;
+    svg+=`</g>`;
+  });
+  // 圖例
+  svg+=`<text x="${W/2-50}" y="${H-5}" text-anchor="middle" font-size="11" fill="#10B981" font-weight="700" font-family=${FF}>■ 準時</text>`;
+  svg+=`<text x="${W/2+20}" y="${H-5}" text-anchor="middle" font-size="11" fill="#EF4444" font-weight="700" font-family=${FF}>■ 延誤</text>`;
+  svg+='</svg>';
+
+  // ── 月份明細表 ──
+  const thS='padding:.65rem 1.8rem;font-size:.92rem;font-weight:700;border-bottom:2px solid #CBD5E1;text-align:center;white-space:nowrap;color:#374151';
+  const tdS='padding:.55rem 1.8rem;font-size:.92rem;text-align:center;border-bottom:1px solid #F1F5F9';
+  const tblHtml=`<table style="border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);width:auto;margin-top:1.4rem">
+    <thead style="background:#F0F9FF"><tr>
+      <th style="${thS}">月份</th><th style="${thS}">完工</th><th style="${thS}">準時</th>
+      <th style="${thS}">延誤</th><th style="${thS}">達成率</th><th style="${thS}">延誤率</th><th style="${thS}">明細</th>
+    </tr></thead><tbody>
+    ${months.map((m,i)=>{
+      const s=_achieveMonthMap[m];
+      const ach=s.total?((s.total-s.delay)/s.total*100).toFixed(1):'100.0';
+      const dly=s.total?(s.delay/s.total*100).toFixed(1):'0.0';
+      const clr=parseFloat(ach)>=90?'#059669':parseFloat(ach)>=70?'#D97706':'#DC2626';
+      const mo=parseInt(m.slice(5));
+      return `<tr style="background:${i%2?'#F8FAFC':'#fff'};cursor:pointer" onclick="showAchieveMonth('${m}')">
+        <td style="${tdS};font-weight:600;color:#475569">${m.slice(0,4)}/${mo}月</td>
+        <td style="${tdS}">${s.total}</td>
+        <td style="${tdS};color:#059669;font-weight:600">${s.total-s.delay}</td>
+        <td style="${tdS};color:${s.delay?'#DC2626':'#94a3b8'};font-weight:${s.delay?700:400}">${s.delay}</td>
+        <td style="${tdS};font-weight:700;color:${clr}">${ach}%</td>
+        <td style="${tdS};color:${s.delay?'#DC2626':'#94a3b8'}">${dly}%</td>
+        <td style="${tdS};color:rgb(0,0,255);font-size:1rem;font-weight:700">${s.delay?'▶ 查看':''}</td>
+      </tr>`;
+    }).join('')}
+    </tbody><tfoot style="background:#F0F9FF"><tr>
+      <td style="${thS}">合計</td><td style="${thS}">${allTotal}</td>
+      <td style="${thS};color:#059669">${allTotal-allDelay}</td>
+      <td style="${thS};color:${allDelay?'#DC2626':'#94a3b8'}">${allDelay}</td>
+      <td style="${thS};color:${sumClr}">${allAch}%</td>
+      <td style="${thS};color:${allDelay?'#DC2626':'#94a3b8'}">${allTotal?(allDelay/allTotal*100).toFixed(1):0}%</td>
+      <td style="${thS}"></td>
+    </tr></tfoot></table>`;
+
+  // ── 分類切換用常數 ──
+  const CAT_COLORS_ACH = { A:'#1565C0', B:'#2E7D32', C:'#E65100', L:'#6A1B9A', '—':'#94a3b8' };
+  const CAT_ORDER_ACH  = ['A','B','C','L','—'];
+  const CAT_LBL_ACH    = { A:'A.CNC', B:'B.鑽床', C:'C.沖床', L:'L.車床', '—':'未分類' };
+
+  // ── 附件2：月份 / 分類 切換 ──
+  // 從全量已完工列計算分類 × 月份統計
+  const catStats = {};
+  const catMonthData = {}; // { cat: { mKey: { total, delay } } }
+  allRows.forEach(r => {
+    if (r['完工碼'] !== 'Y' || !r['製程完工日']) return;
+    const mKey = r['製程完工日'].slice(0, 7);
+    const mNum = parseInt(mKey.slice(5));
+    if (selYear === curYear && mNum > curMonth) return;
+    const cat = (r['分類'] || '').trim() || '—';
+    if (!catStats[cat]) catStats[cat] = { total: 0, delay: 0 };
+    catStats[cat].total++;
+    if (!catMonthData[cat]) catMonthData[cat] = {};
+    if (!catMonthData[cat][mKey]) catMonthData[cat][mKey] = { total: 0, delay: 0 };
+    catMonthData[cat][mKey].total++;
+    if (isDelayR(r)) { catStats[cat].delay++; catMonthData[cat][mKey].delay++; }
+  });
+  const catStatEntries = CAT_ORDER_ACH
+    .filter(c => catStats[c])
+    .concat(Object.keys(catStats).filter(c => !CAT_ORDER_ACH.includes(c)))
+    .map(c => [c, catStats[c]])
+    .sort((a,b) => b[1].delay - a[1].delay);
+  const catAllTotal = catStatEntries.reduce((s,[,v])=>s+v.total,0);
+  const catAllDelay = catStatEntries.reduce((s,[,v])=>s+v.delay,0);
+  const catAllAch   = catAllTotal ? ((catAllTotal-catAllDelay)/catAllTotal*100).toFixed(1) : '100.0';
+
+  // 樞紐表：分類（列）× 月份（欄）
+  const maxCatMoDelay = Math.max(
+    ...catStatEntries.flatMap(([c])=>months.map(m=>((catMonthData[c]||{})[m]||{}).delay||0)), 1);
+  const thP  = `padding:.65rem 1.4rem;font-size:.84rem;font-weight:700;color:#fff;background:linear-gradient(180deg,#1976D2,#1565C0);text-align:center;white-space:nowrap;border-right:1px solid rgba(255,255,255,.12)`;
+  const thPL = thP + ';text-align:left';
+  const tdP  = `padding:.55rem 1.1rem;text-align:center;border-bottom:1px solid #F1F5F9;vertical-align:middle`;
+  const moHdrs = months.map(m=>`<th style="${thP}">${parseInt(m.slice(5))}月</th>`).join('');
+  const catTblHtml = `<div style="overflow-x:auto"><table style="border-collapse:collapse;border-radius:10px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.10);width:auto">
+    <thead><tr>
+      <th style="${thPL}">分類</th>${moHdrs}
+      <th style="${thP}">全年延誤</th><th style="${thP}">完工</th><th style="${thP}">達成率</th>
+    </tr></thead><tbody>
+    ${catStatEntries.map(([cat,s],i) => {
+      const ach = s.total ? ((s.total-s.delay)/s.total*100).toFixed(1) : '100.0';
+      const achClr = parseFloat(ach)>=90?'#059669':parseFloat(ach)>=70?'#D97706':'#DC2626';
+      const catClr = CAT_COLORS_ACH[cat] || '#64748b';
+      const lbl = CAT_LBL_ACH[cat] || cat;
+      const letter = (cat === '—') ? '?' : cat;
+      const moCells = months.map(m => {
+        const d = ((catMonthData[cat]||{})[m]||{}).delay || 0;
+        const barW = d ? Math.max(4, Math.round(d/maxCatMoDelay*44)) : 0;
+        return `<td style="${tdP};background:${i%2?'#F8FAFC':'#fff'}">
+          <div style="font-size:.92rem;font-weight:${d?800:400};color:${d?'#DC2626':'#cbd5e1'};line-height:1.2">${d||'—'}</div>
+          ${d?`<div style="width:${barW}px;height:3px;background:#DC262655;border-radius:2px;margin:3px auto 0"></div>`:''}
+        </td>`;
+      }).join('');
+      return `<tr>
+        <td style="${tdP};text-align:left;padding:.55rem 1.6rem;background:${i%2?'#F8FAFC':'#fff'}">
+          <span style="font-size:.9rem;font-weight:700;color:${catClr}">${lbl}</span>
+        </td>
+        ${moCells}
+        <td style="${tdP};font-size:1rem;font-weight:800;color:${s.delay?'#DC2626':'#94a3b8'};background:${i%2?'#FFF8F8':'#FFF4F4'}">${s.delay||'—'}</td>
+        <td style="${tdP};color:#475569;background:${i%2?'#F8FAFC':'#fff'}">${s.total}</td>
+        <td style="${tdP};font-size:.95rem;font-weight:800;color:${achClr};background:${i%2?'#F8FAFC':'#fff'}">${ach}%</td>
+      </tr>`;
+    }).join('')}
+    </tbody><tfoot><tr>
+      <td style="${tdP};text-align:left;padding:.6rem 1.6rem;background:#EFF6FF;font-size:.9rem;font-weight:800;color:#1565C0">合計</td>
+      ${months.map(m=>{
+        const tot=catStatEntries.reduce((s,[c])=>s+(((catMonthData[c]||{})[m]||{}).delay||0),0);
+        const barW=tot?Math.max(4,Math.round(tot/maxCatMoDelay*44)):0;
+        return `<td style="${tdP};background:#EFF6FF">
+          <div style="font-size:.92rem;font-weight:${tot?800:400};color:${tot?'#1565C0':'#cbd5e1'}">${tot||'—'}</div>
+          ${tot?`<div style="width:${barW}px;height:3px;background:#1565C055;border-radius:2px;margin:3px auto 0"></div>`:''}
+        </td>`;
+      }).join('')}
+      <td style="${tdP};font-size:1rem;font-weight:800;color:#DC2626;background:#FFF0F0">${catAllDelay}</td>
+      <td style="${tdP};font-weight:700;color:#475569;background:#EFF6FF">${catAllTotal}</td>
+      <td style="${tdP};font-size:.95rem;font-weight:800;color:${parseFloat(catAllAch)>=90?'#059669':parseFloat(catAllAch)>=70?'#D97706':'#DC2626'};background:#EFF6FF">${catAllAch}%</td>
+    </tr></tfoot></table></div>`;
+
+  const tabBtn = (id,label,active) =>
+    `<button id="${id}" onclick="achViewTab('${id.slice(-1)}')"
+      style="padding:.3rem .9rem;font-size:.8rem;font-weight:700;border-radius:6px;border:1.5px solid ${active?'#1565C0':'#CBD5E1'};
+             background:${active?'#1565C0':'#fff'};color:${active?'#fff':'#64748b'};cursor:pointer">${label}</button>`;
+
+  const tblWrapper = `
+    <div style="margin-top:1.4rem">
+      <div style="display:flex;gap:6px;margin-bottom:.7rem">
+        ${tabBtn('ach-tab-m','📅 月份',true)}${tabBtn('ach-tab-c','🏷 分類',false)}
+      </div>
+      <div id="ach-view-m">${tblHtml}</div>
+      <div id="ach-view-c" style="display:none">${catTblHtml}</div>
+    </div>`;
+
+  content.innerHTML = kpiHtml +
+    `<div style="font-size:.84rem;font-weight:700;color:#1e293b;margin-bottom:.5rem">月度加工達成率
+      <span style="font-size:.73rem;font-weight:400;color:#94a3b8;margin-left:.4rem">點擊月份長條或表格列查看延誤明細</span></div>
+     <div style="overflow-x:auto">${svg}</div>` +
+    tblWrapper +
+    `<div id="achieve-detail" style="margin-top:1rem"></div>`;
+}
+
+function achViewTab(tab) {
+  const isM = tab === 'm';
+  const vm = document.getElementById('ach-view-m');
+  const vc = document.getElementById('ach-view-c');
+  const bm = document.getElementById('ach-tab-m');
+  const bc = document.getElementById('ach-tab-c');
+  if (vm) vm.style.display = isM ? '' : 'none';
+  if (vc) vc.style.display = isM ? 'none' : '';
+  [bm, bc].forEach((b,i) => {
+    if (!b) return;
+    const on = (i===0) === isM;
+    b.style.background = on ? '#1565C0' : '#fff';
+    b.style.color = on ? '#fff' : '#64748b';
+    b.style.borderColor = on ? '#1565C0' : '#CBD5E1';
+  });
+}
+
+function showAchieveMonth(mKey) {
+  const s = _achieveMonthMap[mKey];
+  const detailEl = document.getElementById('achieve-detail');
+  if (!detailEl || !s) return;
+  const mo = parseInt(mKey.slice(5));
+  const monthLabel = `${mKey.slice(0,4)} 年 ${mo} 月`;
+
+  if (!s.delay) {
+    detailEl.innerHTML = `<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:14px 18px;color:#15803D;font-size:.88rem;font-weight:600">✅ ${monthLabel}・無延誤記錄，達成率 100%</div>`;
+    detailEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    return;
+  }
+
+  // 按延誤天數分組
+  const buckets = {};
+  s.delayRows.forEach(r => {
+    const k = r._days <= 5 ? String(r._days) : '>5';
+    if (!buckets[k]) buckets[k] = [];
+    buckets[k].push(r);
+  });
+  const bucketOrder = ['1','2','3','4','5','>5'].filter(k => buckets[k]);
+
+  const thD='padding:.35rem .7rem;font-size:.79rem;font-weight:700;border-bottom:2px solid #FECACA;text-align:center;white-space:nowrap;color:#7f1d1d;background:#FFF5F5';
+  const tdD='padding:.28rem .7rem;font-size:.79rem;text-align:center;border-bottom:1px solid #FEF2F2';
+
+  const cardHtml = bucketOrder.map(k => {
+    const cnt   = buckets[k].length;
+    const pct   = (cnt/s.delay*100).toFixed(1);
+    const label = k==='>5' ? '≥6天' : k+'天';
+    const tc    = k==='1'?'#C2410C':'#B91C1C';
+    const bid   = `abkt-${mKey.replace('/','')}-${k}`;
+    const rows  = buckets[k].slice().sort((a,b)=>b._days-a._days).map((r,i)=>`<tr style="background:${i%2?'#FFF8F8':'#fff'}">
+      <td style="${tdD};color:#DC2626;font-weight:700;white-space:nowrap;min-width:160px">${esc(r['製令單號'])}</td>
+      <td style="${tdD};min-width:180px">${esc(r['產品品名'])||'—'}</td>
+      <td style="${tdD};min-width:100px">${esc(r['製程名稱'])}</td>
+      <td style="${tdD};white-space:nowrap;min-width:100px">${esc(r['製程完工日'])}</td>
+      <td style="${tdD};color:#DC2626;font-weight:700;white-space:nowrap;min-width:100px">${esc(r['實際完工日'])}</td>
+      <td style="${tdD};color:#DC2626;font-weight:800;min-width:60px">${r._days}天</td>
+    </tr>`).join('');
+    return `<div style="border:1px solid #FECACA;border-radius:8px;overflow:hidden;margin-bottom:6px">
+      <div onclick="(function(el){el.style.display=el.style.display==='none'?'block':'none'})(document.getElementById('${bid}'))"
+        style="display:flex;align-items:center;gap:14px;padding:10px 16px;cursor:pointer;background:#FFF5F5;user-select:none">
+        <span style="font-size:.9rem;font-weight:700;color:#475569;min-width:44px">${label}</span>
+        <span style="font-size:1.4rem;font-weight:800;color:${tc}">${cnt}</span>
+        <span style="font-size:.88rem;font-weight:700;color:${tc};opacity:.75">${pct}%</span>
+        <span style="margin-left:auto;font-size:.78rem;color:#94a3b8;letter-spacing:.02em">▼ 展開</span>
+      </div>
+      <div id="${bid}" style="display:none;overflow-x:auto">
+        <table style="border-collapse:collapse;width:100%">
+          <thead><tr>
+            <th style="${thD}">製令單號</th><th style="${thD}">品名</th><th style="${thD}">製程</th>
+            <th style="${thD}">預計完工</th><th style="${thD}">實際完工</th><th style="${thD}">延誤</th>
+          </tr></thead><tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+
+  detailEl.innerHTML = `
+    <div style="background:#fff;border:1.5px solid #FECACA;border-radius:12px;padding:16px 18px;box-shadow:0 2px 8px rgba(220,38,38,.08)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:.88rem;font-weight:800;color:#7f1d1d">⚠ ${monthLabel} 延誤明細（${s.delay} 件 / 共 ${s.total} 件）</div>
+        <button onclick="document.getElementById('achieve-detail').innerHTML=''" style="border:none;background:none;cursor:pointer;color:#94a3b8;font-size:1rem;padding:2px 6px">✕</button>
+      </div>
+      ${cardHtml}
+    </div>`;
+  detailEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+let _sfcr06Loaded = false;
+let _sfcr06LastRows = [];
+
+function initSfcr06Dates() {
+  const fromEl = document.getElementById('sfc-date-from');
+  const toEl = document.getElementById('sfc-date-to');
+  if (fromEl.value || toEl.value) return;
+  const today = new Date();
+  const first = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const last  = new Date(today.getFullYear(), today.getMonth(), 0);
+  const fmtD = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  fromEl.value = fmtD(first);
+  toEl.value   = fmtD(last);
+}
+
+async function loadSfcr06Data() {
+  if (!_sfcr06Loaded) initSfcr06Dates();
+  const content = document.getElementById('sfcr06-content');
+  content.innerHTML = '<div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>';
+  const dateFrom = document.getElementById('sfc-date-from').value;
+  const dateTo   = document.getElementById('sfc-date-to').value;
+  const keyword  = document.getElementById('sfc-f-keyword').value.trim();
+  const line     = document.getElementById('sfc-f-line').value;
+  const params = new URLSearchParams();
+  if (dateFrom) params.set('date_from', dateFrom);
+  if (dateTo)   params.set('date_to', dateTo);
+  if (keyword)  params.set('keyword', keyword);
+  if (line)     params.set('line', line);
+  try {
+    const res  = await fetch('/api/sfcr06/list?' + params.toString());
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    _sfcr06Loaded = true;
+    _sfcr06LastRows = data.data;
+    renderSfcr06Table(_sfcr06LastRows);
+  } catch (e) {
+    content.innerHTML = `<div class="msg-empty">載入失敗：${esc(e.message)}</div>`;
+  }
+}
+
+function sfcShowPopup(e, wo, name, desc) {
+  const pop = document.getElementById('sfc-popup');
+  document.getElementById('sfc-popup-wo').textContent   = wo;
+  document.getElementById('sfc-popup-name').textContent = name;
+  document.getElementById('sfc-popup-desc').textContent = desc || '（無敘述）';
+  pop.style.display = 'block';
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const pw = pop.offsetWidth || 320, ph = pop.offsetHeight || 160;
+  let x = e.clientX + 12, y = e.clientY + 12;
+  if (x + pw > vw - 12) x = e.clientX - pw - 12;
+  if (y + ph > vh - 12) y = e.clientY - ph - 12;
+  pop.style.left = x + 'px';
+  pop.style.top  = y + 'px';
+  e.stopPropagation();
+}
+document.addEventListener('click', () => {
+  const p = document.getElementById('sfc-popup');
+  if (p) p.style.display = 'none';
+});
+
+// 延誤判斷：加工課(000-1)、已完工、實際完工日晚於製程完工日
+function isDelaySfc(r) {
+  return r['線別/廠商代號'] === '000-1' &&
+    r['完工碼'] === 'Y' &&
+    r['實際完工日'] && r['製程完工日'] &&
+    r['實際完工日'] > r['製程完工日'];
+}
+
+function renderSfcr06Table(rows) {
+  const delayOnly = document.getElementById('sfc-f-delay-only')?.checked;
+  if (delayOnly) rows = rows.filter(isDelaySfc);
+  document.getElementById('sfc-f-count').textContent = rows.length;
+  const content = document.getElementById('sfcr06-content');
+  if (!rows.length) {
+    content.innerHTML = '<div class="msg-empty"><span>查無符合條件的製程明細</span></div>';
+    return;
+  }
+
+  const isDelay = r =>
+    r['線別/廠商代號'] === '000-1' &&
+    r['完工碼'] === 'Y' &&
+    r['實際完工日'] && r['製程完工日'] &&
+    r['實際完工日'] > r['製程完工日'];
+
+  const th = (label, width) => `<th${width ? ` style="width:${width}"` : ''}>${label}</th>`;
+  content.innerHTML = `
+    <table class="pro-table">
+      <thead><tr>
+        ${th('狀態', '60px')}${th('製令單號', '120px')}${th('品號', '130px')}${th('品名', '140px')}${th('分類', '72px')}
+        ${th('加工順序', '55px')}${th('製程代號', '65px')}${th('製程名稱', '85px')}
+        ${th('線別/廠商代號', '90px')}${th('線別/廠商名稱', '90px')}
+        ${th('預計開工日', '80px')}${th('預計完工日', '80px')}${th('製程開工日', '80px')}${th('製程完工日', '80px')}${th('實際完工日', '80px')}
+        ${th('投入數量', '70px')}${th('完成數量', '70px')}${th('標準人時', '70px')}${th('標準機時', '70px')}
+        ${th('實際開工日', '80px')}
+      </tr></thead>
+      <tbody>
+        ${rows.map((r, i) => {
+          const delay = isDelay(r);
+          const rowBg = delay ? 'background:#FFF0F0' : (i%2===1 ? 'background:#F8FAFC' : '');
+          const descEsc = esc(r['製程敘述'] || '').replace(/'/g,'&#39;');
+          const nameEsc = esc(r['產品品名'] || '').replace(/'/g,'&#39;');
+          const woEsc   = esc(r['製令單號'] || '').replace(/'/g,'&#39;');
+          return `
+          <tr style="${rowBg}" onclick="sfcShowPopup(event,'${woEsc}','${nameEsc}','${descEsc}')">
+            <td class="td-center">${
+              r['完工碼'] !== 'Y'
+                ? '<span class="cat-badge" style="background:#F1F5F9;color:#64748B">未完工</span>'
+                : delay
+                  ? '<span class="cat-badge" style="background:#C62828;color:#fff;font-weight:700">DELAY</span>'
+                  : '<span class="cat-badge" style="background:#E8F5E9;color:#2E7D32">已完工</span>'
+            }</td>
+            <td class="td-code" style="${delay ? 'color:#C62828;font-weight:700' : ''}">${esc(r['製令單號'])}</td>
+            <td class="td-code">${esc(r['產品品號'])}</td>
+            <td class="td-name">${esc(r['產品品名'])}</td>
+            <td class="td-center">${(()=>{const c=r['分類']||'';const lbl=K1P2_CAT_LABELS[c]||c;return lbl?`<span class="cat-badge cat-${c}">${esc(lbl)}</span>`:''})()}</td>
+            <td class="td-center">${esc(r['加工順序'])}</td>
+            <td class="td-center">${esc(r['製程代號'])}</td>
+            <td>${esc(r['製程名稱'])}</td>
+            <td class="td-center">${esc(r['線別/廠商代號'])}</td>
+            <td>${esc(r['線別/廠商名稱'])}</td>
+            <td class="td-center">${esc(r['預計開工日'])}</td>
+            <td class="td-center">${esc(r['預計完工日'])}</td>
+            <td class="td-center">${esc(r['製程開工日'])}</td>
+            <td class="td-center">${esc(r['製程完工日'])}</td>
+            <td class="td-center">${delay
+              ? `<span style="display:inline-block;background:#C62828;color:#fff;font-weight:700;font-size:.8rem;padding:1px 7px;border-radius:4px">${esc(r['實際完工日'])}</span>`
+              : esc(r['實際完工日'])}</td>
+            <td class="td-center">${r['投入數量'] ? r['投入數量'].toLocaleString('zh-TW') : ''}</td>
+            <td class="td-center">${r['完成數量'] ? r['完成數量'].toLocaleString('zh-TW') : ''}</td>
+            <td class="td-center">${esc(r['標準人時'])}</td>
+            <td class="td-center">${esc(r['標準機時'])}</td>
+            <td class="td-center">${esc(r['實際開工日'])}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ── P2 ───────────────────────────────────────────────────────────
+
 async function loadP2Data(forceRefresh) {
   if (_p2Loaded && !forceRefresh) { renderP2Current(); return; }
   document.getElementById('p2-content').innerHTML =
@@ -5513,6 +6090,153 @@ async function loadJigData() {
   }
 }
 
+// ══ 新增治檢具申請單（直接寫入 PDM）══
+async function openJigApplyModal() {
+  const m = document.getElementById('jig-apply-modal');
+  m.style.display = 'flex';
+  document.getElementById('ja-loading').style.display = '';
+  document.getElementById('ja-form').style.display = 'none';
+  document.getElementById('ja-error').style.display = 'none';
+  document.getElementById('ja-msg').textContent = '';
+  try {
+    const res = await fetch('/api/jig/apply/defaults');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || '取得預設值失敗');
+    document.getElementById('ja-pt-no').textContent = data.next_no;
+    document.getElementById('ja-applicant').value = data.applicant || '';
+    // 日期：yyyy/mm/dd → input[type=date] 需要 yyyy-mm-dd
+    document.getElementById('ja-date').value = (data.today || '').replace(/\//g, '-');
+    const sel = document.getElementById('ja-mold');
+    sel.innerHTML = '<option value="">— 請選擇 —</option>' +
+      (data.mold_types || []).map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    document.getElementById('ja-loading').style.display = 'none';
+    document.getElementById('ja-form').style.display = '';
+    document.getElementById('ja-machine').focus();
+  } catch (e) {
+    document.getElementById('ja-loading').style.display = 'none';
+    const err = document.getElementById('ja-error');
+    err.style.display = '';
+    err.textContent = '⚠ ' + e.message + '（此功能需要本機已安裝並登入 PDM）';
+  }
+}
+
+let _jaFolderPath = '';
+let _jaImgB64 = '';
+
+function closeJigApplyModal() {
+  document.getElementById('jig-apply-modal').style.display = 'none';
+  document.getElementById('ja-step2').style.display = 'none';
+  jaClearImage();
+}
+
+function jaSetImage(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _jaImgB64 = e.target.result;
+    document.getElementById('ja2-img-preview').src = _jaImgB64;
+    document.getElementById('ja2-img-preview-wrap').style.display = '';
+    document.getElementById('ja2-img-drop').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function jaClearImage() {
+  _jaImgB64 = '';
+  const wrap = document.getElementById('ja2-img-preview-wrap');
+  const drop = document.getElementById('ja2-img-drop');
+  if (wrap) wrap.style.display = 'none';
+  if (drop) drop.style.display = '';
+}
+
+function jaToggleComment() {
+  const on = document.getElementById('ja2-submit-flow').checked;
+  document.getElementById('ja2-comment-row').style.display = on ? 'flex' : 'none';
+}
+
+// 步驟 2 顯示中時支援 Ctrl+V 貼上截圖
+document.addEventListener('paste', e => {
+  const step2 = document.getElementById('ja-step2');
+  if (!step2 || step2.style.display === 'none') return;
+  for (const item of (e.clipboardData || {}).items || []) {
+    if (item.type.startsWith('image/')) {
+      jaSetImage(item.getAsFile());
+      e.preventDefault();
+      break;
+    }
+  }
+});
+
+async function saveJigApplyCard() {
+  const msg = document.getElementById('ja2-msg');
+  const btn = document.getElementById('ja2-save-btn');
+  btn.disabled = true; btn.textContent = '儲存中…'; msg.textContent = '';
+  try {
+    const res = await fetch('/api/jig/apply/card_save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder: _jaFolderPath,
+        urgency:     document.getElementById('ja2-urgency').value,
+        nature:      document.getElementById('ja2-nature').value,
+        part_no:     document.getElementById('ja2-part-no').value.trim(),
+        proc_code:   document.getElementById('ja2-proc').value.trim(),
+        unit:        document.getElementById('ja2-unit').value,
+        expect_date: document.getElementById('ja2-expect').value,
+        options:     [...document.querySelectorAll('.ja2-opt:checked')].map(c => +c.value),
+        other_text:  document.getElementById('ja2-other').value.trim(),
+        image_b64:   _jaImgB64,
+        checkin:     document.getElementById('ja2-checkin').checked,
+        submit_flow: document.getElementById('ja2-submit-flow').checked,
+        comment:     document.getElementById('ja2-comment').value.trim(),
+      }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || '儲存失敗');
+    closeJigApplyModal();
+    const submitted = document.getElementById('ja2-submit-flow').checked;
+    showToast(data.warning ? ('⚠ ' + data.warning)
+      : (submitted ? '✅ 申請單已儲存並提出申請，等待主管審核'
+                   : '✅ 申請單卡片已儲存並存回，可按「⟳ 重新整理」更新清單'));
+  } catch (e) {
+    msg.textContent = '⚠ ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 儲存卡片';
+  }
+}
+
+async function submitJigApply() {
+  const machine = document.getElementById('ja-machine').value.trim();
+  const item    = document.getElementById('ja-item').value.trim();
+  const mold    = document.getElementById('ja-mold').value;
+  const msg     = document.getElementById('ja-msg');
+  if (!machine || !item || !mold) { msg.textContent = '機型、品名、模具類型為必填'; return; }
+  const btn = document.getElementById('ja-submit-btn');
+  btn.disabled = true; btn.textContent = '建立中…'; msg.textContent = '';
+  try {
+    const res = await fetch('/api/jig/apply', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        machine, item, mold_type: mold,
+        rd_no: document.getElementById('ja-rd-no').value.trim(),
+        applicant: document.getElementById('ja-applicant').value.trim(),
+        date: document.getElementById('ja-date').value.replace(/-/g, '/'),
+      }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || '建立失敗');
+    if (data.warning) alert(`⚠ 注意：${data.warning}`);
+    // 切換到步驟 2：填寫申請單主要欄位
+    _jaFolderPath = data.folder;
+    document.getElementById('ja2-pt-no').textContent = data.pt_no;
+    document.getElementById('ja-form').style.display = 'none';
+    document.getElementById('ja-step2').style.display = '';
+  } catch (e) {
+    msg.textContent = '⚠ ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = '送出到 PDM';
+  }
+}
+
 async function rebuildJigIndex() {
   const btn = document.getElementById('jig-rebuild-btn');
   const upd = document.getElementById('jig-last-updated');
@@ -5543,7 +6267,7 @@ function populateJigFilters(jigs) {
     sel.innerHTML = '<option value="">全部</option>' +
       opts.map(v => `<option value="${esc(v)}"${v===def?' selected':''}>${esc(v)}</option>`).join('');
   }
-  fill('jig-f-submitter', jigs.map(j => j.submitter), '楊良捷');
+  fill('jig-f-submitter', jigs.map(j => j.submitter), '');
   fill('jig-f-unit',      jigs.map(j => j.unit),      '加工部');  // 部分資料為「加工課」
   fill('jig-f-status',    jigs.map(j => j.status),    '');
 }
@@ -5605,7 +6329,11 @@ function renderJigTable() {
     const path = j.folder_path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     return `
     <tr>
-      <td class="td-code"><a href="javascript:void(0)" onclick="openJigFolder('${path}')">${esc(j.folder_name)}</a></td>
+      <td class="td-code" style="white-space:nowrap">
+        <a href="javascript:void(0)" onclick="openJigFolder('${path}')">${esc(j.folder_name)}</a>
+        <span onclick="openJigFile('${path}')" title="開啟 Excel 申請單"
+          style="cursor:pointer;margin-left:.35rem;display:inline-block;background:#E8F5E9;color:#1B5E20;border:1px solid #A5D6A7;border-radius:4px;padding:0 .3rem;font-size:.72rem;font-weight:700;vertical-align:middle">📄X</span>
+      </td>
       <td class="td-center">${esc(j.apply_date)}</td>
       <td>${esc(j.product_model)}</td>
       <td>${esc(j.item_name)}</td>
@@ -5645,6 +6373,20 @@ async function openJigFolder(path) {
     if (!data.ok) throw new Error(data.error);
   } catch (e) {
     showToast('開啟資料夾失敗：' + e.message);
+  }
+}
+
+async function openJigFile(path) {
+  try {
+    const res = await fetch('/api/jig/open-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+  } catch (e) {
+    showToast('開啟申請單失敗：' + e.message);
   }
 }
 
@@ -6030,6 +6772,145 @@ async function rescanZume() {
   </div>
 </div>
 
+<div id="jig-apply-modal" onclick="if(event.target===this) closeJigApplyModal()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.28);width:460px;max-width:92vw;overflow:hidden;animation:rm-in .18s ease">
+    <div style="background:linear-gradient(135deg,#1565C0 0%,#1976D2 100%);color:#fff;padding:.9rem 1.2rem;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:1.05rem;font-weight:700">📝 新增治檢具申請單（PDM）</span>
+      <span onclick="closeJigApplyModal()" style="cursor:pointer;font-size:1.3rem;color:rgba(255,255,255,.75);line-height:1">✕</span>
+    </div>
+    <div style="padding:1.2rem 1.4rem">
+      <div id="ja-loading" style="text-align:center;color:var(--muted);padding:.8rem 0">連線 PDM 取得編號中…</div>
+      <div id="ja-form" style="display:none">
+        <table style="width:100%;border-collapse:separate;border-spacing:0 .55rem;font-size:.9rem">
+          <tr><td style="width:96px;color:var(--muted);font-weight:600">PT專案代號</td>
+              <td><span id="ja-pt-no" style="font-weight:700;color:#1565C0;font-size:1rem"></span>
+                  <span style="color:var(--muted);font-size:.78rem;margin-left:.4rem">（送出時自動配號）</span></td></tr>
+          <tr><td style="color:var(--muted);font-weight:600">RD專案代號</td>
+              <td><input type="text" id="ja-rd-no" value="--" autocomplete="off" style="width:160px;padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"></td></tr>
+          <tr><td style="color:var(--muted);font-weight:600">機　　型 <span style="color:#C62828">*</span></td>
+              <td><input type="text" id="ja-machine" placeholder="ex. TC200" autocomplete="off" style="width:160px;padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"></td></tr>
+          <tr><td style="color:var(--muted);font-weight:600">品　　名 <span style="color:#C62828">*</span></td>
+              <td><input type="text" id="ja-item" placeholder="ex. 本台" autocomplete="off" style="width:100%;padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"></td></tr>
+          <tr><td style="color:var(--muted);font-weight:600">模具類型 <span style="color:#C62828">*</span></td>
+              <td><select id="ja-mold" style="width:200px;padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"></select></td></tr>
+          <tr><td style="color:var(--muted);font-weight:600">申 請 人</td>
+              <td><input type="text" id="ja-applicant" autocomplete="off" style="width:120px;padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"></td></tr>
+          <tr><td style="color:var(--muted);font-weight:600">提出日期</td>
+              <td><input type="date" id="ja-date" style="width:160px;padding:.32rem .6rem;border:1px solid var(--border);border-radius:6px"></td></tr>
+        </table>
+        <div id="ja-msg" style="color:#C62828;font-size:.85rem;min-height:1.2em;margin-top:.4rem"></div>
+        <div style="display:flex;justify-content:flex-end;gap:.6rem;margin-top:.6rem">
+          <button onclick="closeJigApplyModal()" style="padding:.45rem 1.1rem;border:1px solid var(--border);border-radius:8px;background:#fff;color:#475569;font-weight:600;cursor:pointer">取消</button>
+          <button id="ja-submit-btn" onclick="submitJigApply()" style="padding:.45rem 1.3rem;border:none;border-radius:8px;background:#1565C0;color:#fff;font-weight:700;cursor:pointer">送出到 PDM</button>
+        </div>
+      </div>
+      <div id="ja-error" style="display:none;color:#C62828;font-size:.9rem;padding:.5rem 0"></div>
+      <div id="ja-step2" style="display:none">
+        <div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;padding:.5rem .8rem;margin-bottom:.8rem;font-size:.88rem;color:#1B5E20">
+          ✅ <b id="ja2-pt-no"></b> 已建立並取出，繼續填寫申請單主要欄位：
+        </div>
+        <table style="width:100%;border-collapse:separate;border-spacing:0 .5rem;font-size:.9rem">
+          <tr><td style="width:96px;color:var(--muted);font-weight:600">緊急程度</td>
+              <td><select id="ja2-urgency" style="width:180px;padding:.32rem .6rem;border:1px solid var(--border);border-radius:6px">
+                <option value="">--</option>
+                <option>一般-二週以上</option>
+                <option>緊急-二週內</option>
+                <option>特急-一週內</option>
+              </select></td></tr>
+          <tr><td style="color:var(--muted);font-weight:600">單據性質</td>
+              <td><select id="ja2-nature" style="width:180px;padding:.32rem .6rem;border:1px solid var(--border);border-radius:6px">
+                <option value="">--</option>
+                <option>新品製作</option>
+                <option>製程改善</option>
+                <option>製程異常</option>
+                <option>外轉內製</option>
+              </select></td></tr>
+          <tr><td style="color:var(--muted);font-weight:600">品　　號</td>
+              <td><input type="text" id="ja2-part-no" autocomplete="off" style="width:100%;padding:.32rem .6rem;border:1px solid var(--border);border-radius:6px"></td></tr>
+          <tr><td style="color:var(--muted);font-weight:600">製程代號</td>
+              <td><input type="text" id="ja2-proc" list="ja2-proc-list" autocomplete="off" placeholder="ex. N40 銑+研+鑽" style="width:100%;padding:.32rem .6rem;border:1px solid var(--border);border-radius:6px">
+                <datalist id="ja2-proc-list">
+                  <option>A05檢驗</option><option>A06 粉末冶金</option><option>B01 沖床</option><option>B03 車床</option>
+                  <option>C01 鑽孔</option><option>C03 攻牙</option><option>C05 沖字</option><option>C08 鉸孔</option>
+                  <option>D01 熱處理</option><option>D10 磨刀口</option><option>G03 組立</option><option>G07 組裝+包裝</option>
+                  <option>H01 雷射</option><option>H02 網印/移印</option><option>J02 高週波</option>
+                  <option>M01 鑽+攻</option><option>M02 鑽+倒</option><option>M11 沖+鑽</option><option>M16 銑+鑽</option>
+                  <option>M30 鉸+沖</option><option>M42 鑽+沖</option><option>M51 車+銑</option>
+                  <option>N04 銑+鑽+倒</option><option>N10 鑽+銑+攻</option><option>N19 鑽+攻+倒</option>
+                  <option>N39 沖+鉸+攻</option><option>N40 銑+研+鑽</option><option>P15 鑽+攻+倒+沖</option>
+                  <option>S01 綜合加工</option><option>Z99 品檢</option>
+                </datalist></td></tr>
+          <tr><td style="color:var(--muted);font-weight:600">保管單位</td>
+              <td><select id="ja2-unit" style="width:180px;padding:.32rem .6rem;border:1px solid var(--border);border-radius:6px">
+                <option selected>加工部</option>
+                <option>加工課</option>
+                <option>品保部</option>
+                <option>成品部</option>
+                <option>生技課</option>
+                <option>生管課</option>
+                <option>研發部</option>
+              </select></td></tr>
+          <tr><td style="color:var(--muted);font-weight:600">期望完成日</td>
+              <td><input type="date" id="ja2-expect" style="width:170px;padding:.3rem .6rem;border:1px solid var(--border);border-radius:6px"></td></tr>
+        </table>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:.6rem .9rem;margin-top:.4rem">
+          <div style="font-weight:700;font-size:.85rem;color:#475569;margin-bottom:.4rem">模具特殊需求</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.3rem .8rem;font-size:.86rem">
+            <label style="cursor:pointer"><input type="checkbox" class="ja2-opt" value="1"> 嚴禁夾傷</label>
+            <label style="cursor:pointer"><input type="checkbox" class="ja2-opt" value="2"> 允許輕微夾痕</label>
+            <label style="cursor:pointer"><input type="checkbox" class="ja2-opt" value="3"> 需快速換模機構</label>
+            <label style="cursor:pointer"><input type="checkbox" class="ja2-opt" value="4"> 具備防呆機制 (避免反裝)</label>
+            <label style="cursor:pointer"><input type="checkbox" class="ja2-opt" value="5"> 易耗損零件(需備品)</label>
+            <label style="cursor:pointer"><input type="checkbox" class="ja2-opt" value="6"> 需易於清理排屑</label>
+          </div>
+          <div style="margin-top:.5rem;display:flex;align-items:flex-start;gap:.5rem">
+            <span style="color:var(--muted);font-weight:600;font-size:.85rem;white-space:nowrap;padding-top:.35rem">其他需求</span>
+            <textarea id="ja2-other" rows="3" autocomplete="off" placeholder="填入「其他」欄位的補充文字…（Enter 可換行）"
+              style="flex:1;padding:.32rem .6rem;border:1px solid var(--border);border-radius:6px;font-size:.86rem;font-family:inherit;resize:vertical"></textarea>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:.6rem .9rem;margin-top:.5rem">
+          <div style="font-weight:700;font-size:.85rem;color:#475569;margin-bottom:.4rem">示意圖（寫入 Excel 示意圖區）</div>
+          <div id="ja2-img-drop" tabindex="0"
+            style="border:2px dashed #CBD5E1;border-radius:8px;padding:.7rem;text-align:center;color:#94a3b8;font-size:.83rem;cursor:pointer;outline:none"
+            onclick="document.getElementById('ja2-img-file').click()">
+            點擊選擇圖片，或按 Ctrl+V 直接貼上截圖
+          </div>
+          <input type="file" id="ja2-img-file" accept="image/*" style="display:none" onchange="if(this.files[0]) jaSetImage(this.files[0])">
+          <div id="ja2-img-preview-wrap" style="display:none;margin-top:.5rem;position:relative">
+            <img id="ja2-img-preview" style="max-width:100%;max-height:150px;border:1px solid var(--border);border-radius:6px">
+            <button onclick="jaClearImage()" title="移除圖片"
+              style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:4px;font-size:.75rem;padding:.1rem .4rem;cursor:pointer">✕ 移除</button>
+          </div>
+        </div>
+        <div id="ja2-msg" style="color:#C62828;font-size:.85rem;min-height:1.2em;margin-top:.4rem"></div>
+        <div style="border-top:1px solid var(--border);margin-top:.5rem;padding-top:.6rem">
+          <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+            <label style="cursor:pointer;font-size:.85rem;color:#475569;display:flex;align-items:center;gap:.3rem">
+              <input type="checkbox" id="ja2-checkin" checked style="cursor:pointer"
+                onchange="if(!this.checked){document.getElementById('ja2-submit-flow').checked=false;jaToggleComment()}"> 儲存後自動存回（簽入）
+            </label>
+            <label style="cursor:pointer;font-size:.85rem;color:#475569;display:flex;align-items:center;gap:.3rem">
+              <input type="checkbox" id="ja2-submit-flow" checked style="cursor:pointer"
+                onchange="if(this.checked)document.getElementById('ja2-checkin').checked=true;jaToggleComment()"> 並提出申請（送主管審核）
+            </label>
+          </div>
+          <div id="ja2-comment-row" style="display:flex;align-items:center;gap:.5rem;margin-top:.45rem">
+            <span style="color:var(--muted);font-weight:600;font-size:.85rem;white-space:nowrap">申請註解</span>
+            <input type="text" id="ja2-comment" autocomplete="off" placeholder="提出申請的註解（可留空）…"
+              style="flex:1;padding:.32rem .6rem;border:1px solid var(--border);border-radius:6px;font-size:.86rem">
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:.6rem;margin-top:.6rem">
+            <button onclick="closeJigApplyModal()" style="padding:.45rem 1.1rem;border:1px solid var(--border);border-radius:8px;background:#fff;color:#475569;font-weight:600;cursor:pointer">稍後再填</button>
+            <button id="ja2-save-btn" onclick="saveJigApplyCard()" style="padding:.45rem 1.3rem;border:none;border-radius:8px;background:#06C755;color:#fff;font-weight:700;cursor:pointer">💾 儲存卡片</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="jig-remarks-modal" onclick="if(event.target===this) closeJigRemarks()">
   <div class="rm-card">
     <div class="rm-header">
@@ -6057,6 +6938,15 @@ async function rescanZume() {
       </div>
     </div>
   </div>
+</div>
+
+<div id="sfc-popup">
+  <div class="sp-header">
+    <span class="sp-wo" id="sfc-popup-wo"></span>
+    <span class="sp-close" onclick="document.getElementById('sfc-popup').style.display='none'">✕</span>
+  </div>
+  <div class="sp-name" id="sfc-popup-name"></div>
+  <div class="sp-desc" id="sfc-popup-desc"></div>
 </div>
 
 </body>

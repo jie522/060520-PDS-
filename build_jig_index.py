@@ -87,6 +87,21 @@ def read_cell_after_label(ws, label):
     return None
 
 
+def _read_custom_xml_vars(local_path):
+    """從 xlsm 的 docProps/custom.xml 直接讀 PDM 卡片變數。
+    系統 API 建立、Excel 尚未實際開啟儲存過的申請單，
+    工作表儲存格是空的，值只存在 custom.xml（PDM 資料卡）裡。"""
+    import zipfile
+    import re
+    try:
+        with zipfile.ZipFile(local_path) as z:
+            xml = z.read('docProps/custom.xml').decode('utf-8')
+        return {m.group(1): m.group(2)
+                for m in re.finditer(r'name="([^"]+)"[^>]*>\s*<vt:lpwstr>([^<]*)</vt:lpwstr>', xml)}
+    except Exception:
+        return {}
+
+
 def read_application_form(folder, f):
     """嘗試將 f 視為「申請單」xlsm 並讀取所需欄位，失敗或非申請單回傳 None"""
     global _first_folder_done
@@ -116,14 +131,40 @@ def read_application_form(folder, f):
                         print(f'    {dn_name} = (讀取失敗)')
 
         submitter = get_defined_value(wb, 'YC_提出人員')
-        if not submitter or not str(submitter).strip():
+
+        # 儲存格沒值（空或範本預設 '--'）時改讀 custom.xml 的 PDM 卡片變數。
+        # 系統 API 建立的申請單，值存在資料卡（custom.xml），儲存格維持範本預設 '--'
+        def _empty(v):
+            s = str(v).strip() if v is not None else ''
+            return not s or s == '--'
+
+        cvars = {}
+        if _empty(submitter):
+            cvars = _read_custom_xml_vars(local_path)
+
+        def _cv(*names):
+            for n in names:
+                v = (cvars.get(n) or '').strip()
+                if v and v != '--':
+                    return v
             return None
 
-        product_model = get_defined_value(wb, 'YC_機型')
-        item_name      = get_defined_value(wb, 'YC_品名')
-        handler        = get_defined_value(wb, 'YC_經辦')
-        apply_date     = get_defined_value(wb, 'YC_日期', 'YC_申請日期', '申請日期')
-        unit           = get_defined_value(wb, '單位', 'YC_保管單位', '保管單位')
+        if _empty(submitter):
+            submitter = _cv('YC_提出人員')
+            if not submitter:
+                return None
+
+        def pick(cell_names, cvar_names):
+            v = get_defined_value(wb, *cell_names)
+            if _empty(v):
+                return _cv(*cvar_names) or v
+            return v
+
+        product_model = pick(('YC_機型',), ('YC_機型',))
+        item_name      = pick(('YC_品名',), ('YC_品名',))
+        handler        = pick(('YC_經辦',), ('YC_經辦',))
+        apply_date     = pick(('YC_日期', 'YC_申請日期', '申請日期'), ('YC_日期',))
+        unit           = pick(('單位', 'YC_保管單位', '保管單位'), ('單位',))
         ws             = wb.active
         remarks        = read_cell_after_label(ws, '其他')
 

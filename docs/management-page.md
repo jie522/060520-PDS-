@@ -17,7 +17,7 @@
 | 請假/加班 | `LEAVE_SHEET_ID`（M3.請假單 / M2.加班人員） | |
 | 出勤統計 | `ATTENDANCE_SHEET_ID` | |
 | 報廢統計 | `SCRAP_SHEET_ID` | |
-| 生產日報表P5.3 | `PROD_REPORT_SHEET_ID` + `PROD_REPORT_SHEET_GID`（P5.3生產日報表data_ref，gid 567727173） | 明細與圖表同源；此分頁無機台名稱/備註 |
+| 生產日報表P5.3 | `PROD_REPORT_SHEET_ID` + `PROD_REPORT_SHEET_NAME`（`'P5.3生產日報表data_ref'`，用分頁名稱取代 GID） | 明細與圖表同源；此分頁無機台名稱/備註 |
 | 生產報工統計P2 | `CATEGORY_SHEET_ID`（K1_P2.ref，出站數量） | 與生產日報表是**不同**資料來源，數字本就不同 |
 | 員工工號對照 | `EMPLOYEE_SHEET_ID` | 工號 → 姓名 |
 | ABC 分類對照 | `CATEGORY_SHEET_ID` | key = 品號+製程代號 → A/B/C/L |

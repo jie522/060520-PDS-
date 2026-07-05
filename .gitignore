@@ -14,3 +14,6 @@ dist_embed/製令查詢/_app/*.db
 # 其他
 *.log
 error.log
+docs/agent/*.bak-*
+last_reindex.json
+*.db-journal

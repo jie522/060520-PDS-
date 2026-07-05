@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>加工部查詢系統PDS</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='4' fill='%230f62fe'/><polygon fill='white' points='8.5,5.94 10.44,3.13 13.56,3.13 15.5,5.94 18.89,6.21 20.46,8.92 19,12 20.46,15.08 18.89,17.79 15.5,18.06 13.56,20.87 10.44,20.87 8.5,18.06 5.11,17.79 3.54,15.08 5,12 3.54,8.92 5.11,6.21'/><circle cx='12' cy='12' r='4' fill='%230f62fe'/></svg>">
+    <link rel="icon" type="image/png" href="/static/app-icon.png">
     <link href="/static/vendor/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -56,7 +56,9 @@
           color:rgba(255,255,255,.85);text-decoration:none;border-radius:0;
           background:rgba(255,255,255,.15);cursor:pointer;transition:background .15s}
         .header-tab.active,.header-tab:hover{background:#fff;color:#1565C0}
-        .header-tab.active{color:var(--erp-blue-dark)}
+        
+        .header-tab-mgmt{background:#06C755;color:#fff}
+        .header-tab-mgmt.active,.header-tab-mgmt:hover{background:#05A649;color:#fff}.header-tab.active{color:var(--erp-blue-dark)}
 
         /* ── Page body wrapper ── */
         .page-body { padding: 0.75rem 1rem; max-width: 1600px; margin: 0 auto; }
@@ -390,7 +392,8 @@
                 <a href="/drawing" class="header-tab">PDM圖面查詢</a>
                 <a href="/routing"      class="header-tab">產品途程查詢</a>
                 <a href="/batch_cost" class="header-tab">批成本</a>
-                <a href="/management" class="header-tab">管理</a>
+                <a href="/cnc_program" class="header-tab">程式管理</a>
+                <a href="/management" class="header-tab header-tab-mgmt">管理</a>
             </div>
             <span class="header-logo">MAXCLAW</span>
         </div>
@@ -412,6 +415,12 @@
                     <option value="other">其它</option>
                     <option value="*">全部</option>
                 </select>
+                <div style="display:flex;border:1.5px solid #CBD5E1;border-radius:8px;overflow:hidden;font-size:.875rem" title="製令發放狀態">
+                  <button type="button" class="release-tog" data-val="已發放" onclick="setReleaseTog(this)" style="padding:.32rem .8rem;border:none;background:#1565C0;color:#fff;font-weight:700;cursor:pointer">已發放</button>
+                  <button type="button" class="release-tog" data-val="未發放" onclick="setReleaseTog(this)" style="padding:.32rem .8rem;border:none;border-left:1.5px solid #CBD5E1;background:#f8fafc;color:#475569;font-weight:600;cursor:pointer">未發放</button>
+                  <button type="button" class="release-tog" data-val="all"    onclick="setReleaseTog(this)" style="padding:.32rem .8rem;border:none;border-left:1.5px solid #CBD5E1;background:#f8fafc;color:#475569;font-weight:600;cursor:pointer">全部</button>
+                </div>
+                <input type="hidden" id="releaseSelect" value="已發放">
                 <button id="searchBtn" class="btn-erp btn-erp-primary">🔍 查詢</button>
                 <button class="btn-erp" onclick="refreshCache()" title="清除快取，重新抓取最新資料">↻ 重新整理</button>
             </div>
@@ -443,6 +452,7 @@
                         <thead>
                             <tr>
                                 <th style="width:32px;"><input type="checkbox" id="checkAll" onchange="toggleAll(this)"></th>
+                                <th>發放</th>
                                 <th>製令</th>
                                 <th>品號</th>
                                 <th>品名</th>
@@ -598,6 +608,7 @@
         const orderInput = document.getElementById('orderInput');
         const nameInput = document.getElementById('nameInput');
         const unitSelect = document.getElementById('unitSelect');
+        const releaseSelect = document.getElementById('releaseSelect');
         const searchBtn = document.getElementById('searchBtn');
         const loading = document.getElementById('loading');
         const errorMsg = document.getElementById('error-msg');
@@ -618,6 +629,15 @@
             resultToolbar.style.display = 'none';
         }
 
+        function setReleaseTog(btn) {
+          document.querySelectorAll('.release-tog').forEach(b => {
+            const on = b === btn;
+            b.style.background = on ? '#1565C0' : '#f8fafc';
+            b.style.color = on ? '#fff' : '#475569';
+          });
+          document.getElementById('releaseSelect').value = btn.dataset.val;
+        }
+
         // ========== 重新整理快取 ==========
         async function refreshCache() {
             try {
@@ -632,12 +652,6 @@
         async function doSearch() {
             const orderId = orderInput.value.trim();
             const productName = nameInput.value.trim();
-            if (!orderId && !productName) {
-                hideAll();
-                errorMsg.textContent = '請輸入製令號碼或品名';
-                errorMsg.style.display = 'block';
-                return;
-            }
 
             hideAll();
             loading.style.display = 'block';
@@ -645,7 +659,8 @@
 
             try {
                 const unit = unitSelect.value;
-                let url = '/api/query?unit=' + encodeURIComponent(unit);
+                const release = releaseSelect.value;
+                let url = '/api/query?unit=' + encodeURIComponent(unit) + '&release=' + encodeURIComponent(release);
                 if (orderId) url += '&order_id=' + encodeURIComponent(orderId);
                 if (productName) url += '&product_name=' + encodeURIComponent(productName);
                 const resp = await fetch(url);
@@ -675,8 +690,13 @@
                             : '';
                         // 整列底色：即時生產量有數字時整行綠底
                         if (hasRt) tr.classList.add('realtime-row');
+                        const releaseStatus = row['發放狀態'] || '';
+                        const releaseBadge = releaseStatus === '未發放'
+                            ? '<span style="background:#FFF3E0;color:#E65100;border-radius:10px;padding:.1rem .55rem;font-size:.78rem;font-weight:700;white-space:nowrap">未發放</span>'
+                            : (releaseStatus ? '<span style="background:#E3F2FD;color:#1565C0;border-radius:10px;padding:.1rem .55rem;font-size:.78rem;font-weight:700;white-space:nowrap">已發放</span>' : '');
                         tr.innerHTML =
                             '<td class="text-center"><input type="checkbox" class="row-check" data-index="' + idx + '"></td>' +
+                            '<td class="text-center">' + releaseBadge + '</td>' +
                             '<td><span class="order-id">' + esc(oid) + '</span></td>' +
                             '<td><span class="clickable" onclick="showDetail(\'' + escAttr(oid) + '\',\'' + escAttr(row['品號']) + '\',\'' + escAttr(row['品名']) + '\')">' + esc(row['品號']) + '</span></td>' +
                             '<td class="wrap-cell">' + esc(row['品名']) + '</td>' +
@@ -1237,6 +1257,7 @@
               orderId: orderInput.value,
               productName: nameInput.value,
               unit: unitSelect.value,
+              release: releaseSelect.value,
               results: window._searchResults || []
             }));
           } catch(e) {}
@@ -1250,6 +1271,7 @@
             if (s.orderId)     orderInput.value   = s.orderId;
             if (s.productName) nameInput.value     = s.productName;
             if (s.unit)        unitSelect.value    = s.unit;
+            if (s.release) { const rb = document.querySelector(`.release-tog[data-val="${s.release}"]`); if (rb) setReleaseTog(rb); }
             if (s.results && s.results.length) {
               window._searchResults = s.results;
               resultBody.innerHTML = '';

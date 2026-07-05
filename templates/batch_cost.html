@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>加工部查詢系統PDS</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='4' fill='%230f62fe'/><polygon fill='white' points='8.5,5.94 10.44,3.13 13.56,3.13 15.5,5.94 18.89,6.21 20.46,8.92 19,12 20.46,15.08 18.89,17.79 15.5,18.06 13.56,20.87 10.44,20.87 8.5,18.06 5.11,17.79 3.54,15.08 5,12 3.54,8.92 5.11,6.21'/><circle cx='12' cy='12' r='4' fill='%230f62fe'/></svg>">
+  <link rel="icon" type="image/png" href="/static/app-icon.png">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -43,7 +43,9 @@
     }
     .header-tab.active,.header-tab:hover { background:#fff; color:#1565C0; }
 
-    .page-body { flex:1; overflow:hidden; display:flex; }
+    
+        .header-tab-mgmt{background:#06C755;color:#fff}
+        .header-tab-mgmt.active,.header-tab-mgmt:hover{background:#05A649;color:#fff}.page-body { flex:1; overflow:hidden; display:flex; }
     .bc-sidebar { width:200px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--border); padding:1rem 0; overflow-y:auto; }
     .bc-side-item {
       padding:.7rem 1.2rem; font-size:.88rem; font-weight:600; color:var(--text-2); cursor:pointer;
@@ -150,10 +152,10 @@
     .bc-detail-rail { border-left:3px solid var(--blue-pale); }
 
     /* 「加工費用(含刀具成本)」欄：用相對量級的內嵌條取代整格平鋪底色，掃描異常值更直觀 */
-    table.bc-table td.bc-cost-cell { position:relative; font-weight:700; color:#A8431D; }
-    table.bc-table tbody tr:hover td.bc-cost-cell { color:#A8431D; }
+    table.bc-table td.bc-cost-cell { position:relative; font-weight:700; color:#E65100; }
+    table.bc-table tbody tr:hover td.bc-cost-cell { color:#E65100; }
     td.bc-cost-cell .bc-cost-bar {
-      position:absolute; left:0; top:.3rem; bottom:.3rem; right:0; background:rgba(168,67,29,.1);
+      position:absolute; left:0; top:.3rem; bottom:.3rem; right:0; background:rgba(230,81,0,.1);
       border-radius:0 3px 3px 0; z-index:0;
     }
     td.bc-cost-cell .bc-cost-num { position:relative; z-index:1; }
@@ -175,7 +177,8 @@
       <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
       <a href="/routing"    class="header-tab">產品途程查詢</a>
       <span                 class="header-tab active">批成本</span>
-      <a href="/management" class="header-tab">管理</a>
+      <a href="/cnc_program" class="header-tab">程式管理</a>
+      <a href="/management" class="header-tab header-tab-mgmt">管理</a>
     </div>
     <span class="header-logo">MAXCLAW</span>
   </div>
@@ -328,7 +331,7 @@
           <button class="bc-btn secondary" style="margin-left:auto;font-size:.78rem;padding:.3rem .7rem" onclick="bcMaintToolmapNew()">➕ 新增品號刀表</button>
         </div>
         <div class="bc-filter-bar">
-          <input type="text" id="bc-maint-tm-search" placeholder="搜尋品號/加工機型…" oninput="bcMaintRenderToolmapList()" style="width:260px">
+          <input type="text" id="bc-maint-tm-search" placeholder="搜尋品號/加工機型/刀具名稱…" oninput="bcMaintRenderToolmapList()" style="width:300px">
         </div>
         <div class="bc-card-body">
           <div id="bc-maint-tm-editor" style="display:none;border:1px solid var(--border);border-radius:8px;padding:.8rem;margin-bottom:1rem;background:var(--blue-pale)"></div>
@@ -367,6 +370,16 @@
 </div>
 
 <div id="bc-toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:.6rem 1.2rem;border-radius:8px;font-size:.85rem;box-shadow:0 4px 16px rgba(0,0,0,.25);display:none;z-index:999"></div>
+
+<div id="bc-tool-info-popup" onclick="bcHideToolInfo()" style="display:none;position:fixed;inset:0;z-index:1050;background:rgba(0,0,0,.18)">
+  <div id="bc-tool-info-card" onclick="event.stopPropagation()" style="position:absolute;background:#fff;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:1.1rem 1.4rem;min-width:220px;max-width:320px;font-size:.875rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem">
+      <span id="bc-tip-name" style="font-weight:700;color:#1e293b;word-break:break-all"></span>
+      <button onclick="bcHideToolInfo()" style="background:none;border:none;font-size:1.1rem;color:#94a3b8;cursor:pointer;padding:0 0 0 .5rem;line-height:1">✕</button>
+    </div>
+    <div id="bc-tip-body"></div>
+  </div>
+</div>
 
 <script>
 function esc(s) {
@@ -579,15 +592,51 @@ async function bcLoadToolMap() {
 function renderBcToolMapView() {
   const view = document.getElementById('bc-toolmap-view');
   view.style.display = '';
-  const rows = _bcSlots.map(s => `
-    <div class="bc-order-row" style="cursor:default">
-      <span class="bc-slot-badge">${esc(s.slot)}</span>　${esc(s.tool)}
-    </div>`).join('') || '<div class="bc-empty">查無已設定刀具</div>';
+  const rows = _bcSlots.map(s => {
+    const hasInfo = _bcToolCatalogMap && _bcToolCatalogMap[s.tool];
+    const toolHtml = hasInfo
+      ? `<span onclick="bcShowToolInfo('${esc(s.tool).replace(/'/g,"\\'")}',event)" style="color:#1565C0;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px">${esc(s.tool)}</span>`
+      : esc(s.tool);
+    return `<div class="bc-order-row" style="cursor:default"><span class="bc-slot-badge">${esc(s.slot)}</span>　${toolHtml}</div>`;
+  }).join('') || '<div class="bc-empty">查無已設定刀具</div>';
   view.innerHTML = rows + `
     <div class="bc-row" style="margin-top:.6rem">
       <button class="bc-btn secondary" onclick="bcStartEditToolMap()">編輯刀表</button>
     </div>`;
   renderBcCostTable();
+}
+
+function bcShowToolInfo(name, event) {
+  const info = _bcToolCatalogMap && _bcToolCatalogMap[name];
+  if (!info) return;
+  document.getElementById('bc-tip-name').textContent = name;
+  const rows = [
+    ['項目', info.item],
+    ['供應商', info.vendor],
+    ['單價', info.price != null ? `NT$ ${info.price}` : ''],
+    ['刃數', info.edges != null ? `${info.edges} 刃` : ''],
+  ].filter(r => r[1]).map(r =>
+    `<div style="display:flex;gap:.5rem;padding:.22rem 0;border-bottom:1px solid #f1f5f9">
+       <span style="color:#64748b;min-width:48px">${r[0]}</span>
+       <span style="color:#1e293b;font-weight:600">${esc(String(r[1]))}</span>
+     </div>`
+  ).join('');
+  document.getElementById('bc-tip-body').innerHTML = rows || '<span style="color:#94a3b8">無詳細資料</span>';
+
+  const card = document.getElementById('bc-tool-info-card');
+  const popup = document.getElementById('bc-tool-info-popup');
+  popup.style.display = '';
+  // 定位在點擊位置附近
+  const x = event.clientX, y = event.clientY;
+  const cw = 320, ch = 160;
+  const left = Math.min(x + 12, window.innerWidth - cw - 8);
+  const top  = Math.min(y + 12, window.innerHeight - ch - 8);
+  card.style.left = left + 'px';
+  card.style.top  = top  + 'px';
+}
+
+function bcHideToolInfo() {
+  document.getElementById('bc-tool-info-popup').style.display = 'none';
 }
 
 function bcStartEditToolMap() {
@@ -905,7 +954,12 @@ function bcSwitchRecordsView(view) {
 function bcRecordsKeywordFiltered() {
   const kw = (document.getElementById('bc-records-search').value || '').trim().toLowerCase();
   if (!kw) return _bcRecordsItems;
-  return _bcRecordsItems.filter(r => _bcRecordsColumns.some(c => (r[c] || '').toLowerCase().includes(kw)));
+  return _bcRecordsItems.filter(r => {
+    if (_bcRecordsColumns.some(c => (r[c] || '').toLowerCase().includes(kw))) return true;
+    // 也搜尋刀具明細的刀具名稱
+    const tools = _bcLifespanByKey[bcRecordsKey(r)] || [];
+    return tools.some(t => (t['刀具名稱'] || '').toLowerCase().includes(kw));
+  });
 }
 
 // 月份成本趨勢用面積折線圖：折線比柱狀更能表達「走勢」，最新一個月用實心大點＋粗體數字強調「現在在哪裡」
@@ -927,13 +981,13 @@ function bcBuildTrendChart(entries) {
 
   const circles = pts.map((p, i) => {
     const isLast = i === n - 1;
-    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isLast ? 5 : 3}" fill="${isLast ? '#A8431D' : '#fff'}" stroke="#A8431D" stroke-width="2"/>`;
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isLast ? 5 : 3}" fill="${isLast ? '#E65100' : '#fff'}" stroke="#E65100" stroke-width="2"/>`;
   }).join('');
 
   const valueLabels = pts.map((p, i) => {
     const isLast = i === n - 1;
     return `<text x="${p.x.toFixed(1)}" y="${(p.y - 10).toFixed(1)}" text-anchor="middle" font-size="11"
-      font-weight="${isLast ? 700 : 500}" fill="${isLast ? '#A8431D' : '#7A8FA3'}" opacity="${isLast ? 1 : .65}">${esc(p.v.toLocaleString('zh-TW', {maximumFractionDigits: 2}))}</text>`;
+      font-weight="${isLast ? 700 : 500}" fill="${isLast ? '#E65100' : '#7A8FA3'}" opacity="${isLast ? 1 : .65}">${esc(p.v.toLocaleString('zh-TW', {maximumFractionDigits: 2}))}</text>`;
   }).join('');
 
   const monthLabels = pts.map(p =>
@@ -942,13 +996,13 @@ function bcBuildTrendChart(entries) {
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">
     <defs>
       <linearGradient id="bcTrendFill" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#A8431D" stop-opacity="0.16"/>
-        <stop offset="100%" stop-color="#A8431D" stop-opacity="0"/>
+        <stop offset="0%" stop-color="#E65100" stop-opacity="0.16"/>
+        <stop offset="100%" stop-color="#E65100" stop-opacity="0"/>
       </linearGradient>
     </defs>
     <line x1="${padX}" y1="${H - padBottom}" x2="${W - padX}" y2="${H - padBottom}" stroke="#E2E7EC" stroke-width="1"/>
     <polygon points="${areaPts}" fill="url(#bcTrendFill)"/>
-    <polyline points="${linePts}" fill="none" stroke="#A8431D" stroke-width="2"/>
+    <polyline points="${linePts}" fill="none" stroke="#E65100" stroke-width="2"/>
     ${circles}
     ${valueLabels}
     ${monthLabels}
@@ -1006,12 +1060,12 @@ function bcRenderRecordsStats(filtered) {
         </div>
         ${unitCostEntries.map(({label, val}, i) => `
           <div style="display:flex;flex-direction:column;align-items:center;gap:.4rem;flex:0 0 auto;width:54px">
-            <div style="font-size:.76rem;font-weight:700;color:#C5613F">${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>
-            <div class="bc-combo-bar" style="width:30px;background:linear-gradient(180deg,#90CAF9,#42A5F5);border-radius:4px 4px 0 0;height:${(val/unitCostMax*110).toFixed(0)}px;min-height:3px"></div>
+            <div style="font-size:.76rem;font-weight:700;color:#E65100">${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>
+            <div class="bc-combo-bar" style="width:30px;background:linear-gradient(180deg,#FFCC80,#FF9800);border-radius:4px 4px 0 0;height:${(val/unitCostMax*110).toFixed(0)}px;min-height:3px"></div>
             <div style="font-size:.72rem;color:var(--text-2);white-space:nowrap">${bcShouldShowLabel(i, unitCostEntries.length) ? esc(bcShortDate(label)) : ''}</div>
           </div>`).join('')}
       </div>
-      <div class="bc-card-body" style="padding-top:0;font-size:.78rem;color:var(--muted)">┄┄ 平均加工費成本：<b style="color:#C5613F">${unitCostAvg.toLocaleString('zh-TW',{maximumFractionDigits:2})}</b> 元</div>
+      <div class="bc-card-body" style="padding-top:0;font-size:.78rem;color:var(--muted)">┄┄ 平均加工費成本：<b style="color:#E65100">${unitCostAvg.toLocaleString('zh-TW',{maximumFractionDigits:2})}</b> 元</div>
     </div>
 
     <div class="bc-card" style="margin-bottom:1rem">
@@ -1029,12 +1083,12 @@ function bcRenderRecordsStats(filtered) {
           const isTop3 = rank <= 3;
           return `
           <div style="display:flex;align-items:center;gap:.7rem;margin-bottom:.5rem">
-            <div style="width:18px;font-size:.74rem;font-weight:700;color:${isTop3 ? '#A8431D' : 'var(--muted)'};text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums">${rank}</div>
+            <div style="width:18px;font-size:.74rem;font-weight:700;color:${isTop3 ? '#E65100' : 'var(--muted)'};text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums">${rank}</div>
             <div style="width:200px;font-size:.8rem;color:var(--text-2);text-align:right;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(name)}">${esc(name)}</div>
             <div style="flex:1;max-width:320px;background:#F4ECE8;border-radius:5px;overflow:hidden;height:22px">
-              <div style="height:100%;background:linear-gradient(90deg,#D97A4D,#A8431D);border-radius:5px;width:${(val/nameMax*100).toFixed(1)}%;min-width:2px"></div>
+              <div style="height:100%;background:linear-gradient(90deg,#FF9800,#E65100);border-radius:5px;width:${(val/nameMax*100).toFixed(1)}%;min-width:2px"></div>
             </div>
-            <div style="width:90px;font-size:.82rem;font-weight:700;text-align:right;color:#A8431D;font-variant-numeric:tabular-nums">${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>
+            <div style="width:90px;font-size:.82rem;font-weight:700;text-align:right;color:#E65100;font-variant-numeric:tabular-nums">${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>
           </div>`;
         }).join('')}
       </div>
@@ -1082,7 +1136,7 @@ function bcDrawComboLine(containerId, avgVal, maxVal) {
     const polyline = document.createElementNS(svgNS, 'polyline');
     polyline.setAttribute('points', points.map(p => `${p.x},${p.y}`).join(' '));
     polyline.setAttribute('fill', 'none');
-    polyline.setAttribute('stroke', '#F5A623');
+    polyline.setAttribute('stroke', '#E65100');
     polyline.setAttribute('stroke-width', '2.5');
     polyline.setAttribute('stroke-linejoin', 'round');
     svg.appendChild(polyline);
@@ -1093,7 +1147,7 @@ function bcDrawComboLine(containerId, avgVal, maxVal) {
     circle.setAttribute('cx', p.x);
     circle.setAttribute('cy', p.y);
     circle.setAttribute('r', '4.5');
-    circle.setAttribute('fill', '#F5A623');
+    circle.setAttribute('fill', '#E65100');
     circle.setAttribute('stroke', '#fff');
     circle.setAttribute('stroke-width', '1.5');
     svg.appendChild(circle);
@@ -1220,23 +1274,37 @@ async function bcMaintLoadToolmapList() {
 function bcMaintRenderToolmapList() {
   const kw = (document.getElementById('bc-maint-tm-search').value || '').trim().toLowerCase();
   const box = document.getElementById('bc-maint-tm-list');
-  const filtered = _bcMaintTmItems.filter(it =>
-    !kw || it.part_no.toLowerCase().includes(kw) || (it.machine_type||'').toLowerCase().includes(kw));
-  if (!filtered.length) { box.innerHTML = '<div class="bc-empty">查無資料</div>'; return; }
+  const results = _bcMaintTmItems.map(it => {
+    if (!kw) return { it, matchSlots: [] };
+    if (it.part_no.toLowerCase().includes(kw) || (it.machine_type||'').toLowerCase().includes(kw))
+      return { it, matchSlots: [] };
+    const matchSlots = it.slots.filter(s => s.tool.toLowerCase().includes(kw));
+    if (matchSlots.length) return { it, matchSlots };
+    return null;
+  }).filter(Boolean);
+
+  if (!results.length) { box.innerHTML = '<div class="bc-empty">查無資料</div>'; return; }
   box.innerHTML = `<table class="bc-table" style="width:auto">
-    <thead><tr><th style="width:100px">建立日期</th><th style="width:150px">品號</th><th style="width:220px">加工機型</th><th style="width:70px">刀數</th><th style="width:100px">修改日期</th><th style="width:140px">操作</th></tr></thead>
-    <tbody>${filtered.map(it => `
-      <tr>
+    <thead><tr><th style="width:100px">建立日期</th><th style="width:150px">品號</th><th style="width:240px">加工機型</th><th style="width:70px">刀數</th><th style="width:100px">修改日期</th><th style="width:140px">操作</th></tr></thead>
+    <tbody>${results.map(({ it, matchSlots }) => {
+      const slotTags = matchSlots.map(s =>
+        `<span style="display:inline-block;background:#1565C0;color:#fff;border-radius:5px;padding:.1rem .45rem;font-size:.8rem;font-weight:700;margin:.2rem .2rem 0 0;letter-spacing:.03em">${esc(s.slot)}</span>`
+      ).join('');
+      const machineHtml = matchSlots.length
+        ? `${esc(it.machine_type)}<div style="margin-top:.25rem">${slotTags}</div>`
+        : esc(it.machine_type);
+      return `<tr>
         <td>${esc(it.created)}</td>
         <td>${esc(it.part_no)}</td>
-        <td>${esc(it.machine_type)}</td>
+        <td>${machineHtml}</td>
         <td>${it.slots.length}</td>
         <td>${esc(it.modified)}</td>
         <td>
           <button class="bc-btn secondary" style="padding:.25rem .6rem;font-size:.78rem" onclick="bcMaintToolmapEdit('${esc(it.part_no)}')">編輯</button>
           <button class="bc-btn danger" onclick="bcMaintToolmapDelete('${esc(it.part_no)}')">刪除</button>
         </td>
-      </tr>`).join('')}</tbody>
+      </tr>`;
+    }).join('')}</tbody>
   </table>`;
 }
 
