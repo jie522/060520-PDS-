@@ -5,11 +5,14 @@ __pycache__/
 .claude/
 
 # dist 中不追蹤的大型目錄
-dist_embed/製令查詢/_python/
-dist_embed/製令查詢/_edge_data/
-dist_embed/製令查詢/__pycache__/
-dist_embed/製令查詢/_app/__pycache__/
-dist_embed/製令查詢/_app/*.db
+dist_embed/PDS系統/_python/
+dist_embed/PDS系統/_edge_data/
+dist_embed/PDS系統/__pycache__/
+dist_embed/PDS系統/_app/__pycache__/
+dist_embed/PDS系統/_app/*.db
+
+# 機密憑證（Google 服務帳戶金鑰等，不進 git）
+secrets/
 
 # 其他
 *.log

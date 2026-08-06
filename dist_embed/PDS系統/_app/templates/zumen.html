@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加工部查詢系統PDS</title>
+    <link rel="icon" type="image/png" href="/static/app-icon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body, * { font-family: 'Noto Sans TC', 'Source Han Sans TC', sans-serif; }
+        body {
+            background: #ECF0F5; color: #212121; font-size: .85rem;
+            margin: 0; height: 100vh; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+        .header{background:#1565C0;color:#fff;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+        .header-inner{display:flex;align-items:flex-end;padding:.4rem 1rem 0}
+        .header-logo{margin-left:auto;align-self:center;font-size:1.15rem;font-weight:800;font-style:italic;letter-spacing:.03em;color:#F5A623}
+        .header-title{font-size:1.1rem;font-weight:700;padding-bottom:.45rem;white-space:nowrap;margin-right:.5rem}
+        .header-tabs{display:flex;align-items:flex-end;gap:2px}
+        .header-tab{display:inline-block;padding:.3rem 1rem;font-size:1rem;font-weight:600;
+          color:rgba(255,255,255,.85);text-decoration:none;border-radius:0;
+          background:rgba(255,255,255,.15);cursor:pointer;transition:background .15s}
+        .header-tab.active,.header-tab:hover{background:#fff;color:#1565C0}
+        .header-tab-mgmt{background:#06C755;color:#fff}
+        .header-tab-mgmt.active,.header-tab-mgmt:hover{background:#05A649;color:#fff}
+        .header-tab-zumen{background:#4FC3F7;color:#fff;letter-spacing:.06em}
+        .header-tab-zumen.active,.header-tab-zumen:hover{background:#039BE5;color:#fff}
+
+        .zumen-body { flex:1; display:flex; flex-direction:column; min-height:0; }
+        #zumen-msg {
+            flex:1; display:flex; align-items:center; justify-content:center;
+            flex-direction:column; gap:.9rem; color:#546E7A; font-size:.95rem;
+        }
+        #zumen-frame { display:none; flex:1; width:100%; border:none; min-height:0; }
+        .spinner {
+            width:26px; height:26px; border:3px solid #BBDEFB; border-top-color:#1565C0;
+            border-radius:50%; animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #zumen-retry {
+            display:none; padding:.4rem 1.2rem; border:1px solid #BDC3C7; border-radius:8px;
+            background:#fff; color:#1565C0; font-weight:600; cursor:pointer; font-size:.9rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <span class="header-title">加工部查詢系統PDS</span>
+    <div class="header-tabs">
+      <a href="/" class="header-tab">製令查詢</a>
+      <a href="/production" class="header-tab">生產中製令</a>
+      <a href="/equipment" class="header-tab">設備稼動</a>
+      <a href="/equipment_master" class="header-tab">設備管理</a>
+      <a href="/drawing" class="header-tab">PDM圖面查詢</a>
+      <a href="/routing" class="header-tab">產品途程查詢</a>
+      <a href="/batch_cost" class="header-tab">批成本</a>
+      <a href="/cnc_program" class="header-tab">程式管理</a>
+      <span                 class="header-tab header-tab-zumen active">ZUMEN</span>
+      <a href="/management" class="header-tab header-tab-mgmt">管理</a>
+    </div>
+    <span class="header-logo">MAXCLAW</span>
+  </div>
+</div>
+
+<div class="zumen-body">
+  <div id="zumen-msg">
+    <span class="spinner" id="zumen-spinner"></span>
+    <span id="zumen-msg-text">連線 ZUMEN 圖面管理系統中…</span>
+    <button id="zumen-retry" onclick="initZumen(true)">重試</button>
+  </div>
+  <iframe id="zumen-frame"></iframe>
+</div>
+
+<script>
+let _zumenLoaded = false;
+
+function zumenMsg(text, showRetry) {
+  document.getElementById('zumen-msg').style.display = 'flex';
+  document.getElementById('zumen-frame').style.display = 'none';
+  document.getElementById('zumen-msg-text').textContent = text;
+  document.getElementById('zumen-retry').style.display = showRetry ? '' : 'none';
+  document.getElementById('zumen-spinner').style.display = showRetry ? 'none' : '';
+}
+
+function zumenShowFrame(url) {
+  const frame = document.getElementById('zumen-frame');
+  if (!_zumenLoaded) { frame.src = url; _zumenLoaded = true; }
+  document.getElementById('zumen-msg').style.display = 'none';
+  frame.style.display = 'flex';   // CSS 預設 display:none，設空字串不會覆蓋，必須明確指定
+}
+
+async function initZumen(forceRetry) {
+  if (_zumenLoaded && !forceRetry) {
+    document.getElementById('zumen-msg').style.display = 'none';
+    document.getElementById('zumen-frame').style.display = 'flex';   // 同上：空字串不會覆蓋 CSS 的 display:none
+    return;
+  }
+  try {
+    let st = await (await fetch('/api/zumen_gui/status')).json();
+    if (!st.installed) {
+      zumenMsg('這台電腦未安裝 ZUMEN 圖面管理工具（git clone https://github.com/jie522/260704-zumen 後 npm install）', true);
+      return;
+    }
+    if (st.running) { zumenShowFrame(st.url); return; }
+
+    zumenMsg('啟動 ZUMEN 圖面管理系統中…（首次自動登入約需 15-20 秒）', false);
+    const res = await fetch('/api/zumen_gui/start', { method: 'POST' });
+    const data = await res.json();
+    if (!data.success) { zumenMsg('⚠ ' + data.error, true); return; }
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      st = await (await fetch('/api/zumen_gui/status')).json();
+      if (st.running) { zumenShowFrame(st.url); return; }
+    }
+    zumenMsg('啟動逾時：伺服器 20 秒內沒有回應，請按重試，或檢查工具目錄的 node server.js 能否啟動', true);
+  } catch (e) {
+    zumenMsg('連線失敗：' + e.message, true);
+  }
+}
+
+initZumen();
+</script>
+</body>
+</html>

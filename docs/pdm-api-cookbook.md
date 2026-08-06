@@ -67,8 +67,17 @@ sv.Rollback()                                      # 不用時還號（預覽下
   **「其他文件歸檔」死路狀態**（沒有任何轉換能出去、一般使用者無取出/刪除權限，只能請管理員救）。
 - 正確順序：`AddFile → SetVar(全部變數,'') → Flush → UnlockFile → 等自動分派（實測約 2 秒，
   輪詢 CurrentState）→ 需要繼續編輯就 LockFile(folderID, 0) 取出`。
-- 變更狀態：`f5.ChangeState('目標狀態名', folder.ID, 註解, 0, 0)`，例如提出申請=
-  `ChangeState('單位主管審核', ...)`（轉換「00-提出申請」的目標狀態）。
+- 變更狀態（2026-07-07 實測更正，舊記載錯誤）：
+  - **Python IDispatch 呼叫 `f5.ChangeState` 一律回 DISP_E_MEMBERNOTFOUND「找不到成員」**，
+    不管 IEdmFile5/IEdmFile17、早期/晚期繫結、VARIANT 包裝都一樣——此方法只在 vtable 上，
+    必須走 .NET Interop（`C:\Program Files\SOLIDWORKS PDM\EPDM.Interop.epdm.dll`）。
+    app.py 的做法：subprocess 呼叫 `pdm_change_state.ps1`（PowerShell Add-Type 編 C#）。
+  - 只帶目標狀態的 `ChangeState`/`ChangeState2` 會回「指定的工作流程狀態資料庫 ID 是無效的」，
+    要用 **`ChangeState3(ref 狀態名, ref 轉換名, folderID, 註解, 0, 0, 密碼)`** 同時指定轉換。
+  - 「00-提出申請」轉換設有**身分驗證**：密碼參數必須是操作者的 PDM 登入密碼，
+    空密碼回「密碼是無效的」。密碼不落地，由前端表單即時輸入傳入。
+  - 列出某狀態可走的轉換（唯讀）：`IEdmState6.GetFirstTransitionPosition(True)`（True=送出方向，
+    False 是列「進入」此狀態的轉換）→ `GetNextTransition`。
 
 ## 權限現況（帳號 990602 楊良捷，2026-07 實測）
 
@@ -83,6 +92,36 @@ sv.Rollback()                                      # 不用時還號（預覽下
   安全做法：openpyxl save 前先把 custom.xml 讀出備份，save 後用 zipfile 整包重寫把原始
   custom.xml 塞回去（見 app.py `_write_xlsm_defined_names` 的實作）。
 - 開 xlsm 一律 `keep_vba=True`（保 VBA）；插圖需要 Pillow（dist_embed 已裝 12.3.0）。
+
+## ★ 多台電腦共用同一份 dist_embed 時：gen_py 快取可能損毀（2026-07 實測）
+
+現象：某台電腦點「治檢具索引更新」或「設計變更通知單索引更新」時炸出類似
+`AttributeError: module 'win32com.gen_py.<LIBID>x0x5x24' has no attribute 'CLSIDToPackageMap'`
+的錯誤，但在其他電腦上一切正常。**實測過至少兩種變體**：使用者回報的是缺
+`CLSIDToPackageMap`，但同一類問題在開發機上重現時缺的是 `CLSIDToClassMap`——
+共同特徵是錯誤訊息裡一定有 `win32com.gen_py`，不是單一固定的屬性名稱，判斷式
+不要只比對某一個屬性字串。
+
+原因：pywin32 的 `gencache.EnsureDispatch`（早期繫結）第一次呼叫時會把「PDMWorks
+Enterprise 2021 Type Library」的 wrapper 產生並快取到本機的 gen_py 資料夾。多台電腦
+如果透過網路共用資料夾（`\\192.168.1.99\...\dist_embed\...`）跑**同一份**內嵌 Python，
+理論上 gen_py 快取路徑（`%TEMP%\gen_py\<py版本>\`）各自獨立在每台電腦本機，但只要某次
+產生過程被中斷、或該機器登錄的 COM 型別庫版本跟快取內容對不上，就會產生一份不完整的
+package，且不只影響第一次連線，**後面任何 `CastTo` 呼叫都可能觸發同一種錯誤**
+（因為整個型別庫的 wrapper package 都沒正確產生，不是單一介面的問題）。
+
+修法（已寫進程式碼，不需要手動介入）：`build_pdm_index.py` 的 `connect_vault()` 與
+`app.py` 的 `_pdm_vault_login()` 現在會攔截這整類特徵錯誤（`AttributeError` 且訊息含
+`win32com.gen_py`），自動刪除 `win32com.__gen_path__` 指向的 gen_py 快取資料夾，
+讓 pywin32 在下一次 `EnsureDispatch` 時重新產生一份乾淨、跟該機器實際登錄版本吻合的
+wrapper，再重試一次連線——使用者端完全無感，不需要手動去 `%TEMP%\gen_py` 刪檔。
+**已在開發機上實際重現＋驗證自動修復成功**（第一次 `EnsureDispatch` 炸出
+`CLSIDToClassMap` 缺失，清快取重試後第二次成功回傳可用的 COM 物件）。
+
+**不能**改成單純 `except Exception` 就 fallback 成晚期繫結（`win32com.client.Dispatch`
+不帶 gencache）長期使用，因為 `CastTo` 一定要早期繫結才能用（見本文件開頭）；只有在
+清快取重試也失敗時，才把晚期繫結當最後手段（此時多數功能會直接失敗，但至少不會整支
+腳本崩潰無回應）。
 
 ## 已知遺留物（待 PDM 管理員清理）
 

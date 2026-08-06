@@ -15,10 +15,10 @@
 
 ## 2. 最易失焦：dist_embed 雙副本同步
 
-repo 是源頭，`dist_embed/製令查詢/` 是部署副本。改完源頭忘記同步、或同步不完整，
+repo 是源頭，`dist_embed/PDS系統/` 是部署副本。改完源頭忘記同步、或同步不完整，
 使用者測到的是舊行為，來回鬼打牆。本專案實際踩過的三個坑：
 
-- **根目錄 config.py 才是執行時載入的那份**：`dist_embed/製令查詢/config.py`（使用者可編輯版）
+- **根目錄 config.py 才是執行時載入的那份**：`dist_embed/PDS系統/config.py`（使用者可編輯版）
   會蓋過 `_app/config.py`。config.py 有新增常數時**兩份都要同步**，漏掉會 AttributeError。
 - **程式執行中會鎖檔**：`Copy-Item` 報 "user-mapped section open" 就是 dist 版程式還在跑。
   先 `Get-Process | Where-Object { $_.Path -like "*dist_embed*" }` 找到 pythonw，請使用者關閉或（經同意）Stop-Process。
@@ -28,8 +28,8 @@ repo 是源頭，`dist_embed/製令查詢/` 是部署副本。改完源頭忘記
 ```
 1. python -m py_compile app.py          # 語法檢查
 2. 改 APP_VERSION 為當日 VYYYYMMDD      # 一天只需改一次
-3. Copy-Item 同步所有改過的檔到 dist_embed/製令查詢/_app/
-4. 若 config.py 有改 → 額外同步到 dist_embed/製令查詢/config.py（根目錄）
+3. Copy-Item 同步所有改過的檔到 dist_embed/PDS系統/_app/
+4. 若 config.py 有改 → 額外同步到 dist_embed/PDS系統/config.py（根目錄）
 5. 回覆裡明講「請重啟程式再測」
 ```
 

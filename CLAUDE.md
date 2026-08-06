@@ -22,6 +22,7 @@ python build_pdm_index.py --update --deploy   # PDM 圖面索引增量更新
 python build_jig_index.py --deploy   # 治檢具索引重建
 python build_dcn_index.py --deploy   # DCN 索引重建
 python build_cnc_program_index.py --deploy    # CNC 程式索引重建
+python build_equipment_index.py --deploy      # 設備主檔匯入（Excel→equipment.db）
 ```
 
 ## 重要檔案
@@ -40,15 +41,22 @@ python build_cnc_program_index.py --deploy    # CNC 程式索引重建
 ## dist_embed 同步鐵則（最常出錯，背下來）
 
 ```
-dist_embed/製令查詢/
+dist_embed/PDS系統/
 ├── _python/    # Python 3.11.9 Embeddable（含 site-packages：pywin32、openpyxl、Pillow…）
 ├── _app/       # 程式碼副本 ← 改完的檔案要同步到這裡
 ├── config.py   # ★使用者可編輯設定，執行時載入的是這份 ← config.py 有改必須「兩份」都同步
-└── 製令查詢.vbs
+└── PDS系統.vbs
 ```
 1. 改 .py 後先 `python -m py_compile` 再同步。
 2. 「user-mapped section open」= dist 版程式執行中鎖檔，先處理程序再同步。
 3. 每天第一次完成更新時：`app.py` 的 `APP_VERSION` 改為當日 `VYYYYMMDD`（同日多次更新不用重改），同步後請使用者重啟測試。
+4. **`equipment.db`／`cnc_program_index.db`／`calendar.db` 不在 `sync_to_dist.py` 的同步清單裡**——
+   這三個是執行期資料庫，桌面應用執行中會直接寫入（照片上傳、設備編輯、CNC 程式上傳、
+   行事曆工作日設定、維修停機時數）。曾經跟原始碼放一起無條件覆蓋，結果使用者在正式
+   桌面應用上傳的照片被開發機的舊資料庫蓋掉（2026-07-30 真實故障，檔案還在網芳但資料庫
+   記錄消失）。要推送前兩個，一律用各自明確的指令（`build_equipment_index.py --deploy` /
+   `build_cnc_program_index.py --deploy`），不要手動 `shutil.copy2` 或改回加進 `sync_to_dist.py`。
+   **`calendar.db` 更沒有任何 build 工具能重建**（純使用者手動點選的資料），蓋掉就救不回來。
 
 ## 延伸文件（不自動載入，碰到對應功能時用 Read 查）
 
@@ -60,11 +68,14 @@ dist_embed/製令查詢/
 | `docs/agent/prompts.md` | 寫 subagent 交辦 prompt 時 |
 | `docs/agent/maintenance.md` | 要改制度檔／寫入踩雷教訓時 |
 | `docs/pdm-api-cookbook.md` | ★動任何 PDM 讀寫之前（COM API 實測手冊） |
+| `docs/pdm-jig-application-sop.md` | 要比照治檢具申請單的做法做其他 PDM 申請單自動化（換帳號/換申請單類型）時 |
 | `docs/pdm-index.md` | 改 PDM 圖面索引（build_pdm_index.py） |
 | `docs/batch-cost.md` | 改批成本計算 |
 | `docs/management-page.md` | 改管理頁任何子頁 |
-| `docs/category-colors.md` / `docs/table-design.md` / `docs/badge-filter-convention.md` | 圖表配色／新表格樣式／徽章篩選互動 |
+| `docs/category-colors.md` / `docs/chart-style.md` / `docs/table-design.md` / `docs/badge-filter-convention.md` | 分類圖表配色／趨勢折線圖樣式／新表格樣式／徽章篩選互動 |
 | `docs/dcn-index.md` / `docs/cnc-program.md` / `docs/sfcr06.md` / `docs/zumen.md` | 對應功能 |
+| `docs/equipment-master.md` | 改設備管理（設備主檔／編碼／照片／規格／妥善率） |
+| `docs/calendar.md` | 改管理頁行事曆，或任何需要「工作天數」的統計 |
 | `docs/nav-design.md` | 新增頂層分頁或改導覽列 |
 | `docs/dev-workflow.md` | push GitHub、preview 工具驗證前端 |
 

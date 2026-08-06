@@ -1,0 +1,2058 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加工部查詢系統PDS - 設備管理</title>
+    <link rel="icon" type="image/png" href="/static/app-icon.png">
+    <link href="/static/vendor/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --erp-blue:        #1565C0;
+            --erp-blue-dark:   #0D47A1;
+            --erp-blue-mid:    #1976D2;
+            --erp-blue-light:  #E3F2FD;
+            --erp-blue-pale:   #F0F7FF;
+            --erp-bg:          #F5F4ED;
+            --erp-surface:     #FFFFFF;
+            --erp-surface-2:   #FAF9F5;
+            --erp-border:      #E5E4DF;
+            --erp-border-dark: #D8D5CC;
+            --erp-text:        #3D3D3A;
+            --erp-text-muted:  #5C5950;
+            --erp-muted:       #8A8778;
+            --erp-row-even:    #FAF9F5;
+            --erp-row-hover:   #FBEFE6;
+            --success:         #2E7D32;
+            --success-bg:      #E8F5E9;
+            --warning:         #E65100;
+            --warning-bg:      #FFF3E0;
+            --danger:          #C62828;
+            --danger-bg:       #FDECEA;
+            --radius:          8px;
+            --radius-sm:       5px;
+            --shadow-sm:       0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+        }
+        * { box-sizing: border-box; }
+        body, * { font-family: 'Noto Sans TC', 'Source Han Sans TC', sans-serif; }
+        body {
+            background: var(--erp-bg); color: var(--erp-text);
+            font-size: .85rem; margin: 0; height: 100vh; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+        .header{background:#1565C0;color:#fff;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.3);z-index:100}
+        .header-inner{display:flex;align-items:flex-end;padding:.4rem 1rem 0}
+        .header-logo{margin-left:auto;align-self:center;font-size:1.15rem;font-weight:800;font-style:italic;letter-spacing:.03em;color:#F5A623}
+        .header-title{font-size:1.1rem;font-weight:700;padding-bottom:.45rem;white-space:nowrap;margin-right:.5rem}
+        .header-tabs{display:flex;align-items:flex-end;gap:2px}
+        .header-tab{display:inline-block;padding:.3rem 1rem;font-size:1rem;font-weight:600;
+          color:rgba(255,255,255,.85);text-decoration:none;border-radius:0;
+          background:rgba(255,255,255,.15);cursor:pointer;transition:background .15s}
+        .header-tab.active,.header-tab:hover{background:#fff;color:#1565C0}
+        .header-tab-mgmt{background:#06C755;color:#fff}
+        .header-tab-mgmt.active,.header-tab-mgmt:hover{background:#05A649;color:#fff}
+        .header-tab-zumen{background:#4FC3F7;color:#fff;letter-spacing:.06em}
+        .header-tab-zumen.active,.header-tab-zumen:hover{background:#039BE5;color:#fff}
+
+        /* ══ 版面：左側選單 + 內容（比照管理頁 docs/management-page.md）══ */
+        .page-layout { flex:1; display:flex; overflow:hidden; min-height:0; }
+        .page-sub-nav {
+            display:flex; flex-direction:column; gap:0; width:230px; flex-shrink:0;
+            padding:.6rem .5rem; background:var(--erp-bg);
+            border-right:1px solid var(--erp-border); overflow-y:auto;
+        }
+        .nav-group { margin-bottom:.25rem; }
+        .nav-group + .nav-group { border-top:1px solid var(--erp-border); padding-top:.4rem; margin-top:.25rem; }
+        .nav-group-header { display:flex; align-items:center; gap:.55rem; padding:.3rem .5rem .4rem; user-select:none; }
+        .nav-group-icon { width:30px; height:30px; border-radius:8px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center; font-size:1rem; }
+        .nav-group-icon.g-data { background:#E3F2FD; }
+        .nav-group-icon.g-hist { background:#F3E5F5; }
+        .nav-group-label { font-size:.88rem; font-weight:700; letter-spacing:.03em; color:var(--erp-text-muted); }
+        .page-sub-tab {
+            display:flex; align-items:center; gap:.55rem; padding:.38rem .6rem .38rem 1.7rem; font-size:.88rem; font-weight:600;
+            color:var(--erp-text-muted); text-decoration:none; border-radius:var(--radius-sm);
+            background:transparent; border:1px solid transparent; transition:all .15s;
+            text-align:left; white-space:nowrap; cursor:pointer;
+        }
+        /* icon 欄寬跟 padding-left/gap 都跟 .nav-group-header 一致，
+           讓子項目的文字跟圖示精準對齊在群組標題正下方，不會歪掉 */
+        .page-sub-tab .tab-icon { width:30px; flex-shrink:0; text-align:center; font-size:.92rem; }
+        .page-sub-tab.active {
+            background:#1565C0; color:#fff; border-color:#1565C0; font-weight:700;
+            box-shadow:0 2px 6px rgba(21,101,192,.35), inset 4px 0 0 #0D47A1;
+        }
+        .page-sub-tab:not(.active):hover { background:var(--erp-surface-2); color:#1565C0; }
+
+        .page-body { flex:1; display:flex; flex-direction:column; padding:.75rem; gap:.55rem; overflow:hidden; min-width:0; }
+        .sub-page { flex:1; display:flex; flex-direction:column; gap:.55rem; overflow:hidden; min-height:0; }
+
+        .card {
+            background:var(--erp-surface); border:1px solid var(--erp-border);
+            border-radius:var(--radius); box-shadow:var(--shadow-sm); overflow:hidden;
+        }
+        .card-header {
+            font-size:.95rem; font-weight:800; padding:.7rem 1rem; color:#fff;
+            background:linear-gradient(90deg, var(--erp-blue-mid) 0%, var(--erp-blue-dark) 100%);
+            border-left:4px solid var(--erp-blue-dark);
+        }
+
+        .toolbar {
+            background:var(--erp-surface); border:1px solid var(--erp-border);
+            border-radius:var(--radius); padding:.6rem .8rem; display:flex; align-items:center;
+            gap:.5rem; flex-wrap:wrap; flex-shrink:0;
+        }
+        .toolbar input[type=text] { font-size:.84rem; padding:.35rem .6rem; border:1px solid var(--erp-border-dark); border-radius:4px; }
+        .toolbar .btn { font-size:.82rem; }
+        #searchInput { width:360px; }
+        .toolbar .spacer { flex:1; }
+        #resultCount { font-size:.78rem; color:var(--erp-text-muted); white-space:nowrap; }
+        #fixWarn { font-size:.78rem; color:var(--danger); font-weight:600; white-space:nowrap; cursor:pointer; }
+
+        /* 篩選列：下拉選單（表格內徽章單擊會設定對應的選單值，見 docs/badge-filter-convention.md）*/
+        .filter-bar {
+            display:flex; align-items:center; gap:.45rem; flex-wrap:wrap;
+            background:var(--erp-surface); border:1px solid var(--erp-border);
+            border-radius:var(--radius); padding:.5rem .9rem; flex-shrink:0;
+        }
+        .filter-label { font-size:.82rem; font-weight:600; color:var(--erp-text-muted); white-space:nowrap; }
+        .filter-bar select {
+            font-size:.82rem; padding:.3rem .5rem; border:1px solid var(--erp-border-dark);
+            border-radius:4px; background:#fff; color:var(--erp-text); cursor:pointer;
+        }
+        .filter-bar select:focus { outline:none; border-color:var(--erp-blue-mid); box-shadow:0 0 0 2px rgba(21,101,192,.12); }
+        .filter-bar select.on { border-color:var(--erp-blue); background:var(--erp-blue-light); font-weight:700; color:var(--erp-blue-dark); }
+        .filter-bar .sep { width:1px; height:20px; background:var(--erp-border); margin:0 .25rem; }
+        .filter-bar .btn { font-size:.78rem; padding:.22rem .6rem; }
+
+        .table-wrap { flex:1; overflow:auto; background:var(--erp-surface); border:1px solid var(--erp-border); border-radius:var(--radius); }
+        table.eq-table { width:100%; border-collapse:collapse; }
+        table.eq-table th {
+            position:sticky; top:0; z-index:2; padding:.5rem .7rem; font-size:.8rem; font-weight:600;
+            text-align:left; color:rgba(255,255,255,.95); white-space:nowrap;
+            background:linear-gradient(180deg, var(--erp-blue-mid), var(--erp-blue-dark));
+        }
+        table.eq-table td { padding:.35rem .7rem; font-size:.85rem; color:var(--erp-text); border-bottom:1px solid #F0EEE8; vertical-align:middle; }
+        table.eq-table tr:nth-child(even) td { background:var(--erp-row-even); }
+        table.eq-table tbody tr { cursor:pointer; }
+        table.eq-table tbody tr:hover td { background:var(--erp-row-hover); }
+        table.eq-table tr.selected td { background:#FBE3D3 !important; }
+
+        td.eq-thumb { width:88px; padding:.3rem .5rem; }
+        td.eq-thumb img { width:76px; height:58px; object-fit:cover; border-radius:5px; border:1px solid var(--erp-border); display:block; }
+        td.eq-thumb .no-photo { width:76px; height:58px; border-radius:5px; border:1px dashed var(--erp-border-dark);
+            display:flex; align-items:center; justify-content:center; color:#C9C5B8; font-size:1.3rem; }
+        td.eq-code { font-weight:700; color:var(--erp-blue-dark); white-space:nowrap; font-family:'Consolas','Courier New',monospace; font-size:.9rem; }
+        td.eq-old, td.eq-vendor { color:var(--erp-text-muted); font-size:.8rem; }
+        td.eq-old { white-space:nowrap; }
+        /* 停機時數：直接在表格裡填，改完離開欄位就自動存檔（綠框閃一下代表存好了） */
+        td.eq-down { padding:.2rem .4rem; }
+        td.eq-down input {
+            width:100%; max-width:78px; text-align:right; font-size:.88rem; font-weight:700;
+            padding:.22rem .4rem; border:1px solid var(--erp-border-dark); border-radius:4px;
+            background:#fff; color:var(--erp-blue-dark); font-family:'Consolas','Courier New',monospace;
+        }
+        td.eq-down input:focus { outline:none; border-color:var(--erp-blue-mid); box-shadow:0 0 0 2px rgba(21,101,192,.15); }
+        td.eq-down input.ok { border-color:var(--success); background:var(--success-bg); }
+        td.eq-down input.err { border-color:var(--danger); background:var(--danger-bg); }
+        td.eq-remark { color:var(--erp-text-muted); font-size:.8rem; max-width:260px;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help; }
+        /* 備註提示用 fixed 定位掛在 body 上（見下方 JS），避免被 .table-wrap 的 overflow:auto 裁掉 */
+        .remark-tip {
+            display:none; position:fixed; z-index:2000; width:420px; max-width:70vw;
+            white-space:normal; text-align:left; background:#2E2C27; color:#fff;
+            font-size:.92rem; font-weight:500; line-height:1.7; padding:.7rem .9rem;
+            border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.3); pointer-events:none;
+        }
+        td.eq-date { white-space:nowrap; font-size:.78rem; color:var(--erp-text-muted); }
+        td.eq-num { text-align:center; font-size:.78rem; color:var(--erp-text-muted); }
+
+        .grp-badge { display:inline-block; padding:.2rem .6rem; border-radius:5px; font-size:.98rem; font-weight:700; white-space:nowrap; }
+        .grp-A{background:#E3F2FD;color:#1565C0} .grp-B{background:#E8F5E9;color:#2E7D32}
+        .grp-C{background:#FFF3E0;color:#E65100} .grp-D{background:#F3E5F5;color:#6A1B9A}
+        .grp-E{background:#E0F7FA;color:#00838F} .grp-F{background:#FCE4EC;color:#AD1457}
+        .grp-G{background:#FFF8E1;color:#F57F17} .grp-H{background:#EFEBE9;color:#4E342E}
+        .grp-I{background:#E8EAF6;color:#283593} .grp-M{background:#E0F2F1;color:#00695C}
+        .grp-O{background:#ECEFF1;color:#455A64}
+        .loc-badge, .st-badge { display:inline-block; padding:.2rem .6rem; border-radius:5px; font-size:.98rem; font-weight:700; white-space:nowrap; }
+        .loc-加工{background:#E3F2FD;color:#1565C0} .loc-詠設{background:#F3E5F5;color:#6A1B9A}
+        .loc-成品{background:#FFF3E0;color:#E65100} .loc-生技{background:#E8F5E9;color:#2E7D32}
+        .st-在用{background:var(--success-bg);color:var(--success)}
+        .st-閒置{background:var(--warning-bg);color:var(--warning)}
+        .st-報廢{background:var(--danger-bg);color:var(--danger)}
+        .st-已售出{background:#ECEFF1;color:#455A64}
+        .st-轉賣{background:#E1F5FE;color:#0277BD}
+        .fix-flag { display:inline-block; margin-left:.3rem; color:var(--danger); font-weight:700; cursor:help; }
+        .src-manual { display:inline-block; margin-left:.25rem; font-size:.62rem; font-weight:700;
+            padding:.02rem .25rem; border-radius:3px; background:#EDE7F6; color:#5E35B1; vertical-align:middle; }
+
+        #emptyMsg, #loadingMsg { text-align:center; padding:2rem; color:var(--erp-text-muted); }
+
+        /* ══ 新增／編輯設備表單 ══ */
+        .form-scroll { flex:1; overflow-y:auto; background:var(--erp-bg); }
+        .form-inner { max-width:1320px; margin:0 auto; padding:1.2rem 1.4rem 1.6rem; }
+        .form-sect {
+            background:var(--erp-surface); border:1px solid var(--erp-border); border-radius:var(--radius);
+            box-shadow:var(--shadow-sm); padding:1.1rem 1.3rem 1.3rem; margin-bottom:1rem;
+        }
+        /* 區塊標題：左側藍色短豎條＋標題＋灰色副標。原本用 ①②③ 步驟圓圈，但這張表單
+           同時給「新增」與「編輯」用，編輯時並不是照順序走的精靈流程，編號反而誤導 */
+        .form-sect h6 {
+            display:flex; align-items:baseline; gap:.65rem; font-size:1.12rem; font-weight:800;
+            color:var(--erp-text); border-bottom:1px solid var(--erp-border);
+            padding:0 0 .65rem .75rem; margin-bottom:1.05rem; position:relative;
+        }
+        .form-sect h6::before {
+            content:''; position:absolute; left:0; top:.12em; width:4px; height:1em;
+            background:var(--erp-blue); border-radius:2px;
+        }
+        .sect-sub { font-size:.84rem; font-weight:500; color:var(--erp-muted); }
+        /* 220px 下限：這些欄位都不長，寬螢幕時「基本資料」5 欄剛好排成一列；
+           窄一點會自動降成 4/3/2 欄，欄位數少的區塊（編碼只有 3 個）空軌道會被 auto-fit 收掉 */
+        .form-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.85rem 1.1rem; }
+        .fld { display:flex; flex-direction:column; gap:.3rem; }
+        .fld label { font-size:.85rem; font-weight:600; color:var(--erp-text-muted); }
+        .fld label .req { color:var(--danger); }
+        .fld input, .fld select, .fld textarea {
+            font-size:.94rem; padding:.5rem .7rem; border:1px solid var(--erp-border-dark);
+            border-radius:var(--radius-sm); background:#fff; color:var(--erp-text); width:100%;
+        }
+        .fld input:focus, .fld select:focus, .fld textarea:focus { outline:none; border-color:var(--erp-blue-mid); box-shadow:0 0 0 2px rgba(21,101,192,.12); }
+        .fld input[readonly], .fld select:disabled { background:var(--erp-surface-2); color:var(--erp-muted); }
+        /* 編輯既有設備時鎖定編碼三層分類＋流水號，避免手滑改動；要改要先按這顆按鈕輸入密碼解鎖 */
+        .code-lock-btn {
+            margin-left:auto; font-size:.8rem; font-weight:700; padding:.3rem .7rem;
+            border:1px solid var(--erp-border-dark); border-radius:999px; background:var(--erp-surface-2);
+            color:var(--erp-muted); cursor:pointer; white-space:nowrap;
+        }
+        .code-lock-btn:hover { background:var(--erp-blue-pale); border-color:var(--erp-blue-mid); color:var(--erp-blue-dark); }
+        .code-lock-btn.unlocked { background:#FFF3E0; border-color:#FFB74D; color:#E65100; }
+        .fld .hint { font-size:.78rem; color:var(--erp-muted); }
+        /* ══ 編碼組成條 ══
+           把 PDM 編碼拆成它真正的四段（群組＋機台類型－加工屬性＋流水號）並排顯示，
+           上面三個下拉選好就逐段填上，流水號那段本身就是輸入框——編碼規則直接長在畫面上，
+           不用另外看說明文字。取代原本那塊只放一行字卻佔 200px 高的漸層色塊。 */
+        .code-anatomy {
+            margin-top:1.1rem; padding:.95rem 1.1rem 1rem;
+            border:1px solid var(--erp-border); border-radius:var(--radius); background:var(--erp-surface-2);
+        }
+        .ca-label {
+            display:block; font-size:.95rem; font-weight:800; letter-spacing:.14em;
+            color:var(--erp-blue-mid); margin-bottom:.8rem;
+        }
+        /* 編碼方框跟右側「已有幾台／配到第幾號」提示排成一列：提示文字改成靠左邊框分隔，
+           跟編碼一樣垂直置中，不再堆疊在下面多佔一行 */
+        .ca-body { display:flex; align-items:center; justify-content:space-between; gap:1.4rem; flex-wrap:wrap; }
+        .ca-strip { display:flex; align-items:flex-start; gap:.5rem; flex-wrap:wrap; }
+        .ca-seg { display:flex; flex-direction:column; align-items:center; gap:.4rem; }
+        /* 已選好的段用實心深藍填底＋白字，比原本白底藍字醒目很多；流水號那格維持白底藍框
+           （見 .ca-seg input），跟已配好的三段做出「可再手動改」的視覺區隔 */
+        .ca-val {
+            display:flex; align-items:center; justify-content:center;
+            min-width:68px; height:68px; padding:0 .6rem;
+            font-family:'Consolas','Courier New',monospace; font-size:2.3rem; font-weight:700; line-height:1;
+            color:#fff; background:linear-gradient(155deg, var(--erp-blue-mid), var(--erp-blue-dark));
+            border:1.5px solid var(--erp-blue-dark); border-radius:7px;
+            box-shadow:0 2px 6px rgba(13,71,161,.28);
+        }
+        .ca-val.is-empty {
+            color:#C9C5B8; background:#fff; border-color:var(--erp-border-dark); border-style:dashed;
+            box-shadow:none;
+        }
+        .ca-seg input {
+            width:88px; height:68px; padding:0; text-align:center;
+            font-family:'Consolas','Courier New',monospace; font-size:2.3rem; font-weight:700;
+            color:var(--erp-blue-dark); background:#fff;
+            border:1.5px solid var(--erp-blue-mid); border-radius:7px; box-shadow:0 1px 2px rgba(21,101,192,.12);
+        }
+        .ca-seg input:focus { outline:none; border-color:var(--erp-blue); box-shadow:0 0 0 3px rgba(21,101,192,.15); }
+        .ca-dash {
+            align-self:flex-start; height:68px; line-height:68px; padding:0 .2rem;
+            font-family:'Consolas','Courier New',monospace; font-size:2.3rem; font-weight:700; color:var(--erp-blue-dark);
+        }
+        .ca-cap { font-size:.74rem; font-weight:600; color:var(--erp-muted); white-space:nowrap; }
+        .ca-seg-edit .ca-cap { color:var(--erp-blue-mid); }
+        .ca-note {
+            flex:1; min-width:180px; padding-left:1.3rem; border-left:1px solid var(--erp-border);
+            font-size:.88rem; color:var(--erp-text-muted); line-height:1.65;
+        }
+        .ca-note:empty { display:none; }
+        .spec-box { border:1px solid var(--erp-border); border-radius:var(--radius-sm); background:var(--erp-surface-2); padding:.55rem .8rem; }
+        .spec-head {
+            display:grid; grid-template-columns:280px 1fr 34px; gap:.6rem; padding:0 0 .45rem;
+            font-size:.78rem; font-weight:700; color:var(--erp-muted); letter-spacing:.03em;
+        }
+        .spec-row {
+            display:grid; grid-template-columns:280px 1fr 34px; gap:.6rem; align-items:center;
+            padding:.35rem 0; border-top:1px solid var(--erp-border);
+        }
+        .spec-row:first-child { border-top:none; }
+        .spec-row input { font-size:.94rem; padding:.4rem .65rem; border:1px solid var(--erp-border-dark); border-radius:var(--radius-sm); width:100%; background:#fff; }
+        .btn-x { border:none; background:transparent; color:var(--danger); font-size:1.1rem; cursor:pointer; border-radius:4px; line-height:1; padding:.2rem; }
+        .btn-x:hover { background:var(--danger-bg); }
+        /* 存檔／刪除放在卡片外的固定底欄，不用捲到最下面才看得到按鈕。
+           內層再包一層與表單同寬的容器，按鈕才會對齊表單欄位，不會被拉到螢幕兩端 */
+        .form-footer {
+            flex-shrink:0; padding:.75rem 0;
+            border-top:1px solid var(--erp-border); background:var(--erp-surface-2);
+        }
+        /* 左右 padding 要跟 .form-inner 一致，按鈕才會對齊上面的表單欄位 */
+        .form-footer .footer-inner {
+            max-width:1320px; margin:0 auto; padding:0 1.4rem;
+            display:flex; align-items:center; gap:.7rem;
+        }
+        .form-footer .footer-spacer { flex:1; }
+        .form-msg { font-size:.9rem; font-weight:600; }
+        .form-msg.ok { color:var(--success); }
+        .form-msg.err { color:var(--danger); }
+        .new-inline { display:flex; gap:.4rem; }
+        .new-inline select { flex:1; min-width:0; }
+        .new-inline .btn-add {
+            flex-shrink:0; width:36px; padding:0; display:inline-flex; align-items:center; justify-content:center;
+            border:1px solid var(--erp-border-dark); border-radius:var(--radius-sm); background:#fff;
+            color:var(--erp-blue-mid); font-size:1.2rem; font-weight:700; line-height:1; cursor:pointer;
+            transition:background .15s,border-color .15s,color .15s;
+        }
+        .new-inline .btn-add:hover { background:var(--erp-blue-pale); border-color:var(--erp-blue-mid); color:var(--erp-blue-dark); }
+
+        /* ══ 妥善率 ══
+           主角是一個大的百分比數字，旁邊四格把算式的每一項攤開來
+           （台數 × 每日工時 × 工作天 = 應有稼動，減掉停機），讓數字自己解釋自己怎麼來的 */
+        .up-scroll { flex:1; overflow-y:auto; min-height:0; }
+        .up-step { padding:.22rem .55rem; font-weight:800; line-height:1.2; }
+        .up-hero {
+            display:flex; align-items:stretch; gap:0; flex-wrap:wrap;
+            background:var(--erp-surface); border:1px solid var(--erp-border);
+            border-radius:var(--radius); box-shadow:var(--shadow-sm); overflow:hidden;
+        }
+
+        /* 左側 KPI：整塊依好壞上底色，數字本身不用再另外標紅綠 */
+        .up-rate {
+            display:flex; flex-direction:column; justify-content:center; gap:.15rem;
+            min-width:290px; padding:1.4rem 1.6rem; border-right:1px solid var(--erp-border);
+        }
+        .up-rate .lbl { font-size:.82rem; font-weight:800; letter-spacing:.18em; text-transform:uppercase; }
+        .up-rate .val { font-size:3.7rem; font-weight:800; line-height:1.02; letter-spacing:-.03em;
+            font-family:'Consolas','Courier New',monospace; display:flex; align-items:baseline; gap:.1rem; }
+        .up-rate .val i { font-size:1.6rem; font-style:normal; font-weight:700; opacity:.75; }
+        .up-rate .val.none { font-size:1.25rem; font-family:inherit; letter-spacing:0; font-weight:700; }
+        .up-rate .sub { font-size:.86rem; margin-top:.45rem; opacity:.75; }
+        /* 稼動占比條：99% 的數字看不出「停機只是一小條」，這條可以 */
+        .up-rate .bar { height:7px; border-radius:4px; overflow:hidden; margin-top:.55rem; display:flex; }
+        .up-rate .bar i { display:block; height:100%; }
+        .up-rate .bar .down { background:var(--danger); opacity:.85; }
+
+        .up-rate.good { background:linear-gradient(160deg,#F1F9F1,#E8F5E9); color:#1B5E20; }
+        .up-rate.good .lbl { color:var(--success); }
+        .up-rate.good .bar { background:#C3E3C5; }
+        .up-rate.good .bar .up { background:var(--success); }
+        .up-rate.warn { background:linear-gradient(160deg,#FFF8F0,#FFF3E0); color:#8A3B00; }
+        .up-rate.warn .lbl { color:var(--warning); }
+        .up-rate.warn .bar { background:#F5D5B0; }
+        .up-rate.warn .bar .up { background:var(--warning); }
+        .up-rate.bad  { background:linear-gradient(160deg,#FEF3F1,#FDECEA); color:#8E1A1A; }
+        .up-rate.bad .lbl { color:var(--danger); }
+        .up-rate.bad .bar { background:#F2C3BD; }
+        .up-rate.bad .bar .up { background:var(--danger); }
+        .up-rate.none { background:var(--erp-surface-2); color:var(--erp-text-muted); }
+        .up-rate.none .lbl { color:var(--erp-muted); }
+
+        /* 右側算式：這五個數字不是五個獨立指標，是同一條算式的項，
+           所以中間放真正的運算子（× × = −），版面自己就把公式講清楚了 */
+        .up-formula {
+            flex:1; display:flex; align-items:center; flex-wrap:wrap;
+            gap:.5rem .95rem; padding:1.4rem 1.6rem;
+        }
+        /* 運算子跟它後面那一項綁成一個不可拆的單位，換行時 − 才不會落單在行尾 */
+        .up-term { display:inline-flex; align-items:center; gap:.95rem; }
+        .up-cell { display:flex; flex-direction:column; gap:.2rem; }
+        .up-cell .k { font-size:1rem; font-weight:600; color:var(--erp-muted); white-space:nowrap; }
+        .up-cell .v { font-size:2.4rem; font-weight:800; color:var(--erp-text);
+            font-family:'Consolas','Courier New',monospace; line-height:1.15;
+            display:flex; align-items:baseline; gap:.28rem; }
+        .up-cell .v small { font-size:1rem; font-weight:600; color:var(--erp-muted); font-family:inherit; }
+        .up-op { font-size:1.7rem; font-weight:700; color:var(--erp-muted); align-self:center;
+            margin-top:1.15rem; font-family:'Consolas','Courier New',monospace; }
+        /* 應有稼動＝分母，是這條算式的小結，用藍框圈起來跟前面三項分層 */
+        .up-cell.total {
+            background:var(--erp-blue-pale); border:1px solid #BBDEFB;
+            border-radius:var(--radius-sm); padding:.4rem .8rem;
+        }
+        .up-cell.total .k { color:var(--erp-blue-mid); }
+        .up-cell.total .v { color:var(--erp-blue-dark); }
+        .up-cell.down .v { color:var(--danger); }
+        .up-cell.down .k { color:#A8564E; }
+
+        .up-bar { height:9px; border-radius:5px; background:var(--erp-border); overflow:hidden; min-width:80px; }
+        .up-bar i { display:block; height:100%; background:var(--danger); border-radius:5px; }
+        td.up-spec { font-size:.92rem; color:var(--erp-text-muted); white-space:nowrap; }
+
+        /* ══ 編碼原則樹 ══ */
+        /* ══ 編碼原則樹：每個群組一張卡片，標題色沿用 .grp-badge 同一套色票，
+           跟設備清單表格裡的群組徽章對得起來，方便在兩頁之間對照 ══ */
+        .tree-wrap { flex:1; overflow:auto; padding:1rem 1.2rem 2rem; background:var(--erp-bg); }
+        .tree-inner { max-width:920px; margin:0 auto; display:flex; flex-direction:column; gap:.9rem; }
+
+        .tree-g { background:var(--erp-surface); border:1px solid var(--erp-border);
+            border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow-sm); }
+        .tree-g > .hd { display:flex; align-items:center; gap:.7rem; padding:.8rem 1.1rem; font-size:1.25rem; font-weight:800; }
+        .tree-g > .hd .g-code { display:inline-flex; align-items:center; justify-content:center;
+            width:32px; height:32px; border-radius:8px; font-size:1.1rem; font-weight:800;
+            background:rgba(255,255,255,.55); flex-shrink:0; }
+        .tree-g > .hd .g-name { flex:1; }
+        .tree-g > .hd .g-cnt { font-size:.92rem; font-weight:700; padding:.2rem .7rem;
+            border-radius:10px; background:rgba(255,255,255,.6); white-space:nowrap; }
+        .tree-g.tg-A > .hd { background:#E3F2FD; color:#1565C0; }
+        .tree-g.tg-B > .hd { background:#E8F5E9; color:#2E7D32; }
+        .tree-g.tg-C > .hd { background:#FFF3E0; color:#E65100; }
+        .tree-g.tg-D > .hd { background:#F3E5F5; color:#6A1B9A; }
+        .tree-g.tg-E > .hd { background:#E0F7FA; color:#00838F; }
+        .tree-g.tg-F > .hd { background:#FCE4EC; color:#AD1457; }
+        .tree-g.tg-G > .hd { background:#FFF8E1; color:#F57F17; }
+        .tree-g.tg-H > .hd { background:#EFEBE9; color:#4E342E; }
+        .tree-g.tg-I > .hd { background:#E8EAF6; color:#283593; }
+        .tree-g.tg-M > .hd { background:#E0F2F1; color:#00695C; }
+        .tree-g.tg-O > .hd { background:#ECEFF1; color:#455A64; }
+
+        .tree-t { border-top:1px solid var(--erp-border); }
+        .tree-t:first-of-type { border-top:none; }
+        .tree-t > .hd { display:flex; align-items:baseline; gap:.6rem; padding:.7rem 1.1rem .4rem;
+            font-size:1.08rem; font-weight:700; color:var(--erp-text); }
+        .tree-t > .hd .t-cnt { font-size:.88rem; font-weight:700; color:var(--erp-muted); }
+
+        .tree-a { display:grid; grid-template-columns:104px 1fr auto auto; align-items:center;
+            gap:.7rem; padding:.42rem 1.1rem .42rem 2.4rem; border-radius:5px; }
+        .tree-a:hover { background:var(--erp-surface-2); }
+        .tree-a .c { font-family:'Consolas','Courier New',monospace; font-weight:700; font-size:.92rem;
+            color:var(--erp-blue-dark); background:var(--erp-blue-pale); padding:.16rem .45rem;
+            border-radius:4px; text-align:center; white-space:nowrap; }
+        .tree-a .n { font-size:1rem; color:var(--erp-text); }
+        .tree-a .cnt { font-size:.9rem; font-weight:700; color:var(--erp-blue-dark);
+            background:var(--erp-blue-light); padding:.12rem .6rem; border-radius:10px;
+            text-align:center; min-width:2em; white-space:nowrap; }
+        .tree-a .next { font-size:.86rem; color:var(--erp-muted); white-space:nowrap; }
+
+        /* ══ 右側設備詳情抽屜 ══ */
+        #drawerMask { position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:900; display:none; }
+        #drawer {
+            position:fixed; top:0; right:0; height:100vh; width:760px; max-width:95vw; z-index:901;
+            background:var(--erp-surface); box-shadow:-6px 0 24px rgba(0,0,0,.18);
+            transform:translateX(100%); transition:transform .22s ease; display:flex; flex-direction:column;
+        }
+        #drawer.open { transform:translateX(0); }
+        .dw-head { background:linear-gradient(95deg, var(--erp-blue-mid), var(--erp-blue-dark)); color:#fff; padding:.9rem 1.1rem; flex-shrink:0; position:relative; }
+        .dw-code { font-size:1.65rem; font-weight:800; font-family:'Consolas','Courier New',monospace; letter-spacing:.02em; }
+        .dw-sub { font-size:1rem; opacity:.92; margin-top:.2rem; }
+        .dw-close { position:absolute; top:.7rem; right:.9rem; background:transparent; border:none; color:#fff; font-size:1.7rem; line-height:1; cursor:pointer; opacity:.85; }
+        .dw-close:hover { opacity:1; }
+        .dw-tools { display:flex; gap:.4rem; padding:.55rem 1.1rem; border-bottom:1px solid var(--erp-border); background:var(--erp-surface-2); flex-shrink:0; }
+        .dw-tools .btn { font-size:.88rem; }
+        .dw-body { flex:1; overflow-y:auto; padding:1rem 1.1rem 2rem; }
+        .dw-sect { margin-bottom:1.3rem; }
+        .dw-sect h6 { font-size:1.05rem; font-weight:800; color:var(--erp-blue-dark);
+            border-bottom:2px solid var(--erp-blue-light); padding-bottom:.35rem; margin-bottom:.6rem;
+            display:flex; align-items:center; gap:.5rem; }
+        .dw-sect h6 .btn { font-size:.76rem; padding:.1rem .5rem; margin-left:auto; font-weight:600; }
+        .dw-grid { display:grid; grid-template-columns:auto 1fr; gap:.45rem 3.5rem; font-size:1rem; }
+        .dw-grid dt { color:var(--erp-text-muted); font-weight:500; white-space:nowrap; }
+        .dw-grid dd { margin:0; color:var(--erp-text); word-break:break-all; font-weight:500; }
+        .dw-photos { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:.6rem; }
+        .dw-photos img { width:100%; height:132px; object-fit:cover; border-radius:6px; border:1px solid var(--erp-border); cursor:zoom-in; }
+        .dw-file { display:flex; align-items:center; gap:.4rem; padding:.35rem .5rem; border-radius:5px;
+            font-size:.95rem; color:var(--erp-blue-dark); text-decoration:none; }
+        .dw-file:hover { background:var(--erp-blue-pale); }
+        .dw-file .sz { margin-left:auto; font-size:.82rem; color:var(--erp-text-muted); white-space:nowrap; }
+        .dw-hist { font-size:.95rem; padding:.4rem 0; border-bottom:1px dashed var(--erp-border);
+            display:flex; gap:.6rem; align-items:baseline; }
+        .dw-hist .d { color:var(--erp-text-muted); white-space:nowrap; font-family:'Consolas',monospace; font-size:.88rem; }
+        /* 動作徽章基底樣式：抽成獨立 class，異動歷程頁的表格跟抽屜裡的清單共用同一套 .hact-* 配色 */
+        .act-badge { display:inline-block; padding:.05rem .4rem; border-radius:4px; font-size:.8rem; font-weight:700; white-space:nowrap; }
+        .dw-hist .a { flex-shrink:0; padding:.05rem .4rem; border-radius:4px; font-size:.8rem; font-weight:700; white-space:nowrap; }
+        .hact-移轉      { background:#F3E5F5; color:#6A1B9A; }
+        .hact-狀態變更  { background:var(--warning-bg); color:var(--warning); }
+        .hact-報廢      { background:var(--danger-bg); color:var(--danger); }
+        .hact-新增      { background:var(--success-bg); color:var(--success); }
+        .hact-重新編碼  { background:#E8EAF6; color:#283593; }
+        .hact-資料修改  { background:#ECEFF1; color:#455A64; }
+        .hact-保養      { background:#E0F7FA; color:#00838F; }
+        .hact-維修      { background:#FFF3E0; color:#E65100; }
+        .hact-轉賣      { background:#E1F5FE; color:#0277BD; }
+        .hact-其他      { background:#ECEFF1; color:#455A64; }
+        .dw-hist .t { flex:1; }
+        .dw-hist .by { font-size:.74rem; color:var(--erp-muted); white-space:nowrap; }
+        .dw-hist .edit-btn { flex-shrink:0; border:none; background:transparent; cursor:pointer;
+            font-size:.82rem; opacity:.4; padding:.1rem .25rem; border-radius:4px; line-height:1; }
+        .dw-hist:hover .edit-btn { opacity:.85; }
+        .dw-hist .edit-btn:hover { opacity:1; background:var(--erp-blue-pale); }
+        .hist-form .r1 select.wide { width:150px; }
+        .hist-form .r3 { display:flex; gap:.4rem; justify-content:flex-end; margin-top:.4rem; }
+        .hist-form .hint { font-size:.72rem; color:var(--erp-muted); margin:-.2rem 0 .4rem; }
+        .dw-repair { font-size:.95rem; padding:.4rem 0; border-bottom:1px dashed var(--erp-border);
+            display:grid; grid-template-columns:84px 1fr 74px 80px; gap:.6rem; align-items:baseline; }
+        .dw-repair .d { color:var(--erp-text-muted); white-space:nowrap; font-family:'Consolas',monospace; font-size:.88rem; }
+        .dw-repair .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .dw-repair .t[data-remark] { cursor:help; text-decoration:underline dotted var(--erp-muted); text-underline-offset:3px; }
+        .dw-repair .v { color:var(--erp-text-muted); font-size:.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .dw-repair .amt { font-weight:700; white-space:nowrap; text-align:right; }
+        .dw-more { padding:.5rem 0 0; }
+        .dw-more a { font-size:.86rem; color:var(--erp-blue-mid); text-decoration:none; font-weight:600; }
+        .dw-more a:hover { text-decoration:underline; }
+        .dw-empty { color:var(--erp-muted); font-size:.92rem; padding:.3rem 0; }
+        .dw-fix { background:var(--danger-bg); border-left:4px solid var(--danger); color:#8E1A1A;
+            padding:.6rem .8rem; border-radius:4px; font-size:.92rem; margin-bottom:.9rem; line-height:1.6; }
+        /* 手動補歷程的小表單 */
+        .hist-form { background:var(--erp-surface-2); border:1px solid var(--erp-border);
+            border-radius:6px; padding:.6rem .7rem; margin-bottom:.6rem; display:none; }
+        .hist-form.open { display:block; }
+        .hist-form .r1 { display:flex; gap:.4rem; margin-bottom:.4rem; }
+        .hist-form input, .hist-form select {
+            font-size:.9rem; padding:.3rem .5rem; border:1px solid var(--erp-border-dark); border-radius:4px;
+        }
+        .hist-form .r1 input[type=date] { width:145px; }
+        .hist-form .r1 select { width:110px; }
+        .hist-form .r2 { display:flex; gap:.4rem; }
+        .hist-form .r2 input { flex:1; }
+        .hist-form .btn { font-size:.85rem; }
+
+        #lightbox { position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:1000; display:none;
+            align-items:center; justify-content:center; cursor:zoom-out; }
+        #lightbox img { max-width:94vw; max-height:94vh; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">加工部查詢系統PDS</div>
+    <div class="header-tabs">
+      <a href="/"           class="header-tab">製令查詢</a>
+      <a href="/production" class="header-tab">生產中製令</a>
+      <a href="/equipment"  class="header-tab">設備稼動</a>
+      <span                 class="header-tab active">設備管理</span>
+      <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
+      <a href="/routing"    class="header-tab">產品途程查詢</a>
+      <a href="/batch_cost" class="header-tab">批成本</a>
+      <a href="/cnc_program" class="header-tab">程式管理</a>
+      <a href="/zumen" class="header-tab header-tab-zumen">ZUMEN</a>
+      <a href="/management" class="header-tab header-tab-mgmt">管理</a>
+    </div>
+    <span class="header-logo">MAXCLAW</span>
+  </div>
+</div>
+
+<div class="page-layout">
+
+<div class="page-sub-nav">
+  <div class="nav-group">
+    <div class="nav-group-header">
+      <span class="nav-group-icon g-data">📁</span>
+      <span class="nav-group-label">設備資料</span>
+    </div>
+    <span class="page-sub-tab active" onclick="switchSubPage('list')"><span class="tab-icon">📋</span>設備清單</span>
+    <span class="page-sub-tab" onclick="switchSubPage('new')"><span class="tab-icon" style="font-weight:800">＋</span>新增設備</span>
+    <span class="page-sub-tab" onclick="switchSubPage('tree')"><span class="tab-icon">🌳</span>編碼原則</span>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-header">
+      <span class="nav-group-icon g-hist">📁</span>
+      <span class="nav-group-label">歷程記錄</span>
+    </div>
+    <span class="page-sub-tab" onclick="switchSubPage('repair')"><span class="tab-icon">🔧</span>維修記錄</span>
+    <span class="page-sub-tab" onclick="switchSubPage('uptime')"><span class="tab-icon">📊</span>妥善率</span>
+    <span class="page-sub-tab" onclick="switchSubPage('history')"><span class="tab-icon">🕒</span>異動歷程</span>
+  </div>
+</div>
+
+<div class="page-body">
+
+  <!-- ══ 設備清單 ══ -->
+  <div id="sub-page-list" class="sub-page">
+    <div class="toolbar">
+      <input type="text" id="searchInput" class="form-control"
+             placeholder="編碼/舊編號/類型/屬性/廠商/型號/規格關鍵字，空格=AND，-前綴=排除（留空＝全部）">
+      <button class="btn btn-primary" id="btnSearch">🔍 搜尋</button>
+      <button class="btn btn-outline-secondary" id="btnClear">清除條件</button>
+      <span class="spacer"></span>
+      <span id="fixWarn" style="display:none"></span>
+      <span id="resultCount"></span>
+    </div>
+
+    <div class="filter-bar">
+      <span class="filter-label">群組</span>
+      <select id="fltGroup" onchange="applyFilters()" style="min-width:170px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">保管位置</span>
+      <select id="fltLoc" onchange="applyFilters()" style="min-width:110px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">狀態</span>
+      <select id="fltStatus" onchange="applyFilters()" style="min-width:110px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">編碼</span>
+      <select id="fltFix" onchange="applyFilters()" style="min-width:110px">
+        <option value="">全部</option>
+        <option value="1">僅待修正</option>
+        <option value="0">僅正常</option>
+      </select>
+      <button class="btn btn-outline-secondary" onclick="clearFilters()">清除篩選</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="eq-table">
+        <thead>
+          <tr>
+            <th style="width:52px"></th>
+            <th style="width:96px">PDM編碼</th>
+            <th style="width:62px">群組</th>
+            <th style="width:150px">機台類型</th>
+            <th style="min-width:130px">加工屬性</th>
+            <th style="width:86px">舊編號</th>
+            <th style="width:150px">廠商</th>
+            <th style="width:180px">型號</th>
+            <th style="width:92px">採購日</th>
+            <th style="width:70px">保管</th>
+            <th style="width:70px">狀態</th>
+            <th style="width:44px">照片</th>
+            <th style="width:44px">技資</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div id="loadingMsg">載入中…</div>
+      <div id="emptyMsg" style="display:none">沒有符合條件的設備</div>
+    </div>
+  </div>
+
+  <!-- ══ 新增／編輯設備 ══ -->
+  <div id="sub-page-new" class="sub-page" style="display:none">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+      <div class="card-header" id="formTitle">➕ 新增設備</div>
+      <div class="form-scroll">
+        <div class="form-inner">
+
+          <div class="form-sect">
+            <h6>編碼<span class="sect-sub">選好三層分類，系統自動配號；流水號可以手動改</span>
+              <button id="btnCodeLock" class="code-lock-btn" onclick="toggleCodeLock()" style="display:none">🔒 編碼鎖定・點此解鎖</button>
+            </h6>
+            <div class="form-row">
+              <div class="fld">
+                <label>群組分類 <span class="req">*</span></label>
+                <div class="new-inline">
+                  <select id="f-group" onchange="onGroupChange()"></select>
+                  <button class="btn-add" onclick="addNewGroup()" title="新增群組分類">＋</button>
+                </div>
+              </div>
+              <div class="fld">
+                <label>機台類型 <span class="req">*</span></label>
+                <div class="new-inline">
+                  <select id="f-type" onchange="onTypeChange()"></select>
+                  <button class="btn-add" onclick="addNewType()" title="新增機台類型">＋</button>
+                </div>
+              </div>
+              <div class="fld">
+                <label>加工屬性 <span class="req">*</span></label>
+                <div class="new-inline">
+                  <select id="f-attr" onchange="onAttrChange()"></select>
+                  <button class="btn-add" onclick="addNewAttr()" title="新增加工屬性">＋</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="code-anatomy">
+              <span class="ca-label">PDM 編碼</span>
+              <div class="ca-body">
+                <div class="ca-strip" id="codePreview">
+                  <div class="ca-seg"><span class="ca-val is-empty" id="segGroup">—</span><span class="ca-cap">群組</span></div>
+                  <div class="ca-seg"><span class="ca-val is-empty" id="segType">—</span><span class="ca-cap">機台類型</span></div>
+                  <span class="ca-dash">-</span>
+                  <div class="ca-seg"><span class="ca-val is-empty" id="segAttr">—</span><span class="ca-cap">加工屬性</span></div>
+                  <div class="ca-seg ca-seg-edit">
+                    <input type="text" id="f-seq" maxlength="2" oninput="onSeqEdit()">
+                    <span class="ca-cap">流水號 · 可改</span>
+                  </div>
+                </div>
+                <div class="ca-note" id="codeSide"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-sect">
+            <h6>基本資料<span class="sect-sub">這台機器的來歷與目前狀況</span></h6>
+            <div class="form-row">
+              <div class="fld"><label>舊設備編號</label><input type="text" id="f-old" placeholder="例如 綜銑21"></div>
+              <div class="fld"><label>廠商</label><input type="text" id="f-vendor" placeholder="例如 高鋒"></div>
+              <div class="fld"><label>型號</label><input type="text" id="f-model" placeholder="例如 VMC11600"></div>
+              <div class="fld"><label>採購時間</label><input type="date" id="f-buy"></div>
+              <div class="fld">
+                <label>保管位置</label>
+                <select id="f-loc">
+                  <option value="加工">加工</option><option value="詠設">詠設</option>
+                  <option value="成品">成品</option><option value="生技">生技</option>
+                </select>
+              </div>
+              <div class="fld">
+                <label>狀態</label>
+                <select id="f-status">
+                  <option value="在用">在用</option><option value="閒置">閒置</option>
+                  <option value="轉賣">轉賣</option><option value="已售出">已售出</option>
+                  <option value="報廢">報廢</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row" style="margin-top:.8rem">
+              <div class="fld" style="grid-column:1/-1">
+                <label>說明／備註</label>
+                <textarea id="f-note" rows="2" placeholder="例如：搭配自動研磨機、閒置中、2025/1/18 移至詠設"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-sect">
+            <h6>規格<span class="sect-sub">依機型自由增列，例如 床台／1150mm、刀庫／30把、X/Y/Z／36/36/30</span></h6>
+            <div class="spec-box">
+              <div class="spec-head"><span>項目</span><span>內容</span><span></span></div>
+              <div id="specRows"></div>
+            </div>
+            <button class="btn btn-sm btn-outline-primary" style="margin-top:.7rem" onclick="addSpecRow()">＋ 新增一列規格</button>
+          </div>
+
+        </div>
+      </div>
+      <div class="form-footer">
+        <div class="footer-inner">
+          <button class="btn btn-primary" id="btnSave" onclick="saveEquipment()">💾 儲存</button>
+          <button class="btn btn-outline-secondary" onclick="resetForm()">重設</button>
+          <span class="form-msg" id="formMsg"></span>
+          <span class="footer-spacer"></span>
+          <button class="btn btn-outline-danger" id="btnScrap" style="display:none" onclick="scrapEquipment()">🗑 標記報廢</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 編碼原則 ══ -->
+  <div id="sub-page-tree" class="sub-page" style="display:none">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+      <div class="card-header">🌳 編碼原則（群組 ▸ 機台類型 ▸ 加工屬性）</div>
+      <div class="tree-wrap" id="treeWrap"></div>
+    </div>
+  </div>
+
+  <!-- ══ 異動歷程 ══ -->
+  <div id="sub-page-history" class="sub-page" style="display:none">
+    <div class="toolbar">
+      <input type="text" id="histSearchInput" class="form-control"
+             placeholder="設備編碼/動作/內容關鍵字，空格=AND，-前綴=排除（留空＝全部）">
+      <button class="btn btn-primary" id="btnHistSearch">🔍 搜尋</button>
+      <button class="btn btn-outline-secondary" id="btnHistClear">清除條件</button>
+      <button class="btn btn-outline-secondary" id="btnExportHist" title="把全部設備的異動歷程匯出成獨立的 設備歷程.xlsx">📤 匯出歷程到Excel</button>
+      <span class="spacer"></span>
+      <span id="histResultCount"></span>
+    </div>
+
+    <div class="filter-bar">
+      <span class="filter-label">動作</span>
+      <select id="histFltAction" onchange="renderHistoryList()" style="min-width:110px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">來源</span>
+      <select id="histFltUser" onchange="renderHistoryList()" style="min-width:110px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">群組</span>
+      <select id="histFltGroup" onchange="renderHistoryList()" style="min-width:150px"></select>
+      <button class="btn btn-outline-secondary" onclick="clearHistoryFilters()">清除篩選</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="eq-table">
+        <thead>
+          <tr>
+            <th style="width:100px">日期</th>
+            <th style="width:100px">設備編碼</th>
+            <th style="width:62px">群組</th>
+            <th style="width:100px">動作</th>
+            <th>內容</th>
+            <th style="width:84px">來源</th>
+          </tr>
+        </thead>
+        <tbody id="histTbody"></tbody>
+      </table>
+      <div id="histLoadingMsg">載入中…</div>
+      <div id="histEmptyMsg" style="display:none">沒有符合條件的歷程記錄</div>
+    </div>
+  </div>
+
+  <!-- ══ 維修記錄（來源：採購登入表 Google 試算表）══ -->
+  <div id="sub-page-repair" class="sub-page" style="display:none">
+    <div class="toolbar">
+      <input type="text" id="repSearchInput" class="form-control"
+             placeholder="設備編碼/品名/廠商/會計科目關鍵字，空格=AND，-前綴=排除（留空＝全部）">
+      <button class="btn btn-primary" id="btnRepSearch">🔍 搜尋</button>
+      <button class="btn btn-outline-secondary" id="btnRepClear">清除條件</button>
+      <span class="spacer"></span>
+      <span id="repTotalCost"></span>
+      <span id="repResultCount"></span>
+    </div>
+
+    <div class="filter-bar">
+      <span class="filter-label">設備</span>
+      <select id="repFltCode" onchange="renderRepairList()" style="min-width:150px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">群組</span>
+      <select id="repFltGroup" onchange="renderRepairList()" style="min-width:110px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">廠商</span>
+      <select id="repFltVendor" onchange="renderRepairList()" style="min-width:130px"></select>
+      <button class="btn btn-outline-secondary" onclick="clearRepairFilters()">清除篩選</button>
+      <span class="spacer"></span>
+      <span class="hint">來源：採購登入表（分類=維修 或 會計科目=修繕保養）；只列對應得到設備的，已售出／報廢設備不列</span>
+    </div>
+
+    <div class="table-wrap">
+      <table class="eq-table">
+        <thead>
+          <tr>
+            <th style="width:100px">日期</th>
+            <th style="width:100px">設備編碼</th>
+            <th style="width:62px">群組</th>
+            <th style="min-width:200px">維修項目</th>
+            <th style="width:150px">規格/說明</th>
+            <th style="width:110px">廠商</th>
+            <th style="width:96px">金額</th>
+            <th style="width:92px" title="這台機器因為這次維修停了幾小時，直接填數字即可">停機(小時)</th>
+            <th style="min-width:220px">備註</th>
+          </tr>
+        </thead>
+        <tbody id="repTbody"></tbody>
+      </table>
+      <div id="repLoadingMsg">載入中…</div>
+      <div id="repEmptyMsg" style="display:none">沒有符合條件的維修記錄</div>
+    </div>
+  </div>
+
+  <!-- ══ 妥善率（停機時數來自維修記錄頁登記的資料）══ -->
+  <div id="sub-page-uptime" class="sub-page" style="display:none">
+    <div class="filter-bar">
+      <span class="filter-label">群組</span>
+      <select id="upFltGroup" onchange="loadUptime()" style="min-width:170px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">保管位置</span>
+      <select id="upFltLoc" onchange="loadUptime()" style="min-width:110px">
+        <option value="加工">加工</option>
+        <option value="詠設">詠設</option>
+        <option value="成品">成品</option>
+        <option value="生技">生技</option>
+        <option value="">全部位置</option>
+      </select>
+      <span class="sep"></span>
+      <span class="filter-label">期間</span>
+      <button class="btn btn-outline-secondary up-step" onclick="shiftUptimeMonth(-1)" title="往前一個月">◀</button>
+      <input type="date" id="upStart" onchange="loadUptime()">
+      <span style="color:var(--erp-muted)">～</span>
+      <input type="date" id="upEnd" onchange="loadUptime()">
+      <button class="btn btn-outline-secondary up-step" onclick="shiftUptimeMonth(1)" title="往後一個月">▶</button>
+      <button class="btn btn-outline-secondary" onclick="setUptimeRange('month')">本月</button>
+      <button class="btn btn-outline-secondary" onclick="setUptimeRange('year')">今年</button>
+      <span class="sep"></span>
+      <span class="filter-label">每日工時</span>
+      <input type="number" id="upHours" value="8" min="1" step="1" style="width:64px" onchange="loadUptime()">
+      <span class="spacer"></span>
+      <span class="hint">工作天依「管理 ▸ 行事曆」設定（未設定＝週一～週五）；保管位置的台數與停機一起排除</span>
+    </div>
+
+    <div class="up-scroll">
+      <div class="up-hero" id="upHero"></div>
+      <div class="card" style="margin-top:.9rem">
+        <div class="card-header">停機明細（依停機時數排序）</div>
+        <div class="table-wrap" style="flex:none;max-height:none;border:none;border-radius:0">
+          <table class="eq-table">
+            <thead>
+              <tr>
+                <th style="width:120px">設備編碼</th>
+                <th style="width:210px">規格／說明</th>
+                <th style="width:110px">停機時數</th>
+                <th style="width:120px">個別妥善率</th>
+                <th>相對於全期應有稼動時數</th>
+              </tr>
+            </thead>
+            <tbody id="upTbody"></tbody>
+          </table>
+          <div id="upEmptyMsg" style="display:none;padding:1.2rem;color:var(--erp-muted)">
+            這段期間沒有登記任何停機時數。到「🔧 維修記錄」把每筆維修的停機小時數填上，這裡就會自動算。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<div id="drawerMask"></div>
+<div id="drawer">
+  <div class="dw-head">
+    <button class="dw-close" id="dwClose">&times;</button>
+    <div class="dw-code" id="dwCode"></div>
+    <div class="dw-sub" id="dwSub"></div>
+  </div>
+  <div class="dw-tools">
+    <button class="btn btn-sm btn-primary" id="dwEdit">✏️ 編輯這台設備</button>
+  </div>
+  <div class="dw-body" id="dwBody"></div>
+</div>
+
+<div id="lightbox"><img id="lightboxImg" alt=""></div>
+
+<script src="/static/vendor/bootstrap.bundle.min.js"></script>
+<script>
+let ALL = [];                                   // 搜尋在後端做，群組/位置/狀態篩選在前端做
+let FILTER = { group:'', loc:'', status:'', fix:'' };   // 值都對應篩選列的下拉選單
+let DICT = { groups:[], types:[], attrs:[] };   // 編碼字典
+let EDITING = null;                             // null = 新增模式，否則是正在編輯的原始編碼
+let CUR_HISTORY = [];                           // 目前抽屜開著那台設備的歷程（編輯記錄用，避免多打一次 API）
+let ALL_HIST = [];                              // 異動歷程頁：跨設備全部歷程（動作/來源/群組篩選在前端做）
+let ALL_REPAIR = [];                            // 維修記錄頁：來自採購登入表、已對應到設備的維修支出
+
+const esc = s => (s ?? '').toString()
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const $ = id => document.getElementById(id);
+
+function fmtSize(n) {
+    if (!n && n !== 0) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n/1024).toFixed(0) + ' KB';
+    return (n/1048576).toFixed(1) + ' MB';
+}
+
+// ── 子頁切換 ──
+function switchSubPage(name) {
+    ['list','new','tree','history','repair','uptime'].forEach(n => $('sub-page-' + n).style.display = (n === name ? 'flex' : 'none'));
+    document.querySelectorAll('.page-sub-tab').forEach(el => {
+        el.classList.toggle('active', el.getAttribute('onclick').includes(`'${name}'`));
+    });
+    if (name === 'tree') renderTree();
+    if (name === 'new' && !EDITING) refreshCode();
+    if (name === 'history' && !ALL_HIST.length) loadHistoryList();
+    if (name === 'repair' && !ALL_REPAIR.length) loadRepairList();
+    if (name === 'uptime') initUptime();
+}
+
+// ══════════ 設備清單 ══════════
+// 徽章單擊＝設定對應下拉選單的值、雙擊＝清空（docs/badge-filter-convention.md）
+function filterByGroup(v)  { $('fltGroup').value  = v; applyFilters(); }
+function filterByLoc(v)    { $('fltLoc').value    = v; applyFilters(); }
+function filterByStatus(v) { $('fltStatus').value = v; applyFilters(); }
+
+function applyFilters() {
+    FILTER.group  = $('fltGroup').value;
+    FILTER.loc    = $('fltLoc').value;
+    FILTER.status = $('fltStatus').value;
+    FILTER.fix    = $('fltFix').value;
+    render();
+}
+
+function clearFilters() {
+    ['fltGroup','fltLoc','fltStatus','fltFix'].forEach(id => $(id).value = '');
+    applyFilters();
+}
+
+async function loadStats() {
+    const json = await (await fetch('/api/equipment_master/stats')).json();
+    if (!json.success) return;
+    const total = json.groups.reduce((s, g) => s + g.cnt, 0);
+    const opt = (v, label, cnt) => `<option value="${esc(v)}">${esc(label)}（${cnt}）</option>`;
+
+    // 重填選單時保留使用者目前選的值（loadStats 在存檔後會重跑）
+    const keep = {g:$('fltGroup').value, l:$('fltLoc').value, s:$('fltStatus').value};
+    $('fltGroup').innerHTML = `<option value="">全部群組（${total}）</option>` +
+        json.groups.map(g => opt(g.code, `${g.code} ${g.name}`, g.cnt)).join('');
+    $('fltLoc').innerHTML = `<option value="">全部（${total}）</option>` +
+        json.locations.map(l => opt(l.name, l.name, l.cnt)).join('');
+    $('fltStatus').innerHTML = `<option value="">全部（${total}）</option>` +
+        json.statuses.map(s => opt(s.name, s.name, s.cnt)).join('');
+    $('fltGroup').value = keep.g; $('fltLoc').value = keep.l; $('fltStatus').value = keep.s;
+
+    const warn = $('fixWarn');
+    if (json.needs_fix > 0) {
+        warn.textContent = `⚠ ${json.needs_fix} 台編碼待修正`;
+        warn.style.display = '';
+        warn.onclick = () => { $('fltFix').value = ($('fltFix').value === '1') ? '' : '1'; applyFilters(); };
+    } else {
+        warn.style.display = 'none';
+    }
+}
+
+async function doSearch() {
+    $('loadingMsg').style.display = '';
+    $('emptyMsg').style.display = 'none';
+    const q = $('searchInput').value.trim();
+    try {
+        const json = await (await fetch('/api/equipment_master/search?q=' + encodeURIComponent(q))).json();
+        if (!json.success) { alert(json.error); ALL = []; } else ALL = json.data;
+    } catch (e) { alert('查詢失敗：' + e); ALL = []; }
+    $('loadingMsg').style.display = 'none';
+    render();
+}
+
+function render() {
+    const rows = ALL.filter(r =>
+        (!FILTER.group  || r.group_code === FILTER.group) &&
+        (!FILTER.loc    || r.location   === FILTER.loc) &&
+        (!FILTER.status || r.status     === FILTER.status) &&
+        (FILTER.fix === '' || String(r.needs_fix) === FILTER.fix));
+
+    // 有篩選條件的選單加上高亮，一眼看得出目前被什麼條件卡住
+    [['fltGroup', FILTER.group], ['fltLoc', FILTER.loc],
+     ['fltStatus', FILTER.status], ['fltFix', FILTER.fix]]
+        .forEach(([id, v]) => $(id).classList.toggle('on', !!v));
+
+    $('resultCount').textContent =
+        `共 ${rows.length} 台` + (rows.length !== ALL.length ? `（全部 ${ALL.length} 台）` : '');
+    $('emptyMsg').style.display = rows.length ? 'none' : '';
+
+    $('tbody').innerHTML = rows.map(r => {
+        const thumb = r.cover
+            ? `<img loading="lazy" src="/api/equipment_master/photo?relpath=${encodeURIComponent(r.cover)}" alt="">`
+            : `<div class="no-photo">📷</div>`;
+        const fix = r.needs_fix ? `<span class="fix-flag" title="${esc(r.fix_reason)}">⚠</span>` : '';
+        const man = r.source === 'manual' ? `<span class="src-manual" title="系統內新增或修改過，重新匯入 Excel 不會覆蓋">改</span>` : '';
+        return `<tr data-code="${esc(r.code)}">
+          <td class="eq-thumb">${thumb}</td>
+          <td class="eq-code">${esc(r.code)}${fix}${man}</td>
+          <td><span class="grp-badge grp-${esc(r.group_code)}" data-f="group" data-v="${esc(r.group_code)}"
+                    title="單擊篩選／雙擊清除">${esc(r.group_code)}</span></td>
+          <td>${esc(r.type_name)}</td>
+          <td>${esc(r.attr_name)}</td>
+          <td class="eq-old">${esc(r.old_code)}</td>
+          <td class="eq-vendor">${esc(r.vendor)}</td>
+          <td class="eq-vendor">${esc(r.model)}</td>
+          <td class="eq-date">${esc(r.buy_date)}</td>
+          <td><span class="loc-badge loc-${esc(r.location)}" data-f="loc" data-v="${esc(r.location)}"
+                    title="單擊篩選／雙擊清除">${esc(r.location)}</span></td>
+          <td><span class="st-badge st-${esc(r.status)}" data-f="status" data-v="${esc(r.status)}"
+                    title="單擊篩選／雙擊清除">${esc(r.status)}</span></td>
+          <td class="eq-num">${r.photo_count || ''}</td>
+          <td class="eq-num">${r.tech_count || ''}</td>
+        </tr>`;
+    }).join('');
+
+    document.querySelectorAll('#tbody tr').forEach(tr => {
+        tr.addEventListener('click', () => openDrawer(tr.dataset.code, tr));
+    });
+    // 列本身有 onclick 會彈出詳情，徽章的事件要擋住冒泡
+    document.querySelectorAll('#tbody [data-f]').forEach(el => {
+        const fn = {group: filterByGroup, loc: filterByLoc, status: filterByStatus}[el.dataset.f];
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', e => { e.stopPropagation(); fn(el.dataset.v); });
+        el.addEventListener('dblclick', e => { e.stopPropagation(); fn(''); });
+    });
+}
+
+// ══════════ 詳情抽屜 ══════════
+async function openDrawer(code, tr) {
+    document.querySelectorAll('#tbody tr').forEach(x => x.classList.remove('selected'));
+    if (tr) tr.classList.add('selected');
+    $('drawerMask').style.display = 'block';
+    $('drawer').classList.add('open');
+    $('dwCode').textContent = code;
+    $('dwSub').textContent = '載入中…';
+    $('dwBody').innerHTML = '';
+    $('dwEdit').onclick = () => { closeDrawer(); startEdit(code); };
+
+    const [json, repJson] = await Promise.all([
+        fetch('/api/equipment_master/detail?code=' + encodeURIComponent(code)).then(r => r.json()),
+        fetch('/api/equipment_master/repair/list?q=' + encodeURIComponent(code)).then(r => r.json()).catch(() => ({success: false}))
+    ]);
+    if (!json.success) { $('dwSub').textContent = json.error; return; }
+    const d = json.data;
+    const repairs = repJson.success ? repJson.data.filter(r => r.code === code) : [];
+    $('dwSub').textContent = [d.group_name, d.type_name, d.attr_name].filter(Boolean).join(' ▸ ');
+
+    const info = [
+        ['群組分類', `${d.group_code} ${d.group_name || ''}`],
+        ['機台類型', `${d.type_code} ${d.type_name || ''}`],
+        ['加工屬性', `${d.attr_code} ${d.attr_name || ''}`],
+        ['舊設備編號', d.old_code],
+        ['廠商',     d.vendor],
+        ['型號',     d.model],
+        ['採購時間', d.buy_date],
+        ['保管位置', d.location, 'loc'],
+        ['狀態',     d.status, 'st'],
+        ['說明',     d.note],
+        ['資料來源', d.source === 'manual' ? '系統內新增/修改（重新匯入不會覆蓋）' : 'Excel 匯入'],
+        ['最後更新', d.updated_at],
+    ].filter(([, v]) => v);
+    // 保管位置／狀態改用跟設備清單表格同一套彩色徽章（.loc-badge/.st-badge），
+    // 一眼就能看出來，不用逐字讀文字；流水號已內含在編碼裡，這裡不重複顯示
+    const renderInfoVal = ([, v, badge]) => badge === 'loc' ? `<span class="loc-badge loc-${esc(v)}">${esc(v)}</span>`
+        : badge === 'st' ? `<span class="st-badge st-${esc(v)}">${esc(v)}</span>`
+        : esc(v);
+
+    $('dwBody').innerHTML = `
+      ${d.needs_fix ? `<div class="dw-fix">⚠ 編碼待修正：${esc(d.fix_reason)}<br>
+          按上方「編輯這台設備」可直接改成正確編碼，相關照片與技術資料會一起搬過去。</div>` : ''}
+      <div class="dw-sect">
+        <h6>基本資料</h6>
+        <dl class="dw-grid">${info.map(row => `<dt>${esc(row[0])}</dt><dd>${renderInfoVal(row)}</dd>`).join('')}</dl>
+      </div>
+      <div class="dw-sect">
+        <h6>規格</h6>
+        ${d.specs.length
+          ? `<dl class="dw-grid">${d.specs.map(s =>
+                `<dt>${esc(s.spec_name)}</dt><dd>${esc(s.spec_value)}</dd>`).join('')}</dl>`
+          : `<div class="dw-empty">尚未登錄規格${d.remark ? '（原始備註：' + esc(d.remark) + '）' : ''}</div>`}
+      </div>
+      <div class="dw-sect">
+        <h6>設備照片（${d.photos.length}）
+          <button class="btn btn-sm btn-outline-secondary" id="btnUploadPhoto">📤 上傳照片</button>
+          <button class="btn btn-sm btn-outline-primary" id="btnZumeLink" disabled>🔗 查詢 ZUMEN…</button>
+        </h6>
+        <input type="file" id="photoUploadInput" accept="image/*" multiple style="display:none">
+        <div class="hint" style="margin-bottom:.4rem">複製圖片後可直接按 Ctrl+V 貼上（例如螢幕截圖、從 ZUMEN 複製的照片）</div>
+        <div class="form-msg" id="photoUploadMsg" style="margin-bottom:.4rem"></div>
+        ${d.photos.length
+          ? `<div class="dw-photos">${d.photos.map(p =>
+                `<img loading="lazy" src="/api/equipment_master/photo?relpath=${encodeURIComponent(p.relpath)}"
+                      alt="${esc(p.filename)}" title="${esc(p.filename)}">`).join('')}</div>`
+          : `<div class="dw-empty">尚無照片</div>`}
+      </div>
+      <div class="dw-sect">
+        <h6>技術資料（${d.tech_files.length}）</h6>
+        ${d.tech_files.length
+          ? d.tech_files.map(f =>
+                `<a class="dw-file" href="/api/equipment_master/tech_download?relpath=${encodeURIComponent(f.relpath)}">
+                   📄 ${esc(f.filename)}<span class="sz">${fmtSize(f.size)}</span></a>`).join('')
+          : `<div class="dw-empty">尚無技術資料檔案</div>`}
+      </div>
+      <div class="dw-sect">
+        <h6>維修記錄（${repairs.length}）</h6>
+        ${repairs.length
+          ? repairs.slice(0, 10).map(r => `
+              <div class="dw-repair">
+                <span class="d">${esc(r.date)}</span>
+                <span class="t"${r.remark ? ` data-remark="${esc(r.remark)}"` : ''}>${esc(r.name)}</span>
+                <span class="v">${esc(r.vendor)}</span>
+                <span class="amt">${fmtMoney(r.subtotal)}</span>
+              </div>`).join('') +
+            (repairs.length > 10
+              ? `<div class="dw-more"><a href="#" onclick="viewAllRepairs('${esc(code)}');return false;">查看全部 ${repairs.length} 筆 →</a></div>`
+              : '')
+          : `<div class="dw-empty">尚無維修記錄（來源：採購登入表）</div>`}
+      </div>
+      <div class="dw-sect">
+        <h6>異動歷程（${d.history.length}）
+          <button class="btn btn-sm btn-outline-primary" onclick="openHistForm()">＋ 補一筆記錄</button>
+        </h6>
+        <div class="hist-form" id="histForm">
+          <input type="hidden" id="hf-id">
+          <div class="r1">
+            <input type="date" id="hf-date" value="${todayStr()}">
+            <select id="hf-action" onchange="onHistActionChange()">
+              <option value="保養">保養</option><option value="維修">維修</option>
+              <option value="移轉">移轉</option><option value="轉賣">轉賣</option>
+              <option value="報廢">報廢</option><option value="狀態變更">狀態變更</option>
+              <option value="其他">其他</option>
+            </select>
+            <select id="hf-location" class="wide" style="display:none">
+              <option value="加工">加工</option><option value="詠設">詠設</option>
+              <option value="成品">成品</option><option value="生技">生技</option>
+            </select>
+            <select id="hf-status" class="wide" style="display:none">
+              <option value="在用">在用</option><option value="閒置">閒置</option>
+              <option value="轉賣">轉賣</option><option value="已售出">已售出</option>
+              <option value="報廢">報廢</option>
+            </select>
+          </div>
+          <div class="hint" id="hf-hint" style="display:none"></div>
+          <div class="r2">
+            <input type="text" id="hf-detail" placeholder="做了什麼？例如：更換主軸皮帶、年度保養完成（選填）">
+          </div>
+          <div class="r3">
+            <button class="btn btn-outline-danger btn-sm" id="hf-delete" style="display:none" onclick="deleteHistory('${esc(d.code)}')">刪除</button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="closeHistForm()">取消</button>
+            <button class="btn btn-primary btn-sm" onclick="saveHistory('${esc(d.code)}')">儲存</button>
+          </div>
+        </div>
+        ${d.history.length
+          ? d.history.map(h =>
+                `<div class="dw-hist">
+                   <span class="d">${esc(h.date || '—')}</span>
+                   <span class="a hact-${esc(h.action)}">${esc(h.action)}</span>
+                   <span class="t">${esc(h.detail)}</span>
+                   <span class="by">${h.user === 'user' ? '人工' : (h.user === 'excel' ? 'Excel' : '系統')}</span>
+                   <button class="edit-btn" title="編輯這筆記錄" onclick="startEditHistory('${esc(d.code)}', ${h.id})">✏️</button>
+                 </div>`).join('')
+          : `<div class="dw-empty">目前沒有異動記錄。改動「狀態」或「保管位置」並儲存後，系統會自動記在這裡。</div>`}
+      </div>`;
+    CUR_HISTORY = d.history;
+
+    document.querySelectorAll('.dw-photos img').forEach(img => {
+        img.addEventListener('click', () => {
+            $('lightboxImg').src = img.src;
+            $('lightbox').style.display = 'flex';
+        });
+    });
+
+    $('btnUploadPhoto').onclick = () => $('photoUploadInput').click();
+    $('photoUploadInput').onchange = e => uploadPhotos(code, e.target.files);
+
+    loadZumeLink(code);
+}
+
+async function uploadPhotos(code, fileList) {
+    if (!fileList || !fileList.length) return;
+    const btn = $('btnUploadPhoto');
+    const msg = $('photoUploadMsg');
+    const fd = new FormData();
+    fd.append('code', code);
+    [...fileList].forEach(f => fd.append('files', f));
+
+    btn.disabled = true;
+    btn.textContent = '📤 上傳中…';
+    msg.className = 'form-msg';
+    msg.textContent = '';
+    try {
+        const j = await (await fetch('/api/equipment_master/photo/upload', {method: 'POST', body: fd})).json();
+        if ($('dwCode').textContent !== code) return;   // 上傳期間使用者已經切去看別台設備
+        if (!j.success) {
+            msg.className = 'form-msg err';
+            msg.textContent = '❌ ' + j.error;
+            btn.disabled = false;
+            btn.textContent = '📤 上傳照片';
+            return;
+        }
+        await loadStats();
+        await doSearch();
+        await openDrawer(code, document.querySelector(`#tbody tr[data-code="${code}"]`));  // 重新整理才看得到新照片
+        const freshMsg = $('photoUploadMsg');   // openDrawer 整段 dwBody 重畫過，剛剛的 msg 元素已經沒了，要重抓
+        if (freshMsg) { freshMsg.className = 'form-msg ok'; freshMsg.textContent = '✅ ' + j.message; }
+    } catch (e) {
+        if ($('dwCode').textContent === code) {
+            msg.className = 'form-msg err';
+            msg.textContent = '❌ 上傳失敗：' + e;
+            btn.disabled = false;
+            btn.textContent = '📤 上傳照片';
+        }
+    } finally {
+        $('photoUploadInput').value = '';   // 清掉選檔記錄，同一批檔案要能重新選取上傳
+    }
+}
+
+// ZUMEN（zume-n.com）是第三方系統，唯讀整合：以設備編碼當圖號去查 zume_drawings.db
+// 裡既有的對照表（/api/zume/lookup，管理頁「ZUMEN 圖面」既有功能）。查到就直接連過去；
+// 查不到也不會死路，後端會退而給 ZUMEN 站內搜尋連結。這裡完全沒有另存照片，
+// 只是給一個連結，見使用者要求「以 ZUMEN 為主」的討論。
+async function loadZumeLink(code) {
+    const btn = $('btnZumeLink');
+    if (!btn) return;                              // 使用者可能已經切到別台，drawer 早就被蓋掉了
+    btn.disabled = true;
+    btn.textContent = '🔗 查詢 ZUMEN…';
+    btn.onclick = null;
+    try {
+        const j = await (await fetch('/api/zume/lookup', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({item_nos: [code]})
+        })).json();
+        const cur = $('btnZumeLink');
+        if (!cur || $('dwCode').textContent !== code) return;   // drawer 已經換到別台，別覆蓋錯的按鈕
+        const item = j.success && j.items && j.items[0];
+        if (item && item.url) {
+            cur.textContent = item.found ? '🔗 在 ZUMEN 查看照片' : '🔗 ZUMEN 搜尋此編碼';
+            cur.title = item.found ? '' : 'ZUMEN 裡沒有這個編碼的圖面對照資料，改用站內搜尋';
+            cur.onclick = () => window.open(item.url, '_blank');
+        } else {
+            cur.textContent = '🔗 ZUMEN 查詢失敗';
+        }
+        cur.disabled = false;
+    } catch (e) {
+        const cur = $('btnZumeLink');
+        if (cur && $('dwCode').textContent === code) {
+            cur.textContent = '🔗 ZUMEN 查詢失敗';
+            cur.disabled = false;
+        }
+    }
+}
+
+// 日期字串一律手組，不能用 toISOString（時區會差一天，見 CLAUDE.md 硬規則）
+function todayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// 這幾個動作代表設備當下狀態真的變了，補記錄時要連動更新設備本身：
+// 移轉 → 保管位置；轉賣／報廢／狀態變更 → 狀態。純文字類動作（保養/維修/其他）不連動。
+function onHistActionChange() {
+    const action = $('hf-action').value;
+    const showLoc = action === '移轉';
+    const showStatus = ['轉賣', '報廢', '狀態變更'].includes(action);
+    $('hf-location').style.display = showLoc ? '' : 'none';
+    $('hf-status').style.display = showStatus ? '' : 'none';
+    if (action === '轉賣' || action === '報廢') $('hf-status').value = action;
+
+    const hint = $('hf-hint');
+    if (showLoc) {
+        hint.style.display = ''; hint.textContent = '會同步更新設備目前的保管位置';
+    } else if (showStatus) {
+        hint.style.display = ''; hint.textContent = '會同步更新設備目前的狀態';
+    } else {
+        hint.style.display = 'none';
+    }
+}
+
+function openHistForm() {
+    $('hf-id').value = '';
+    $('hf-date').value = todayStr();
+    $('hf-action').value = '保養';
+    $('hf-detail').value = '';
+    $('hf-delete').style.display = 'none';
+    onHistActionChange();
+    $('histForm').classList.add('open');
+    $('hf-detail').focus();
+}
+
+function closeHistForm() {
+    $('histForm').classList.remove('open');
+}
+
+function startEditHistory(code, id) {
+    const h = (CUR_HISTORY || []).find(x => x.id === id);
+    if (!h) return;
+    $('hf-id').value = id;
+    $('hf-date').value = h.date || todayStr();
+    $('hf-action').value = h.action;
+    $('hf-detail').value = h.detail || '';
+    // 編輯既有記錄只改文字內容，不重新連動設備目前狀態（避免補改舊記錄時，
+    // 誤把設備現在的保管位置/狀態改回過去的值）
+    $('hf-location').style.display = 'none';
+    $('hf-status').style.display = 'none';
+    $('hf-hint').style.display = 'none';
+    $('hf-delete').style.display = h.user === 'user' ? '' : 'none';
+    $('histForm').classList.add('open');
+    $('hf-detail').focus();
+}
+
+async function saveHistory(code) {
+    const id = $('hf-id').value;
+    const date = $('hf-date').value;
+    const action = $('hf-action').value;
+    const detail = $('hf-detail').value.trim();
+    if (!date) { alert('請選擇日期'); return; }
+
+    let payload, url;
+    if (id) {
+        if (!detail) { alert('請填寫內容'); return; }
+        payload = {id, code, date, action, detail};
+        url = '/api/equipment_master/history/edit';
+    } else {
+        payload = {code, date, action, detail};
+        if (action === '移轉') payload.new_location = $('hf-location').value;
+        if (['轉賣', '報廢', '狀態變更'].includes(action)) payload.new_status = $('hf-status').value;
+        url = '/api/equipment_master/history/add';
+    }
+    const j = await (await fetch(url, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    })).json();
+    if (!j.success) { alert(j.error); return; }
+    await loadStats();
+    openDrawer(code, document.querySelector(`#tbody tr[data-code="${code}"]`));
+}
+
+async function deleteHistory(code) {
+    const id = $('hf-id').value;
+    if (!id) return;
+    if (!confirm('確定要刪除這筆歷程記錄嗎？')) return;
+    const j = await (await fetch('/api/equipment_master/history/delete', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({id, code})
+    })).json();
+    if (!j.success) { alert(j.error); return; }
+    openDrawer(code, document.querySelector(`#tbody tr[data-code="${code}"]`));
+}
+
+function closeDrawer() {
+    $('drawer').classList.remove('open');
+    $('drawerMask').style.display = 'none';
+    document.querySelectorAll('#tbody tr').forEach(x => x.classList.remove('selected'));
+}
+
+// ══════════ 新增／編輯設備 ══════════
+async function loadDict() {
+    const j = await (await fetch('/api/equipment_master/dict')).json();
+    if (j.success) DICT = j;
+    fillGroupSelect();
+}
+
+function fillGroupSelect() {
+    const sel = $('f-group');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— 請選擇 —</option>' + DICT.groups.map(g =>
+        `<option value="${esc(g.code)}">${esc(g.code)} ${esc(g.name)}</option>`).join('');
+    sel.value = cur;
+}
+
+function fillTypeSelect(group) {
+    const sel = $('f-type');
+    const list = DICT.types.filter(t => t.group_code === group);
+    sel.innerHTML = '<option value="">— 請選擇 —</option>' + list.map(t =>
+        `<option value="${esc(t.code)}">${esc(t.code)} ${esc(t.name)}</option>`).join('');
+}
+
+function fillAttrSelect(group, type) {
+    const sel = $('f-attr');
+    const list = DICT.attrs.filter(a => a.group_code === group && a.type_code === type);
+    sel.innerHTML = '<option value="">— 請選擇 —</option>' + list.map(a =>
+        `<option value="${esc(a.code)}">${esc(a.code)} ${esc(a.name)}</option>`).join('');
+}
+
+function onGroupChange() { fillTypeSelect($('f-group').value); fillAttrSelect('', ''); refreshCode(); }
+function onTypeChange()  { fillAttrSelect($('f-group').value, $('f-type').value); refreshCode(); }
+function onAttrChange()  { refreshCode(); }
+function onSeqEdit()     { updateCodePreview(); }
+
+async function refreshCode() {
+    const g = $('f-group').value, t = $('f-type').value, a = $('f-attr').value;
+    if (!(g && t && a)) { updateCodePreview(); return; }
+    const j = await (await fetch(
+        `/api/equipment_master/next_code?group_code=${g}&type_code=${t}&attr_code=${a}`)).json();
+    if (j.success && j.next_seq && !EDITING) {
+        $('f-seq').value = j.next_seq;
+        $('codeSide').innerHTML = `此屬性下已有 <b>${j.siblings}</b> 台<br>系統配到第 ${j.next_seq} 號`;
+    }
+    updateCodePreview();
+}
+
+// 編碼組成條：逐段填值，沒選的那段顯示虛線框加「—」，流水號那段是輸入框、不由這裡改
+function updateCodePreview() {
+    [['segGroup', $('f-group').value],
+     ['segType',  $('f-type').value],
+     ['segAttr',  $('f-attr').value]].forEach(([id, v]) => {
+        const el = $(id);
+        el.textContent = v || '—';
+        el.classList.toggle('is-empty', !v);
+    });
+}
+
+async function addNewGroup() {
+    const code = (prompt('新群組代碼（1 個大寫英文字母，例如 P）') || '').trim().toUpperCase();
+    if (!code) return;
+    if (!/^[A-Z]$/.test(code)) { alert('群組代碼必須是 1 個英文字母'); return; }
+    const name = (prompt(`群組「${code}」的名稱（例如 焊接類）`) || '').trim();
+    if (!name) return;
+    if (!DICT.groups.some(g => g.code === code)) DICT.groups.push({code, name});
+    DICT.groups.sort((x, y) => x.code.localeCompare(y.code));
+    fillGroupSelect();
+    $('f-group').value = code;
+    onGroupChange();
+}
+
+async function addNewType() {
+    const g = $('f-group').value;
+    if (!g) { alert('請先選擇群組分類'); return; }
+    const j = await (await fetch(`/api/equipment_master/next_code?group_code=${g}`)).json();
+    const code = (prompt(`新機台類型代碼（2 位數字），系統建議：${j.next_type_code}`,
+                         j.next_type_code) || '').trim();
+    if (!code) return;
+    if (!/^\d{2}$/.test(code)) { alert('機台類型代碼必須是 2 位數字'); return; }
+    const name = (prompt(`類型 ${g}${code} 的名稱（例如 立式銑床(BT40)）`) || '').trim();
+    if (!name) return;
+    DICT.types = DICT.types.filter(t => !(t.group_code === g && t.code === code));
+    DICT.types.push({group_code:g, code, name});
+    DICT.types.sort((x, y) => (x.group_code + x.code).localeCompare(y.group_code + y.code));
+    fillTypeSelect(g);
+    $('f-type').value = code;
+    onTypeChange();
+}
+
+async function addNewAttr() {
+    const g = $('f-group').value, t = $('f-type').value;
+    if (!(g && t)) { alert('請先選擇群組與機台類型'); return; }
+    const j = await (await fetch(
+        `/api/equipment_master/next_code?group_code=${g}&type_code=${t}`)).json();
+    const code = (prompt(`新加工屬性代碼（1 位數字），系統建議：${j.next_attr_code}`,
+                         j.next_attr_code) || '').trim();
+    if (!code) return;
+    if (!/^\d$/.test(code)) { alert('加工屬性代碼必須是 1 位數字'); return; }
+    const name = (prompt(`屬性 ${g}${t}-${code} 的名稱（例如 線軌-36m）`) || '').trim();
+    if (!name) return;
+    DICT.attrs = DICT.attrs.filter(a => !(a.group_code === g && a.type_code === t && a.code === code));
+    DICT.attrs.push({group_code:g, type_code:t, code, name});
+    DICT.attrs.sort((x, y) => (x.group_code+x.type_code+x.code).localeCompare(y.group_code+y.type_code+y.code));
+    fillAttrSelect(g, t);
+    $('f-attr').value = code;
+    onAttrChange();
+}
+
+function addSpecRow(name, value) {
+    const div = document.createElement('div');
+    div.className = 'spec-row';
+    div.innerHTML = `<input type="text" placeholder="項目（例如 床台）" value="${esc(name || '')}">
+                     <input type="text" placeholder="內容（例如 1150mm）" value="${esc(value || '')}">
+                     <button class="btn-x" title="刪除這列">✕</button>`;
+    div.querySelector('.btn-x').onclick = () => div.remove();
+    $('specRows').appendChild(div);
+}
+
+function collectSpecs() {
+    return [...document.querySelectorAll('#specRows .spec-row')].map(r => {
+        const [a, b] = r.querySelectorAll('input');
+        return {spec_name: a.value.trim(), spec_value: b.value.trim()};
+    }).filter(s => s.spec_name || s.spec_value);
+}
+
+// 編碼三層分類＋流水號的鎖定狀態：新增設備一律不鎖，編輯既有設備預設鎖住（見 startEdit）
+function lockCodeFields(locked) {
+    ['f-group','f-type','f-attr'].forEach(id => $(id).disabled = locked);
+    $('f-seq').readOnly = locked;
+}
+function toggleCodeLock() {
+    const btn = $('btnCodeLock');
+    if ($('f-group').disabled) {
+        const pwd = prompt('修改編碼需要密碼：');
+        if (pwd === null) return;
+        if (pwd !== 'maxclaw') { alert('密碼錯誤'); return; }
+        lockCodeFields(false);
+        btn.textContent = '🔓 編碼已解鎖（可修改）';
+        btn.classList.add('unlocked');
+    } else {
+        lockCodeFields(true);
+        btn.textContent = '🔒 編碼鎖定・點此解鎖';
+        btn.classList.remove('unlocked');
+    }
+}
+
+function resetForm() {
+    EDITING = null;
+    $('formTitle').textContent = '➕ 新增設備';
+    $('btnScrap').style.display = 'none';
+    ['f-group','f-type','f-attr','f-seq','f-old','f-vendor','f-model','f-buy','f-note'].forEach(id => $(id).value = '');
+    $('f-loc').value = '加工';
+    $('f-status').value = '在用';
+    lockCodeFields(false);
+    $('btnCodeLock').style.display = 'none';
+    fillTypeSelect(''); fillAttrSelect('', '');
+    $('specRows').innerHTML = '';
+    addSpecRow();
+    $('codeSide').textContent = '';
+    $('formMsg').textContent = '';
+    updateCodePreview();
+}
+
+async function startEdit(code) {
+    switchSubPage('new');
+    const j = await (await fetch('/api/equipment_master/detail?code=' + encodeURIComponent(code))).json();
+    if (!j.success) { alert(j.error); return; }
+    const d = j.data;
+    EDITING = code;
+    $('formTitle').textContent = `✏️ 編輯設備 ${code}`;
+    $('btnScrap').style.display = d.status === '報廢' ? 'none' : '';
+    $('formMsg').textContent = '';
+
+    // 字典裡若沒有這台設備的類型/屬性（例如 B-101 這種壞編碼），先補進下拉選單才選得到
+    if (d.group_code && !DICT.groups.some(g => g.code === d.group_code))
+        DICT.groups.push({code:d.group_code, name:d.group_name || ''});
+    if (d.type_code && !DICT.types.some(t => t.group_code === d.group_code && t.code === d.type_code))
+        DICT.types.push({group_code:d.group_code, code:d.type_code, name:d.type_name || ''});
+    if (d.attr_code && !DICT.attrs.some(a => a.group_code === d.group_code
+            && a.type_code === d.type_code && a.code === d.attr_code))
+        DICT.attrs.push({group_code:d.group_code, type_code:d.type_code, code:d.attr_code, name:d.attr_name || ''});
+
+    fillGroupSelect();
+    $('f-group').value = d.group_code || '';
+    fillTypeSelect(d.group_code);
+    $('f-type').value = d.type_code || '';
+    fillAttrSelect(d.group_code, d.type_code);
+    $('f-attr').value = d.attr_code || '';
+    $('f-seq').value = /^\d{2}$/.test(d.seq || '') ? d.seq : '';
+    $('f-old').value = d.old_code || '';
+    $('f-vendor').value = d.vendor || '';
+    $('f-model').value = d.model || '';
+    $('f-buy').value = /^\d{4}-\d{2}-\d{2}$/.test(d.buy_date || '') ? d.buy_date : '';
+    $('f-loc').value = d.location || '加工';
+    $('f-status').value = d.status || '在用';
+    $('f-note').value = d.note || '';
+    $('specRows').innerHTML = '';
+    (d.specs.length ? d.specs : [{spec_name:'', spec_value:''}])
+        .forEach(s => addSpecRow(s.spec_name, s.spec_value));
+    $('codeSide').innerHTML = d.needs_fix
+        ? '<b style="color:#C62828">此編碼待修正</b><br>改好後照片與技資會一起搬過去'
+        : '編輯模式：改動編碼會連同照片<br>技資、規格、歷程一起搬移';
+    updateCodePreview();
+
+    // 每次進到編輯畫面都重新鎖住編碼，避免上一次解鎖的狀態延續到別台設備
+    lockCodeFields(true);
+    const lockBtn = $('btnCodeLock');
+    lockBtn.style.display = '';
+    lockBtn.textContent = '🔒 編碼鎖定・點此解鎖';
+    lockBtn.classList.remove('unlocked');
+}
+
+async function saveEquipment() {
+    const msg = $('formMsg');
+    const g = $('f-group').value, t = $('f-type').value, a = $('f-attr').value, s = $('f-seq').value;
+    if (!(g && t && a && /^\d{2}$/.test(s))) {
+        msg.className = 'form-msg err';
+        msg.textContent = '請先把群組／機台類型／加工屬性選好，流水號需為 2 位數字';
+        return;
+    }
+    const typeName = (DICT.types.find(x => x.group_code === g && x.code === t) || {}).name || '';
+    const attrName = (DICT.attrs.find(x => x.group_code === g && x.type_code === t && x.code === a) || {}).name || '';
+    const groupName = (DICT.groups.find(x => x.code === g) || {}).name || '';
+
+    const payload = {
+        is_new: !EDITING, orig_code: EDITING || '',
+        group_code:g, type_code:t, attr_code:a, seq:s,
+        group_name:groupName, type_name:typeName, attr_name:attrName,
+        old_code:$('f-old').value, vendor:$('f-vendor').value, model:$('f-model').value, buy_date:$('f-buy').value,
+        location:$('f-loc').value, status:$('f-status').value, note:$('f-note').value,
+        remark:'', specs: collectSpecs()
+    };
+
+    $('btnSave').disabled = true;
+    try {
+        const j = await (await fetch('/api/equipment_master/save', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        })).json();
+        if (!j.success) {
+            msg.className = 'form-msg err';
+            msg.textContent = '❌ ' + j.error;
+            return;
+        }
+        msg.className = 'form-msg ok';
+        msg.textContent = '✅ ' + j.message;
+        await loadDict();
+        await loadStats();
+        await doSearch();
+        if (!EDITING) resetForm();
+        else { EDITING = j.code; $('formTitle').textContent = `✏️ 編輯設備 ${j.code}`; }
+    } catch (e) {
+        msg.className = 'form-msg err';
+        msg.textContent = '❌ 儲存失敗：' + e;
+    } finally {
+        $('btnSave').disabled = false;
+    }
+}
+
+async function scrapEquipment() {
+    if (!EDITING) return;
+    if (!confirm(`確定要把 ${EDITING} 標記為報廢嗎？\n（編碼會保留不放回重用，資料不會被刪除）`)) return;
+    const j = await (await fetch('/api/equipment_master/delete', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({code: EDITING})
+    })).json();
+    const msg = $('formMsg');
+    msg.className = j.success ? 'form-msg ok' : 'form-msg err';
+    msg.textContent = (j.success ? '✅ ' : '❌ ') + (j.message || j.error);
+    if (j.success) {
+        $('f-status').value = '報廢';
+        $('btnScrap').style.display = 'none';
+        await loadStats(); await doSearch();
+    }
+}
+
+// ══════════ 編碼原則樹 ══════════
+function renderTree() {
+    const cnt = (g, t, a) => ALL.filter(r => r.group_code === g
+        && (t === undefined || r.type_code === t)
+        && (a === undefined || r.attr_code === a)).length;
+    $('treeWrap').innerHTML = '<div class="tree-inner">' + DICT.groups.map(g => `
+      <div class="tree-g tg-${esc(g.code)}">
+        <div class="hd">
+          <span class="g-code">${esc(g.code)}</span>
+          <span class="g-name">${esc(g.name)}</span>
+          <span class="g-cnt">${cnt(g.code)} 台</span>
+        </div>
+        ${DICT.types.filter(t => t.group_code === g.code).map(t => `
+          <div class="tree-t">
+            <div class="hd">
+              <span>${esc(g.code)}${esc(t.code)}　${esc(t.name)}</span>
+              <span class="t-cnt">${cnt(g.code, t.code)} 台</span>
+            </div>
+            ${DICT.attrs.filter(a => a.group_code === g.code && a.type_code === t.code).map(a => {
+                const n = cnt(g.code, t.code, a.code);
+                const used = ALL.filter(r => r.group_code === g.code && r.type_code === t.code
+                                          && r.attr_code === a.code).map(r => +r.seq).filter(x => x);
+                let next = 1; while (used.includes(next)) next++;
+                return `<div class="tree-a">
+                    <span class="c">${esc(g.code)}${esc(t.code)}-${esc(a.code)}xx</span>
+                    <span class="n">${esc(a.name)}</span>
+                    <span class="cnt">${n} 台</span>
+                    <span class="next">下一個 ${esc(g.code)}${esc(t.code)}-${esc(a.code)}${String(next).padStart(2,'0')}</span>
+                  </div>`;
+            }).join('')}
+          </div>`).join('')}
+      </div>`).join('') + '</div>';
+}
+
+// ══════════ 異動歷程（跨設備） ══════════
+const HIST_USER_LABEL = {system:'系統自動', excel:'Excel匯入', user:'人工登錄'};
+
+async function loadHistoryList() {
+    $('histLoadingMsg').style.display = '';
+    $('histEmptyMsg').style.display = 'none';
+    const q = $('histSearchInput').value.trim();
+    try {
+        const json = await (await fetch('/api/equipment_master/history/list?q=' + encodeURIComponent(q))).json();
+        if (!json.success) { alert(json.error); ALL_HIST = []; } else ALL_HIST = json.data;
+    } catch (e) { alert('查詢失敗：' + e); ALL_HIST = []; }
+    $('histLoadingMsg').style.display = 'none';
+    fillHistFilterSelects();
+    renderHistoryList();
+}
+
+function fillHistFilterSelects() {
+    const uniq = key => [...new Set(ALL_HIST.map(r => r[key]).filter(Boolean))].sort();
+    const keep = {a: $('histFltAction').value, u: $('histFltUser').value, g: $('histFltGroup').value};
+
+    $('histFltAction').innerHTML = '<option value="">全部動作</option>' +
+        uniq('action').map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
+    $('histFltUser').innerHTML = '<option value="">全部來源</option>' +
+        uniq('user').map(u => `<option value="${esc(u)}">${esc(HIST_USER_LABEL[u] || u)}</option>`).join('');
+    $('histFltGroup').innerHTML = '<option value="">全部群組</option>' +
+        uniq('group_code').map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
+
+    $('histFltAction').value = keep.a; $('histFltUser').value = keep.u; $('histFltGroup').value = keep.g;
+}
+
+function renderHistoryList() {
+    const a = $('histFltAction').value, u = $('histFltUser').value, g = $('histFltGroup').value;
+    const rows = ALL_HIST.filter(r =>
+        (!a || r.action === a) && (!u || r.user === u) && (!g || r.group_code === g));
+
+    $('histResultCount').textContent =
+        `共 ${rows.length} 筆` + (rows.length !== ALL_HIST.length ? `（全部 ${ALL_HIST.length} 筆）` : '');
+    $('histEmptyMsg').style.display = rows.length ? 'none' : '';
+
+    $('histTbody').innerHTML = rows.map(r => `
+        <tr data-code="${esc(r.code)}">
+          <td class="eq-date">${esc(r.date || '—')}</td>
+          <td class="eq-code">${esc(r.code)}</td>
+          <td>${r.group_code ? `<span class="grp-badge grp-${esc(r.group_code)}">${esc(r.group_code)}</span>` : ''}</td>
+          <td><span class="act-badge hact-${esc(r.action)}">${esc(r.action)}</span></td>
+          <td>${esc(r.detail)}</td>
+          <td class="eq-vendor">${esc(HIST_USER_LABEL[r.user] || r.user)}</td>
+        </tr>`).join('');
+
+    document.querySelectorAll('#histTbody tr').forEach(tr => {
+        tr.addEventListener('click', () => openDrawer(tr.dataset.code, null));
+    });
+}
+
+function clearHistoryFilters() {
+    ['histFltAction', 'histFltUser', 'histFltGroup'].forEach(id => $(id).value = '');
+    renderHistoryList();
+}
+
+// ══════════ 維修記錄（來源：採購登入表）══════════
+const fmtMoney = n => (n || n === 0) ? '$' + Math.round(n).toLocaleString('en-US') : '';
+
+async function loadRepairList() {
+    $('repLoadingMsg').style.display = '';
+    $('repEmptyMsg').style.display = 'none';
+    const q = $('repSearchInput').value.trim();
+    try {
+        const json = await (await fetch('/api/equipment_master/repair/list?q=' + encodeURIComponent(q))).json();
+        if (!json.success) { alert(json.error); ALL_REPAIR = []; } else ALL_REPAIR = json.data;
+    } catch (e) { alert('查詢失敗：' + e); ALL_REPAIR = []; }
+    $('repLoadingMsg').style.display = 'none';
+    fillRepairFilterSelects();
+    renderRepairList();
+}
+
+function fillRepairFilterSelects() {
+    const uniq = key => [...new Set(ALL_REPAIR.map(r => r[key]).filter(Boolean))].sort();
+    const keep = {c: $('repFltCode').value, g: $('repFltGroup').value, v: $('repFltVendor').value};
+
+    // 設備選單順便顯示各台維修次數，一眼看得出哪台最常修
+    const cnt = {};
+    ALL_REPAIR.forEach(r => { cnt[r.code] = (cnt[r.code] || 0) + 1; });
+    $('repFltCode').innerHTML = '<option value="">全部設備</option>' +
+        uniq('code').map(c => `<option value="${esc(c)}">${esc(c)}（${cnt[c]}）</option>`).join('');
+    $('repFltGroup').innerHTML = '<option value="">全部群組</option>' +
+        uniq('group_code').map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
+    $('repFltVendor').innerHTML = '<option value="">全部廠商</option>' +
+        uniq('vendor').map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+
+    $('repFltCode').value = keep.c; $('repFltGroup').value = keep.g; $('repFltVendor').value = keep.v;
+}
+
+function renderRepairList() {
+    const c = $('repFltCode').value, g = $('repFltGroup').value, v = $('repFltVendor').value;
+    const rows = ALL_REPAIR.filter(r =>
+        (!c || r.code === c) && (!g || r.group_code === g) && (!v || r.vendor === v));
+
+    [['repFltCode', c], ['repFltGroup', g], ['repFltVendor', v]]
+        .forEach(([id, val]) => $(id).classList.toggle('on', !!val));
+
+    const total = rows.reduce((s, r) => s + (r.subtotal || 0), 0);
+    const down = rows.reduce((s, r) => s + (r.downtime || 0), 0);
+    $('repTotalCost').textContent = '維修總額 ' + fmtMoney(total)
+        + (down ? `　停機 ${fmtHours(down)} 小時` : '');
+    $('repResultCount').textContent =
+        `共 ${rows.length} 筆` + (rows.length !== ALL_REPAIR.length ? `（全部 ${ALL_REPAIR.length} 筆）` : '');
+    $('repEmptyMsg').style.display = rows.length ? 'none' : '';
+
+    $('repTbody').innerHTML = rows.map(r => `
+        <tr data-code="${esc(r.code)}">
+          <td class="eq-date">${esc(r.date)}</td>
+          <td class="eq-code">${esc(r.code)}</td>
+          <td>${r.group_code ? `<span class="grp-badge grp-${esc(r.group_code)}">${esc(r.group_code)}</span>` : ''}</td>
+          <td>${esc(r.name)}</td>
+          <td class="eq-vendor">${esc(r.spec)}</td>
+          <td class="eq-vendor">${esc(r.vendor)}</td>
+          <td class="eq-date" style="text-align:right;font-weight:700">${fmtMoney(r.subtotal)}</td>
+          <td class="eq-down"><input type="number" min="0" step="0.5" placeholder="—"
+                 value="${r.downtime != null ? r.downtime : ''}"
+                 data-key="${esc(r.rep_key)}" data-code="${esc(r.code)}"
+                 data-date="${esc(r.date)}" data-seq="${esc(r.pur_seq)}"></td>
+          <td class="eq-remark"${r.remark ? ` data-remark="${esc(r.remark)}"` : ''}>${esc(r.remark)}</td>
+        </tr>`).join('');
+
+    document.querySelectorAll('#repTbody tr').forEach(tr => {
+        tr.addEventListener('click', e => {
+            if (e.target.closest('.eq-down')) return;   // 點停機欄是要填數字，不要開抽屜
+            openDrawer(tr.dataset.code, null);
+        });
+    });
+    document.querySelectorAll('#repTbody .eq-down input').forEach(inp => {
+        inp.addEventListener('change', () => saveDowntime(inp));
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); });
+    });
+}
+
+const fmtHours = n => (Math.round(n * 10) / 10).toLocaleString('en-US');
+
+// 停機時數存在我們自己的 equipment.db（採購表是唯讀的 Google 試算表，寫不回去），
+// 用該列的內容雜湊 rep_key 對應，所以採購表中間插列也不會對錯筆
+async function saveDowntime(inp) {
+    const val = inp.value.trim();
+    inp.classList.remove('ok', 'err');
+    try {
+        const j = await (await fetch('/api/equipment_master/downtime/save', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({rep_key: inp.dataset.key, code: inp.dataset.code,
+                                  date: inp.dataset.date, pur_seq: inp.dataset.seq, hours: val})
+        })).json();
+        if (!j.success) { inp.classList.add('err'); alert(j.error); return; }
+        inp.classList.add('ok');
+        setTimeout(() => inp.classList.remove('ok'), 1200);
+        // 同步更新記憶體裡那筆，工具列的停機合計才會跟著動
+        const rec = ALL_REPAIR.find(r => r.rep_key === inp.dataset.key);
+        if (rec) rec.downtime = j.hours || null;
+        const rows = ALL_REPAIR.filter(r =>
+            (!$('repFltCode').value || r.code === $('repFltCode').value) &&
+            (!$('repFltGroup').value || r.group_code === $('repFltGroup').value) &&
+            (!$('repFltVendor').value || r.vendor === $('repFltVendor').value));
+        const d = rows.reduce((s, r) => s + (r.downtime || 0), 0);
+        $('repTotalCost').textContent = '維修總額 '
+            + fmtMoney(rows.reduce((s, r) => s + (r.subtotal || 0), 0))
+            + (d ? `　停機 ${fmtHours(d)} 小時` : '');
+    } catch (e) { inp.classList.add('err'); alert('儲存失敗：' + e); }
+}
+
+// ══════════ 妥善率 ══════════
+// 日期字串一律自己組（getFullYear/getMonth/getDate），不能用 toISOString——會差一天（時區）
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+let UPTIME_READY = false;
+
+function initUptime() {
+    if (!UPTIME_READY) {
+        UPTIME_READY = true;
+        // 群組選單直接用編碼字典，預設選 A（使用者主要看 A 類 CNC 車銑床）
+        $('upFltGroup').innerHTML = '<option value="">全部群組</option>' +
+            DICT.groups.map(g => `<option value="${esc(g.code)}">${esc(g.code)} ${esc(g.name)}</option>`).join('');
+        $('upFltGroup').value = DICT.groups.some(g => g.code === 'A') ? 'A' : '';
+        setUptimeRange('month');
+        return;                       // setUptimeRange 內會呼叫 loadUptime
+    }
+    loadUptime();
+}
+
+function setUptimeRange(kind) {
+    const now = new Date();
+    $('upStart').value = ymd(kind === 'year' ? new Date(now.getFullYear(), 0, 1)
+                                             : new Date(now.getFullYear(), now.getMonth(), 1));
+    $('upEnd').value = ymd(now);
+    loadUptime();
+}
+
+// ◀ ▶ 一次跳一整個月。當月只算到今天為止（未來的日子還沒發生，算進分母會把妥善率壓低），
+// 過去的月份則是完整一個月。月初剛好遇到週末時本月會是 0 個工作天，按 ◀ 就能看上個月
+function shiftUptimeMonth(delta) {
+    const base = $('upStart').value ? new Date($('upStart').value + 'T00:00:00') : new Date();
+    const d = new Date(base.getFullYear(), base.getMonth() + delta, 1);
+    const now = new Date();
+    const isThisMonth = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    $('upStart').value = ymd(d);
+    $('upEnd').value = ymd(isThisMonth ? now : new Date(d.getFullYear(), d.getMonth() + 1, 0));
+    loadUptime();
+}
+
+async function loadUptime() {
+    const p = new URLSearchParams({group: $('upFltGroup').value, location: $('upFltLoc').value,
+                                  start: $('upStart').value,
+                                  end: $('upEnd').value, hours_per_day: $('upHours').value || 8});
+    $('upFltGroup').classList.toggle('on', !!$('upFltGroup').value);
+    $('upFltLoc').classList.toggle('on', !!$('upFltLoc').value);
+    let j;
+    try { j = await (await fetch('/api/equipment_master/availability?' + p)).json(); }
+    catch (e) { alert('查詢失敗：' + e); return; }
+    if (!j.success) { alert(j.error); return; }
+
+    // 分母為 0 有兩種原因：期間內沒有平日（例如月初剛好是週末），或這個群組沒有在用設備。
+    // 直接寫「無資料」使用者會以為是壞掉，所以把原因講出來
+    const cls = j.rate == null ? 'none' : j.rate >= 95 ? 'good' : j.rate >= 90 ? 'warn' : 'bad';
+    const why = j.machines === 0 ? '這個條件下沒有在用設備'
+              : j.workdays === 0 ? '這段期間沒有工作天（平日）' : '';
+    const upPct = j.rate == null ? 0 : Math.max(0, Math.min(100, j.rate));
+    $('upHero').innerHTML = `
+      <div class="up-rate ${cls}">
+        <span class="lbl">設備妥善率</span>
+        ${j.rate == null
+          ? `<span class="val none">${why || '無資料'}</span>`
+          : `<span class="val">${j.rate.toFixed(2)}<i>%</i></span>
+             <span class="bar"><i class="up" style="width:${upPct}%"></i><i class="down" style="width:${100 - upPct}%"></i></span>`}
+        <span class="sub">${esc(j.start)} ～ ${esc(j.end)} · ${j.group ? '群組 ' + esc(j.group) : '全部群組'} · ${j.location ? esc(j.location) : '全部位置'}</span>
+      </div>
+      <div class="up-formula">
+        <div class="up-cell"><div class="k">在用台數</div><div class="v">${j.machines}<small>台</small></div></div>
+        <span class="up-term"><span class="up-op">×</span>
+          <div class="up-cell"><div class="k">工作天</div><div class="v">${j.workdays}<small>天</small></div></div></span>
+        <span class="up-term"><span class="up-op">×</span>
+          <div class="up-cell"><div class="k">每日工時</div><div class="v">${j.hours_per_day}<small>小時</small></div></div></span>
+        <span class="up-term"><span class="up-op">=</span>
+          <div class="up-cell total"><div class="k">應有稼動時數</div><div class="v">${fmtHours(j.planned_hours)}<small>小時</small></div></div></span>
+        <span class="up-term"><span class="up-op">−</span>
+          <div class="up-cell down"><div class="k">停機（${j.affected} 台）</div><div class="v">${fmtHours(j.downtime_hours)}<small>小時</small></div></div></span>
+      </div>`;
+
+    const per = j.hours_per_day * j.workdays;      // 單台在本期的應有稼動時數
+    $('upEmptyMsg').style.display = j.detail.length ? 'none' : '';
+    $('upTbody').innerHTML = j.detail.map(d => {
+        const pct = per > 0 ? Math.min(100, d.hours / per * 100) : 0;
+        // 規格／說明沿用維修記錄那欄的寫法：編碼(舊編號)，使用者是靠「綜銑07」認機器的
+        const spec = [d.old_code ? `${d.code}(${d.old_code})` : d.code, d.type_name]
+                     .filter(Boolean).join('　');
+        return `<tr data-code="${esc(d.code)}">
+          <td class="eq-code">${esc(d.code)}</td>
+          <td class="up-spec">${esc(spec)}</td>
+          <td style="text-align:right;font-weight:700;color:var(--danger)">${fmtHours(d.hours)}</td>
+          <td style="text-align:right;font-weight:700">${d.rate == null ? '' : d.rate.toFixed(1) + '%'}</td>
+          <td><div class="up-bar"><i style="width:${pct.toFixed(1)}%"></i></div></td>
+        </tr>`;
+    }).join('');
+    document.querySelectorAll('#upTbody tr').forEach(tr => {
+        tr.addEventListener('click', () => openDrawer(tr.dataset.code, null));
+    });
+}
+
+// 備註 hover 提示：用 fixed 定位掛在 body 上，不受 .table-wrap / .dw-body 的 overflow:auto 裁切影響。
+// 共用於維修記錄表格（td.eq-remark）與設備詳情抽屜的維修記錄（span.dw-repair-remark），兩邊都只認 [data-remark]
+let remarkTipEl = null;
+document.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-remark]');
+    if (!el) return;
+    if (!remarkTipEl) { remarkTipEl = document.createElement('div'); remarkTipEl.className = 'remark-tip'; document.body.appendChild(remarkTipEl); }
+    remarkTipEl.textContent = el.dataset.remark;
+    remarkTipEl.style.display = 'block';
+    const r = el.getBoundingClientRect();
+    remarkTipEl.style.left = r.left + 'px';
+    remarkTipEl.style.top = (r.bottom + 4) + 'px';
+    requestAnimationFrame(() => {
+        if (!remarkTipEl) return;
+        const tw = remarkTipEl.offsetWidth, th = remarkTipEl.offsetHeight;
+        let left = Math.min(r.left, window.innerWidth - tw - 8);
+        let top = r.bottom + 4;
+        if (top + th > window.innerHeight - 8) top = r.top - th - 4;
+        remarkTipEl.style.left = Math.max(8, left) + 'px';
+        remarkTipEl.style.top = Math.max(8, top) + 'px';
+    });
+});
+document.addEventListener('mouseout', e => {
+    if (remarkTipEl && e.target.closest('[data-remark]')) remarkTipEl.style.display = 'none';
+});
+
+function clearRepairFilters() {
+    ['repFltCode', 'repFltGroup', 'repFltVendor'].forEach(id => $(id).value = '');
+    renderRepairList();
+}
+
+// 設備詳情抽屜的維修記錄最多只顯示 10 筆，超過的用這個連結跳去維修記錄頁看完整清單（帶設備篩選）
+async function viewAllRepairs(code) {
+    closeDrawer();
+    switchSubPage('repair');
+    await loadRepairList();
+    $('repFltCode').value = code;
+    renderRepairList();
+}
+
+// ══════════ 事件綁定 ══════════
+$('btnSearch').addEventListener('click', doSearch);
+$('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+$('btnClear').addEventListener('click', () => {
+    $('searchInput').value = '';
+    ['fltGroup','fltLoc','fltStatus','fltFix'].forEach(id => $(id).value = '');
+    applyFilters();
+    doSearch();
+});
+$('btnExportHist').addEventListener('click', async () => {
+    const btn = $('btnExportHist');
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '匯出中…';
+    try {
+        const j = await (await fetch('/api/equipment_master/export_history', {method: 'POST'})).json();
+        alert(j.success ? j.message : ('匯出失敗：' + j.error));
+    } catch (e) {
+        alert('匯出失敗：' + e);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+    }
+});
+$('btnRepSearch').addEventListener('click', loadRepairList);
+$('repSearchInput').addEventListener('keydown', e => { if (e.key === 'Enter') loadRepairList(); });
+$('btnRepClear').addEventListener('click', () => {
+    $('repSearchInput').value = '';
+    clearRepairFilters();
+    loadRepairList();
+});
+$('btnHistSearch').addEventListener('click', loadHistoryList);
+$('histSearchInput').addEventListener('keydown', e => { if (e.key === 'Enter') loadHistoryList(); });
+$('btnHistClear').addEventListener('click', () => {
+    $('histSearchInput').value = '';
+    clearHistoryFilters();
+    loadHistoryList();
+});
+$('dwClose').addEventListener('click', closeDrawer);
+$('drawerMask').addEventListener('click', closeDrawer);
+$('lightbox').addEventListener('click', () => { $('lightbox').style.display = 'none'; });
+
+// Ctrl+V／Cmd+V 貼上剪貼簿裡的圖片當設備照片。用瀏覽器原生 paste 事件（不是自己攔
+// keydown 判斷 ctrlKey），Windows/Mac 快捷鍵、右鍵貼上、選單貼上都會自然觸發，不用另外處理。
+// 只有「抽屜開著」且「剪貼簿裡真的有圖片」才攔截，一般文字貼上（搜尋框、備註欄…）不受影響。
+document.addEventListener('paste', async (e) => {
+    if (!$('drawer').classList.contains('open')) return;
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    const imgItem = [...items].find(it => it.type && it.type.startsWith('image/'));
+    if (!imgItem) return;
+    e.preventDefault();
+    const blob = imgItem.getAsFile();
+    if (!blob) return;
+    const ext = imgItem.type.split('/')[1].replace('jpeg', 'jpg');
+    const file = new File([blob], `貼上照片_${Date.now()}.${ext}`, {type: imgItem.type});
+    await uploadPhotos($('dwCode').textContent, [file]);
+});
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if ($('lightbox').style.display === 'flex') $('lightbox').style.display = 'none';
+    else closeDrawer();
+});
+
+loadDict().then(resetForm);
+loadStats();
+doSearch();
+</script>
+</body>
+</html>

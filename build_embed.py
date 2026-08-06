@@ -14,7 +14,7 @@ ARCH      = 'amd64'
 PY_ZIP    = f'python-{PY_VER}-embed-{ARCH}.zip'
 PY_URL    = f'https://www.python.org/ftp/python/{PY_VER}/{PY_ZIP}'
 GET_PIP   = 'https://bootstrap.pypa.io/get-pip.py'
-DIST      = os.path.join('dist_embed', '製令查詢')
+DIST      = os.path.join('dist_embed', 'PDS系統')
 APP_SRC   = os.path.dirname(os.path.abspath(__file__))
 
 PACKAGES  = ['flask', 'requests', 'requests-ntlm', 'pywin32']
@@ -147,9 +147,9 @@ shutil.copy2(os.path.join(APP_SRC, 'config.py'), DIST)
 step('6/7  建立啟動器')
 
 # VBScript 啟動器（靜默執行，不顯示 CMD 視窗）
-vbs = os.path.join(DIST, '製令查詢.vbs')
+vbs = os.path.join(DIST, 'PDS系統.vbs')
 open(vbs, 'w', encoding='utf-8').write(textwrap.dedent(r"""
-    ' 製令查詢系統啟動器（GUI 版）
+    ' Maxclaw PDS系統啟動器（GUI 版）
     Dim shell : Set shell = CreateObject("WScript.Shell")
     Dim fso   : Set fso   = CreateObject("Scripting.FileSystemObject")
     Dim base  : base = fso.GetParentFolderName(WScript.ScriptFullName)
@@ -157,12 +157,12 @@ open(vbs, 'w', encoding='utf-8').write(textwrap.dedent(r"""
     Dim script: script = base & "\_app\main.py"
     shell.Run Chr(34) & pyexe & Chr(34) & " " & Chr(34) & script & Chr(34), 0, False
 """).strip())
-print('  建立 製令查詢.vbs')
+print('  建立 PDS系統.vbs')
 
 # 批次捷徑（方便測試，顯示輸出）
 bat = os.path.join(DIST, '除錯模式執行.bat')
 open(bat, 'w', encoding='utf-8').write(
-    '@echo off\nchcp 65001>nul\necho 製令查詢系統（除錯模式）...\n'
+    '@echo off\nchcp 65001>nul\necho Maxclaw PDS系統（除錯模式）...\n'
     r'"%~dp0_python\python.exe" "%~dp0_app\main.py"' + '\npause\n'
 )
 print('  建立 除錯模式執行.bat')
@@ -170,11 +170,11 @@ print('  建立 除錯模式執行.bat')
 # 使用說明
 readme = os.path.join(DIST, '使用說明.txt')
 open(readme, 'w', encoding='utf-8').write(textwrap.dedent(f"""
-    製令查詢系統（GUI 版）使用說明
+    Maxclaw PDS系統（GUI 版）使用說明
     ==============================
 
     【啟動方式】
-      雙擊「製令查詢.vbs」即可啟動
+      雙擊「PDS系統.vbs」即可啟動
       系統會開啟獨立的應用程式視窗（不需要瀏覽器）
 
     【設定修改】
@@ -211,5 +211,30 @@ total = sum(
 print(f'  輸出目錄: {os.path.abspath(DIST)}')
 print(f'  總大小:   {total:.1f} MB')
 print()
-print('  將整個「製令查詢」資料夾複製到其他電腦即可使用')
-print('  雙擊「製令查詢.vbs」啟動')
+print('  將整個「PDS系統」資料夾複製到其他電腦即可使用')
+print('  雙擊「PDS系統.vbs」啟動')
+
+# ═══════════════════════════════════════════════
+#  建立自訂圖示捷徑（.vbs 本身無法內嵌圖示，桌面/工作列要釘選要用這顆 .lnk）
+# ═══════════════════════════════════════════════
+step('額外  建立自訂圖示捷徑')
+try:
+    from PIL import Image
+    import win32com.client
+    png = os.path.join(APP_SRC, 'static', 'app-icon.png')
+    ico = os.path.join(APP_SRC, 'static', 'app-icon.ico')
+    Image.open(png).convert('RGBA').save(
+        ico, format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+    # ico 一併放進發行包，捷徑圖示指向包內路徑（整包複製到別台電腦圖示才不會失效）
+    ico_dist = os.path.abspath(os.path.join(DIST, '_app', 'static', 'app-icon.ico'))
+    shutil.copy2(ico, ico_dist)
+    shell = win32com.client.Dispatch('WScript.Shell')
+    lnk = shell.CreateShortCut(os.path.join(DIST, 'PDS系統.lnk'))
+    lnk.TargetPath = os.path.join(DIST, 'PDS系統.vbs')
+    lnk.WorkingDirectory = DIST
+    lnk.IconLocation = ico_dist
+    lnk.Description = 'Maxclaw PDS系統'
+    lnk.Save()
+    print(f'  建立 PDS系統.lnk（桌面/工作列請釘選這顆，不要釘 .vbs）')
+except Exception as e:
+    print(f'  [WARN] 略過捷徑建立（開發機才需要）：{e}')
