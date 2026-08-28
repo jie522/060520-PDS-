@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <!-- 手機版：viewport 要鎖住寬度，maximum-scale 不設死（現場戴手套也要能放大看判定基準）-->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>設備保養回報</title>
+    <link rel="icon" type="image/png" href="/static/app-icon.png">
+    <style>
+        /* 手機版刻意不載 Bootstrap：現場網路差，這頁只要能開得快、按得到。
+           字體規則同全站（Noto Sans TC），但手機不一定有，備援 sans-serif 就好。 */
+        :root {
+            --blue:#1565C0; --blue-dark:#0D47A1; --blue-pale:#F0F7FF;
+            --bg:#F5F4ED; --surface:#fff; --border:#E5E4DF; --border-dark:#D8D5CC;
+            --text:#3D3D3A; --muted:#8A8778;
+            --ok:#2E7D32; --ok-bg:#E8F5E9; --warn:#E65100; --warn-bg:#FFF3E0;
+            --danger:#C62828; --danger-bg:#FDECEA;
+        }
+        * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        body { margin:0; background:var(--bg); color:var(--text);
+            font-family:'Noto Sans TC','Source Han Sans TC',sans-serif; font-size:16px; }
+        .hd { position:sticky; top:0; z-index:10; background:var(--blue); color:#fff;
+            padding:.7rem .9rem; display:flex; align-items:center; gap:.6rem; }
+        .hd .t { font-size:1.05rem; font-weight:800; }
+        .hd .v { margin-left:auto; font-size:.7rem; opacity:.75; }
+        .hd a { color:#fff; text-decoration:none; font-size:1.3rem; }
+        .wrap { padding:.8rem; display:flex; flex-direction:column; gap:.8rem; }
+        .card { background:var(--surface); border:1px solid var(--border); border-radius:10px;
+            box-shadow:0 1px 3px rgba(0,0,0,.08); overflow:hidden; }
+        .eq { display:flex; gap:.8rem; padding:.8rem; align-items:center; }
+        .eq img { width:78px; height:78px; object-fit:cover; border-radius:8px; flex-shrink:0;
+            border:1px solid var(--border); background:var(--bg); }
+        .eq .code { font-size:1.35rem; font-weight:800; color:var(--blue-dark);
+            font-family:'Consolas','Courier New',monospace; }
+        .eq .sub { font-size:.86rem; color:var(--muted); margin-top:.15rem; line-height:1.5; }
+        .badge { display:inline-block; padding:.1rem .45rem; border-radius:5px;
+            font-size:.75rem; font-weight:700; }
+        .badge.loc { background:var(--blue-pale); color:var(--blue-dark); }
+        .badge.st  { background:var(--ok-bg); color:var(--ok); }
+
+        .who { display:flex; align-items:center; gap:.5rem; padding:.6rem .8rem;
+            background:var(--warn-bg); border-bottom:1px solid var(--border); }
+        .who label { font-size:.85rem; font-weight:700; color:var(--warn); white-space:nowrap; }
+        .who input { flex:1; font-size:1rem; padding:.45rem .6rem; border:1px solid var(--border-dark);
+            border-radius:6px; min-width:0; }
+
+        .sect { font-size:.95rem; font-weight:800; padding:.2rem .2rem .1rem; color:var(--text); }
+        .sect .n { color:var(--muted); font-weight:600; font-size:.82rem; }
+
+        .job { padding:.75rem .8rem; border-bottom:1px solid #F0EEE8; }
+        .job:last-child { border-bottom:none; }
+        .job .top { display:flex; align-items:baseline; gap:.5rem; flex-wrap:wrap; }
+        .job .nm { font-size:1.05rem; font-weight:700; flex:1; min-width:60%; }
+        .job .cyc { font-size:.78rem; font-weight:700; color:var(--blue-dark);
+            background:var(--blue-pale); padding:.1rem .4rem; border-radius:5px; white-space:nowrap; }
+        .job .due { font-size:.78rem; font-weight:700; color:var(--muted); white-space:nowrap; }
+        .job .due.over { color:var(--danger); }
+        .job .meta { font-size:.85rem; color:var(--muted); margin-top:.25rem; line-height:1.6; }
+        .job .meta b { color:var(--text); }
+        .job .oil { display:inline-block; background:var(--warn-bg); color:var(--warn);
+            font-weight:700; padding:.05rem .4rem; border-radius:4px; }
+        .job .stop { color:var(--danger); font-weight:700; }
+
+        /* 按鈕要大：現場戴手套、單手操作 */
+        .btns { display:flex; gap:.5rem; margin-top:.6rem; }
+        .btn { flex:1; padding:.8rem .5rem; border:none; border-radius:8px; font-size:1rem;
+            font-weight:800; cursor:pointer; }
+        .btn.ok { background:var(--ok); color:#fff; }
+        .btn.ng { background:var(--danger); color:#fff; }
+        .btn.sub { background:var(--surface); color:var(--muted); border:1px solid var(--border-dark);
+            flex:0 0 84px; font-weight:700; }
+        .ngbox { margin-top:.6rem; display:none; }
+        .ngbox textarea { width:100%; font-size:1rem; padding:.55rem .6rem; border-radius:6px;
+            border:1px solid var(--border-dark); font-family:inherit; }
+        .ngbox .row { display:flex; gap:.5rem; margin-top:.5rem; align-items:center; }
+        .ngbox .cam { flex:1; padding:.6rem; text-align:center; border:1px dashed var(--border-dark);
+            border-radius:8px; color:var(--muted); font-size:.9rem; background:var(--surface); }
+        .ngbox .cam.has { border-style:solid; border-color:var(--ok); color:var(--ok); font-weight:700; }
+
+        .done { padding:.7rem .8rem; border-bottom:1px solid #F0EEE8; display:flex;
+            align-items:center; gap:.5rem; font-size:.92rem; color:var(--muted); }
+        .done:last-child { border-bottom:none; }
+        .done .r { font-weight:800; padding:.05rem .4rem; border-radius:4px; font-size:.8rem; }
+        .done .r.OK { background:var(--ok-bg); color:var(--ok); }
+        .done .r.NG { background:var(--danger-bg); color:var(--danger); }
+        .done .nm { flex:1; color:var(--text); }
+
+        .empty { padding:2rem 1rem; text-align:center; color:var(--muted); line-height:1.8; }
+        .empty .big { font-size:2.4rem; }
+        .msg { position:fixed; left:50%; bottom:1.2rem; transform:translateX(-50%);
+            background:rgba(0,0,0,.85); color:#fff; padding:.6rem 1.1rem; border-radius:20px;
+            font-size:.92rem; font-weight:700; z-index:50; display:none; max-width:90vw; }
+        .search { padding:.8rem; }
+        .search input { width:100%; font-size:1.05rem; padding:.7rem .8rem;
+            border:1px solid var(--border-dark); border-radius:8px; }
+        .hit { display:flex; align-items:center; gap:.6rem; padding:.75rem .8rem;
+            border-bottom:1px solid #F0EEE8; text-decoration:none; color:inherit; }
+        .hit .c { font-family:'Consolas','Courier New',monospace; font-weight:800;
+            color:var(--blue-dark); min-width:88px; }
+        .hit .n { flex:1; font-size:.9rem; color:var(--muted); }
+    </style>
+</head>
+<body>
+
+<div class="hd">
+    <a href="/m" title="找其他設備">☰</a>
+    <span class="t">設備保養回報</span>
+    <span class="v">{{ app_version }}</span>
+</div>
+
+<div class="wrap" id="wrap"></div>
+<div class="msg" id="msg"></div>
+<input type="file" id="camIn" accept="image/*" capture="environment" style="display:none">
+
+<script>
+const CODE = {{ code|tojson }};
+const $ = id => document.getElementById(id);
+const esc = s => (s ?? '').toString()
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+let JOBS = [], EQ = null, PHOTO = {};      // PHOTO[index] = 已上傳的檔名
+
+function toast(t, ms = 2200) {
+    $('msg').textContent = t; $('msg').style.display = 'block';
+    clearTimeout(window._mt); window._mt = setTimeout(() => $('msg').style.display = 'none', ms);
+}
+function todayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+async function postJSON(url, body) {
+    try {
+        return await (await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+                                        body: JSON.stringify(body || {})})).json();
+    } catch (e) { return {success:false, error:'連線失敗：' + e}; }
+}
+
+// ── 沒有編碼 → 搜尋設備 ──
+async function renderSearch(q) {
+    if (!$('sq')) {
+        $('wrap').innerHTML = `
+          <div class="card">
+            <div class="search"><input id="sq" placeholder="輸入編碼／舊編號／機型關鍵字" autocomplete="off"></div>
+            <div id="hits"></div>
+          </div>
+          <div class="empty">掃設備上的 QR 可以直接開回報頁，<br>標籤掉了或看不清楚時才用搜尋。</div>`;
+        $('sq').addEventListener('input', () => renderSearch($('sq').value));
+        $('sq').focus();
+    }
+    const j = await (await fetch('/api/equipment_master/maint/mobile/search?q=' + encodeURIComponent(q || ''))).json();
+    $('hits').innerHTML = (j.data || []).map(r => `
+      <a class="hit" href="/m/eq/${encodeURIComponent(r.code)}">
+        <span class="c">${esc(r.code)}</span>
+        <span class="n">${esc(r.type_name || '')}${r.old_code ? '　' + esc(r.old_code) : ''}</span>
+        <span class="badge loc">${esc(r.location || '')}</span></a>`).join('');
+}
+
+// ── 設備 + 待辦 ──
+async function load() {
+    if (!CODE) return renderSearch('');
+    $('wrap').innerHTML = '<div class="empty">載入中…</div>';
+    let eqJson, planJson;
+    try {
+        [eqJson, planJson] = await Promise.all([
+            fetch('/api/equipment_master/maint/mobile?code=' + encodeURIComponent(CODE)).then(r => r.json()),
+            fetch('/api/equipment_master/maint/plan/list?scope=due&code=' + encodeURIComponent(CODE)).then(r => r.json()),
+        ]);
+    } catch (e) {
+        $('wrap').innerHTML = `<div class="empty">連線失敗<br>${esc(String(e))}</div>`; return;
+    }
+    if (!eqJson.success) {
+        $('wrap').innerHTML = `<div class="empty"><div class="big">🔍</div>${esc(eqJson.error)}
+            <br><a href="/m">改用搜尋</a></div>`; return;
+    }
+    EQ = eqJson.data;
+    JOBS = (planJson.success ? planJson.data : []);
+    render();
+}
+
+function render() {
+    const todo = JOBS.filter(j => j.status === '待辦');
+    const done = JOBS.filter(j => j.status !== '待辦');
+    const who = localStorage.getItem('mtWho') || '';
+    $('wrap').innerHTML = `
+      <div class="card">
+        <div class="eq">
+          ${EQ.photo ? `<img src="/api/equipment_master/photo?relpath=${encodeURIComponent(EQ.photo)}" alt="">`
+                     : '<img src="/static/app-icon.png" alt="">'}
+          <div>
+            <div class="code">${esc(EQ.code)}</div>
+            <div class="sub">${esc(EQ.type_name || '')}${EQ.attr_name ? '／' + esc(EQ.attr_name) : ''}
+              ${EQ.old_code ? '<br>舊編號 ' + esc(EQ.old_code) : ''}
+              <br><span class="badge loc">${esc(EQ.location || '')}</span>
+              <span class="badge st">${esc(EQ.status || '')}</span></div>
+          </div>
+        </div>
+        <div class="who">
+          <label>執行人</label>
+          <input id="who" value="${esc(who)}" placeholder="輸入姓名／工號（會記住）"
+                 onchange="localStorage.setItem('mtWho', this.value.trim())">
+        </div>
+      </div>
+
+      <div class="sect">今天要做的保養 <span class="n">${todo.length} 項</span></div>
+      <div class="card">
+        ${todo.length ? todo.map((j, i) => jobHtml(j, JOBS.indexOf(j))).join('')
+          : '<div class="empty"><div class="big">✅</div>這台目前沒有待辦的保養</div>'}
+      </div>
+
+      ${done.length ? `<div class="sect">最近回報 <span class="n">${done.length} 筆</span></div>
+        <div class="card">${done.map(j => `
+          <div class="done"><span class="nm">${esc(j.item_name)}</span>
+            ${j.result ? `<span class="r ${esc(j.result)}">${esc(j.result)}</span>` : ''}
+            <span>${esc(j.done_date || '')} ${esc(j.done_by || '')}</span></div>`).join('')}</div>` : ''}`;
+}
+
+function jobHtml(j, i) {
+    return `<div class="job" id="job${i}">
+      <div class="top">
+        <span class="nm">${esc(j.item_name)}</span>
+        <span class="cyc">${esc(j.cycle_label)}</span>
+        <span class="due${j.overdue_days ? ' over' : ''}">${
+            j.overdue_days ? '逾期 ' + j.overdue_days + ' 天' : esc(j.due_date)}</span>
+      </div>
+      <div class="meta">
+        ${j.part ? `部位：<b>${esc(j.part)}</b>　` : ''}${j.method ? `方法：<b>${esc(j.method)}</b>` : ''}
+        ${j.criteria ? `<br>判定基準：<b>${esc(j.criteria)}</b>` : ''}
+        ${j.oil_label ? `<br>使用油品：<span class="oil">${esc(j.oil_label)}</span>` : ''}
+        ${j.tools ? `<br>工具：${esc(j.tools)}` : ''}
+        ${j.safety ? `<br>⚠ ${esc(j.safety)}` : ''}
+        ${j.need_stop ? '<br><span class="stop">⚠ 需停機作業</span>' : ''}
+      </div>
+      <div class="btns">
+        <button class="btn ok" onclick="report(${i}, 'OK')">✓ 正常完成</button>
+        <button class="btn ng" onclick="toggleNg(${i})">✗ 異常</button>
+        <button class="btn sub" onclick="report(${i}, '', '跳過')">跳過</button>
+      </div>
+      <div class="ngbox" id="ng${i}">
+        <textarea id="ngtxt${i}" rows="2" placeholder="異常狀況（例如：主軸異音、油封滲油）"></textarea>
+        <div class="row">
+          <div class="cam" id="cam${i}" onclick="pickPhoto(${i})">📷 拍照（選填）</div>
+          <button class="btn ng" style="flex:0 0 110px" onclick="report(${i}, 'NG')">送出異常</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleNg(i) {
+    const b = $('ng' + i);
+    b.style.display = b.style.display === 'block' ? 'none' : 'block';
+    if (b.style.display === 'block') $('ngtxt' + i).focus();
+}
+
+// 手機拍照：<input capture="environment"> 會直接叫出後鏡頭，不用另外做相機介面
+function pickPhoto(i) {
+    const inp = $('camIn');
+    inp.onchange = async () => {
+        if (!inp.files.length) return;
+        $('cam' + i).textContent = '上傳中…';
+        const fd = new FormData();
+        fd.append('code', EQ.code);
+        [...inp.files].forEach(f => fd.append('files', f));
+        try {
+            const j = await (await fetch('/api/equipment_master/maint/plan/photo',
+                                         {method:'POST', body: fd})).json();
+            if (!j.success) { $('cam' + i).textContent = '📷 上傳失敗，再試一次'; toast(j.error); return; }
+            PHOTO[i] = (PHOTO[i] ? PHOTO[i] + '|' : '') + j.saved.join('|');
+            $('cam' + i).textContent = `📷 已拍 ${PHOTO[i].split('|').length} 張`;
+            $('cam' + i).classList.add('has');
+        } catch (e) { $('cam' + i).textContent = '📷 上傳失敗，再試一次'; }
+        inp.value = '';
+    };
+    inp.click();
+}
+
+async function report(i, result, status) {
+    const j = JOBS[i];
+    const who = ($('who').value || '').trim();
+    if (who) localStorage.setItem('mtWho', who);
+    const remark = result === 'NG' ? ($('ngtxt' + i).value || '').trim() : '';
+    if (result === 'NG' && !remark) { toast('請寫一下異常狀況'); $('ngtxt' + i).focus(); return; }
+    // 虛擬列（日／週點檢）沒有 id，改帶 code+item_id+period_key，後端這時才寫進資料庫
+    const body = j.id ? {id: j.id}
+                      : {code: j.code, item_id: j.item_id, period_key: j.period_key, due_date: j.due_date};
+    Object.assign(body, {
+        status: status || '已完成', result: status ? '' : result,
+        done_date: todayStr(), done_by: who, remark, photo: PHOTO[i] || '',
+    });
+    const r = await postJSON('/api/equipment_master/maint/plan/done', body);
+    if (!r.success) { toast(r.error); return; }
+    toast(status ? '已跳過' : (result === 'NG' ? '已回報異常' : '完成！'));
+    load();
+}
+
+load();
+</script>
+</body>
+</html>

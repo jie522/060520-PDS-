@@ -1,1 +1,1 @@
-{"A": {"upper": 75, "lower": 70}, "B": {"upper": 15, "lower": 13}, "C": {"upper": 12, "lower": 10}, "L": {"upper": 70, "lower": 65}}
+{"A": {"upper": 75.0, "lower": 70.0}, "B": {"upper": 15.0, "lower": 13.0}, "C": {"upper": 12.0, "lower": 10.0}, "L": {"upper": 70.0, "lower": 65.0}}

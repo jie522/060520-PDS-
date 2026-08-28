@@ -75,7 +75,7 @@
     .header-title { font-size:1.1rem; font-weight:700; padding-bottom:.45rem; white-space:nowrap; margin-right:.5rem; }
     .header-tabs { display:flex; align-items:flex-end; gap:2px; }
     .header-tab {
-      display: inline-block; padding:.3rem 1rem; font-size:1rem; font-weight:600;
+      display: inline-block; padding:.3rem .75rem; font-size:1rem; font-weight:600; white-space:nowrap;
       color:rgba(255,255,255,.85); text-decoration:none; border-radius:0;
       background:rgba(255,255,255,.15); cursor:pointer; transition:background .15s;
     }
@@ -799,6 +799,30 @@
     }
     #sub-page-application textarea.form-control { resize: vertical; min-height: 64px; }
 
+    /* ══ 異常處理單「品名」搜尋目前製令的下拉 ══ */
+    #sub-page-application .ppq006-name-wrap { position: relative; }
+    #sub-page-application .ppq006-order-dropdown {
+      display: none;
+      position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 40;
+      background: var(--surface); border: 1.5px solid var(--blue-mid); border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md);
+      max-height: 260px; overflow-y: auto;
+    }
+    #sub-page-application .ppq006-order-dropdown.open { display: block; }
+    #sub-page-application .ppq006-order-item {
+      padding: 0.4rem 0.65rem; cursor: pointer; border-bottom: 1px solid var(--border);
+    }
+    #sub-page-application .ppq006-order-item:last-child { border-bottom: none; }
+    #sub-page-application .ppq006-order-item:hover { background: var(--blue-xpale); }
+    #sub-page-application .ppq006-order-item .mo {
+      font-weight: 700; color: var(--blue-d); font-family: Consolas, monospace; font-size: 0.85rem;
+    }
+    #sub-page-application .ppq006-order-item .nm { color: var(--text); font-size: 0.86rem; margin-left: 0.4rem; }
+    #sub-page-application .ppq006-order-item .meta { color: var(--muted); font-size: 0.78rem; margin-top: 0.1rem; }
+    #sub-page-application .ppq006-order-item.empty,
+    #sub-page-application .ppq006-order-item.err { cursor: default; color: var(--muted); }
+    #sub-page-application .ppq006-order-item.err { color: #C62828; }
+
 
     /* ══ Buttons ══ */
     #sub-page-application .btn {
@@ -1439,11 +1463,12 @@
       <a href="/"           class="header-tab">製令查詢</a>
       <a href="/production" class="header-tab">生產中製令</a>
       <a href="/equipment"  class="header-tab">設備稼動</a>
-      <a href="/equipment_master" class="header-tab">設備管理</a>
       <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
       <a href="/routing"    class="header-tab">產品途程查詢</a>
       <a href="/batch_cost" class="header-tab">批成本</a>
       <a href="/cnc_program" class="header-tab">程式管理</a>
+      <a href="/oil"        class="header-tab">油品管理</a>
+      <a href="/equipment_master" class="header-tab">設備管理</a>
       <a href="/zumen" class="header-tab header-tab-zumen">ZUMEN</a>
       <span                 class="header-tab header-tab-mgmt active">管理</span>
     </div>
@@ -2346,7 +2371,14 @@
                   <label class="form-label"{% if f.type != 'checkbox_group' %} for="{{ key }}_{{ f.key }}"{% endif %}>
                     {{ f.label }}{% if f.required %}<span class="req">*</span>{% endif %}
                   </label>
-                  {% if f.type == 'textarea' %}
+                  {% if key == 'ppq006' and f.key == 'item_name' %}
+                  <div class="ppq006-name-wrap">
+                    <input type="text" class="form-control" id="{{ key }}_{{ f.key }}" name="{{ f.key }}"
+                      placeholder="{{ f.label }}（打字可搜尋目前製令，選一筆自動代入生產製令/產品編號/批量）"
+                      autocomplete="off" oninput="debouncePreview(); ppq006SearchOrders(this.value)">
+                    <div id="ppq006-order-dropdown" class="ppq006-order-dropdown"></div>
+                  </div>
+                  {% elif f.type == 'textarea' %}
                   <textarea class="form-control" id="{{ key }}_{{ f.key }}" name="{{ f.key }}"
                     rows="3" placeholder="{{ f.label }}" oninput="debouncePreview()"></textarea>
                   {% elif f.type == 'date' %}
@@ -2410,7 +2442,7 @@
                        ondragover="event.preventDefault(); this.classList.add('dragover')"
                        ondragleave="this.classList.remove('dragover')"
                        ondrop="handlePhotoDrop(event,'{{ key }}')">
-                    📷 點擊或拖曳照片至此
+                    📷 點擊或拖曳照片至此，或 Ctrl+V 貼上
                   </div>
                   <input type="file" id="photo-{{ key }}" accept="image/*" multiple style="display:none"
                          onchange="handlePhotos(this,'{{ key }}')">
@@ -2468,6 +2500,11 @@
                 <input class="search-input" id="keywordInput" type="text" placeholder="關鍵字…"
                        onkeydown="if(event.key==='Enter') searchFiles()">
                 <button class="btn btn-primary btn-sm" onclick="searchFiles()">搜尋</button>
+              </div>
+              <div class="search-row" style="margin-top:.4rem;">
+                <input class="search-input" id="mailToName" type="text" placeholder="郵件收件人稱呼（例：昭昌，留白則不加稱呼）"
+                       style="max-width:260px;" onchange="localStorage.setItem('app_mailToName', this.value)">
+                <script>document.getElementById('mailToName').value = localStorage.getItem('app_mailToName') || '';</script>
               </div>
               <div class="file-list" id="fileList">
                 <div class="list-empty">按搜尋載入清單</div>
@@ -3725,6 +3762,29 @@ function handlePhotoDrop(e, key) {
   handlePhotos(input, key);
 }
 
+// 附件照片支援 Ctrl+V 直接貼上（例如先按 Win+Shift+S 截圖）。
+// 監聽整個 document 而非只在上傳框裡：目前作用中的表單類型只有一個，貼上時不用先點進框裡搶焦點；
+// 純文字貼上（填品名等欄位）時 clipboard 裡沒有 image 檔案，files 會是空的，不會攔截、照常貼文字。
+document.addEventListener('paste', e => {
+  if (!_type || !['pp015', 'ppq006'].includes(_type)) return;
+  const items = (e.clipboardData || window.clipboardData || {}).items;
+  if (!items) return;
+  const files = [];
+  for (const item of items) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      const f = item.getAsFile();
+      if (f) files.push(f);
+    }
+  }
+  if (!files.length) return;
+  e.preventDefault();
+  const dt = new DataTransfer();
+  files.forEach(f => dt.items.add(f));
+  const input = document.getElementById('photo-' + _type);
+  input.files = dt.files;
+  handlePhotos(input, _type);
+});
+
 // ── 附件檔案（呈現於 Word 第2頁） ──────────────────────────────────
 function handleAttachments(input, key) {
   if (!_attachments[key]) _attachments[key] = [];
@@ -3884,13 +3944,15 @@ function mailFile(idx) {
 
 function mailFileByPath(path, filename) {
   const title = String(filename || '').replace(/\.docx?$/i, '');
+  const toName = (document.getElementById('mailToName')?.value || '').trim();
+  const greeting = toName ? `${toName}您好：` : '您好：';
   showToast('開啟 Outlook 草稿中…', 'info');
   fetch('/api/application/mail', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       path,
       subject: title,
-      body: `您好：\n\n附件為「${title}」，請查收。\n\n加工部 敬上\n`
+      body: `${greeting}\n\n附件為「${title}」，請查收。\n\n加工部 敬上\n`
     })
   }).then(r => r.json()).then(d => {
     if (d.ok) showToast('✉️ 已開啟 Outlook 草稿，確認收件者後再寄出', 'info');
@@ -3937,6 +3999,65 @@ function debouncePreview() {
   clearTimeout(_pvTimer);
   _pvTimer = setTimeout(updatePreview, 180);
 }
+
+// ── 異常處理單「品名」搜尋目前製令，選一筆代入生產製令/產品編號/批量 ──────
+// 直接打 /api/application/order_lookup（只查未完工製令報表，不像製令查詢首頁
+// 額外查 SFT/效率報表那些慢速 SOAP，純打字自動完成用要快）
+let _ppq006Timer = null;
+let _ppq006Results = [];
+function ppq006SearchOrders(q) {
+  clearTimeout(_ppq006Timer);
+  q = (q || '').trim();
+  const dd = document.getElementById('ppq006-order-dropdown');
+  if (!dd) return;
+  if (!q) { dd.classList.remove('open'); dd.innerHTML = ''; return; }
+  _ppq006Timer = setTimeout(() => _ppq006DoSearch(q), 350);
+}
+
+function _ppq006DoSearch(q) {
+  const dd = document.getElementById('ppq006-order-dropdown');
+  if (!dd) return;
+  dd.classList.add('open');
+  dd.innerHTML = '<div class="ppq006-order-item empty">搜尋中…</div>';
+  fetch('/api/application/order_lookup?q=' + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) throw new Error(data.error || '搜尋失敗');
+      _ppq006Results = data.data || [];
+      if (!_ppq006Results.length) {
+        dd.innerHTML = '<div class="ppq006-order-item empty">找不到符合的製令（已發放）</div>';
+        return;
+      }
+      dd.innerHTML = _ppq006Results.map((it, idx) => `
+        <div class="ppq006-order-item" onmousedown="event.preventDefault(); ppq006PickOrder(${idx})">
+          <div><span class="mo">${esc(it.mo_no)}</span><span class="nm">${esc(it.item_name)}</span></div>
+          <div class="meta">${esc(it.item_no)}　批量 ${esc(it.qty || '—')}</div>
+        </div>`).join('');
+    })
+    .catch(e => { dd.innerHTML = `<div class="ppq006-order-item err">${esc(e.message)}</div>`; });
+}
+
+function ppq006PickOrder(idx) {
+  const it = _ppq006Results[idx];
+  if (!it) return;
+  const set = (key, v) => { const el = document.getElementById('ppq006_' + key); if (el) el.value = v; };
+  set('item_name', it.item_name);
+  set('mo_no', it.mo_no);
+  set('item_no', it.item_no);
+  if (it.qty) set('qty', it.qty);
+  const dd = document.getElementById('ppq006-order-dropdown');
+  if (dd) { dd.classList.remove('open'); dd.innerHTML = ''; }
+  updatePreview();
+}
+
+// 點擊下拉外面就收起來（用 mousedown 搶在 blur 前面選項已用 preventDefault 擋掉了，
+// 這裡處理的是點頁面其他地方的情況）
+document.addEventListener('click', e => {
+  const dd = document.getElementById('ppq006-order-dropdown');
+  if (!dd || !dd.classList.contains('open')) return;
+  if (e.target.closest('.ppq006-name-wrap')) return;
+  dd.classList.remove('open');
+});
 
 // ── 即時預覽 ─────────────────────────────────────────────────────
 function val(id) {
@@ -8503,9 +8624,28 @@ async function loadJigData() {
 }
 
 // ══ 新增治檢具申請單（直接寫入 PDM）══
+// 製程代號自動完成清單（CMSMW 全表，258 筆左右，跟 /api/bom/routing 同一份代碼表）：
+// 之前是手 key 的固定 30 筆清單，缺很多實際存在的代號（例如 M46），改成向後端要完整清單。
+// 開 Modal 時就先抓（不 await，不擋 Modal 開啟），流程走到 Step2 打字時多半已經抓回來了；
+// 抓過一次就存著不重查，同一次開啟 PDS 不會變。
+let _jaProcCodesLoaded = false;
+function _ensureProcCodeList() {
+  if (_jaProcCodesLoaded) return;
+  _jaProcCodesLoaded = true;
+  fetch('/api/proc_codes')
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) { _jaProcCodesLoaded = false; return; }
+      document.getElementById('ja2-proc-list').innerHTML =
+        (d.data || []).map(p => `<option value="${esc(p.code)} ${esc(p.name)}">`).join('');
+    })
+    .catch(() => { _jaProcCodesLoaded = false; });
+}
+
 async function openJigApplyModal() {
   const m = document.getElementById('jig-apply-modal');
   m.style.display = 'flex';
+  _ensureProcCodeList();
   document.getElementById('ja-loading').style.display = '';
   document.getElementById('ja-form').style.display = 'none';
   document.getElementById('ja-error').style.display = 'none';
@@ -8917,7 +9057,11 @@ async function daUploadFiles(fileList) {
       const data = await res.json();
       if (!data.success) throw new Error(data.error || '上傳失敗');
       const row = document.getElementById(rowId);
-      if (row) { row.innerHTML = `✓ ${esc(data.filename)}`; row.style.color = '#2E7D32'; }
+      // 附件本身進 vault 就算成功；參考關聯沒掛上只警告（可在 PDM 手動貼上參考）
+      if (row) {
+        row.innerHTML = data.warning ? `⚠ ${esc(data.filename)}：${esc(data.warning)}` : `✓ ${esc(data.filename)}`;
+        row.style.color = data.warning ? '#B45309' : '#2E7D32';
+      }
     } catch (e) {
       const row = document.getElementById(rowId);
       if (row) { row.innerHTML = `⚠ ${esc(file.name)}：${esc(e.message)}`; row.style.color = '#C62828'; }
@@ -9429,8 +9573,10 @@ async function dcnUploadAttachment(file) {
     const res = await fetch('/api/dcn/attachment/upload', { method: 'POST', body: fd });
     const data = await res.json();
     if (!data.success) throw new Error(data.error || '上傳失敗');
-    msg.style.color = '#2E7D32';
-    msg.textContent = `✓ 已上傳「${data.filename}」到這個資料夾`;
+    msg.style.color = data.warning ? '#B45309' : '#2E7D32';
+    msg.textContent = data.warning
+      ? `⚠ 已上傳「${data.filename}」，但${data.warning}`
+      : `✓ 已上傳「${data.filename}」並掛成申請單的參考`;
     showToast('附件已上傳');
   } catch (e) {
     msg.style.color = '#C62828';
@@ -10456,6 +10602,11 @@ function boardMakeDraggable(rec) {
     if (boardCropRec) return;
     if (e.target.classList.contains('board-resize-handle') || e.target.classList.contains('board-line-handle')) return;
     if (node.classList.contains('editing')) { e.stopPropagation(); return; }
+    // 畫圖工具（線/矩形/圓/印章）啟用時，不要在這裡攔截──否則點在既有圖層（例如照片）
+    // 上面時，這個 handler 會搶先把點擊當成「選取/搬移這個圖層」處理並 stopPropagation，
+    // 讓 wrap 的 mousedown（真正呼叫 boardStartDrawShape 的地方）永遠收不到事件，
+    // 使用者就只能在空白處才畫得出形狀。放行讓事件冒泡上去，畫完工具會自動切回選取。
+    if (boardTool !== 'select') return;
     e.stopPropagation();
     e.preventDefault();
     if (e.button !== 0) return;
@@ -10976,17 +11127,7 @@ async function calResetMonth() {
               <td><input type="text" id="ja2-part-no" autocomplete="off" style="width:100%;padding:.32rem .6rem;border:1px solid var(--border);border-radius:6px"></td></tr>
           <tr><td style="color:var(--muted);font-weight:600">製程代號</td>
               <td><input type="text" id="ja2-proc" list="ja2-proc-list" autocomplete="off" placeholder="ex. N40 銑+研+鑽" style="width:100%;padding:.32rem .6rem;border:1px solid var(--border);border-radius:6px">
-                <datalist id="ja2-proc-list">
-                  <option>A05檢驗</option><option>A06 粉末冶金</option><option>B01 沖床</option><option>B03 車床</option>
-                  <option>C01 鑽孔</option><option>C03 攻牙</option><option>C05 沖字</option><option>C08 鉸孔</option>
-                  <option>D01 熱處理</option><option>D10 磨刀口</option><option>G03 組立</option><option>G07 組裝+包裝</option>
-                  <option>H01 雷射</option><option>H02 網印/移印</option><option>J02 高週波</option>
-                  <option>M01 鑽+攻</option><option>M02 鑽+倒</option><option>M11 沖+鑽</option><option>M16 銑+鑽</option>
-                  <option>M30 鉸+沖</option><option>M42 鑽+沖</option><option>M51 車+銑</option>
-                  <option>N04 銑+鑽+倒</option><option>N10 鑽+銑+攻</option><option>N19 鑽+攻+倒</option>
-                  <option>N39 沖+鉸+攻</option><option>N40 銑+研+鑽</option><option>P15 鑽+攻+倒+沖</option>
-                  <option>S01 綜合加工</option><option>Z99 品檢</option>
-                </datalist></td></tr>
+                <datalist id="ja2-proc-list"></datalist></td></tr>
           <tr><td style="color:var(--muted);font-weight:600">保管單位</td>
               <td><select id="ja2-unit" style="width:180px;padding:.32rem .6rem;border:1px solid var(--border);border-radius:6px">
                 <option selected>加工部</option>

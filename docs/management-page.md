@@ -70,4 +70,13 @@ PP-Q-006 異常處理單（照片附在第2頁，`photos_page2: True`）、公�
 - 「📧 郵寄」走 `/api/application/mail`：用 Outlook COM 開**草稿**並附上檔案，
   收件者與寄出動作一律留給使用者，程式不自動送出。
 
+**PP-Q-006 異常處理單「品名」欄位可搜尋目前製令**（2026-08-26）：打字 350ms 後打
+`/api/application/order_lookup?q=關鍵字`，下拉選一筆會自動代入「生產製令／產品編號／批量」
+三個欄位。這支 API 直接呼叫 `search_orders()`（跟製令查詢首頁同一份未完工製令報表資料源，
+支援空格=AND、`-`前綴=排除語法），**特意不走**完整的 `/api/query`——那支額外查 SFT／效率報表
+（SOAP/SSRS），對自動完成這種每打一個字就可能觸發的場景太慢。目前只有 `ppq006` 這個表單類型
+的 `item_name` 欄位有這個行為，是在 `management.html` 動態表單欄位迴圈裡用
+`{% if key == 'ppq006' and f.key == 'item_name' %}` 特判插入的，其餘表單/欄位不受影響；
+新增一種表單如果也要這種搜尋代入，照樣加一個特判分支即可，不用改動生成迴圈的其他部分。
+
 相關延伸文件：分類配色標準見 `docs/category-colors.md`、表格樣式見 `docs/table-design.md`、徽章篩選慣例見 `docs/badge-filter-convention.md`、治檢具/PDM 索引見 `docs/pdm-index.md`、DCN 索引見 `docs/dcn-index.md`、ZUMEN 圖面見 `docs/zumen.md`。

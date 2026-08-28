@@ -59,6 +59,54 @@ sv.Rollback()                                      # 不用時還號（預覽下
    defined_names 寫入（見 app.py `_write_xlsm_defined_names`）。**治檢具索引（build_jig_index.py）讀的是儲存格**，
    讀不到會 fallback 到 custom.xml。
 
+### 陷阱：卡片上的「勾選框」通常不是綁 ■/□ 那個變數（2026-08-18 實測）
+
+設計變更申請單每個「申請設變原因」其實有**兩個**變數：
+
+| 變數 | 值 | 存在哪 | 誰在看 |
+|------|----|--------|--------|
+| `PP_R_004_製造問題_tasky` | `■製造問題` / `□製造問題` | DB + custom.xml + 儲存格 | Excel 列印出來的樣子 |
+| `PP_R_004_製造問題F_tasky` | `1` / `0` | **只有 DB** | **PDM 資料卡上的勾選框** |
+
+`F` 系列在 xlsm 的 custom.xml 與 defined names 裡都查無此名，所以：
+- 寫：`ev.SetVar(名稱, '', '1')` + `ev.Flush()`（CloseFile 對它沒意義）。
+- 驗：只能 `GetVar` 讀 DB，**不能**沿用讀檔案 custom.xml 那套讀回比對（會永遠 mismatch）。
+
+只寫 `_tasky` 不寫 `F_tasky` 的症狀：Excel 印出來有 ■，但資料卡七個框全空。
+碰到別張卡片的勾選框沒反應時，第一件事就是**把人工建立的同類文件全部變數 dump 出來 diff**
+（`IEdmVariableMgr5` 列 vault 全部變數 → 對兩份檔案逐一 `GetVar`），一次就會看到多出來的那組。
+
+### 多行文字要寫 CRLF
+
+資料卡的多行文字框只認 `\r\n`，只寫 `\n` 會擠成一整段；Excel 儲存格則慣用 `\n`
+（人工建單也是這樣）。所以 SetVar 給 CRLF、`_write_xlsm_defined_names` 給 LF。
+另外讀回 custom.xml 比對時，XML 解析器會把 CRLF 正規化成 LF，比對前要先正規化換行
+（app.py `_dcn_same_text`）。
+
+## 「貼上為參考」：IEdmAddCustomRefs（2026-08-18 打通）
+
+把附件掛成申請單 xlsm 的參考（＝檔案總管的複製→貼上為參考）：
+
+```python
+ob = vault.CreateUtility(8)          # EdmUtil_AddCustomRefs
+ob = ob._oleobj_
+ob.InvokeTypes(2, 0, pythoncom.DISPATCH_METHOD, (24, 0),      # AddReferencesPath
+               ((3, 1), (0x4000 | 0x2000 | 8, 1)), 主檔FileID, [附件完整路徑])
+ob.InvokeTypes(4, 0, pythoncom.DISPATCH_METHOD, (11, 0), ((3, 1),), 0)   # CreateTree
+ob.InvokeTypes(6, 0, pythoncom.DISPATCH_METHOD, (11, 0), ())             # CreateReferences
+```
+
+踩過的坑：
+- **gen_py 包不出這個介面**：`CastTo(..., 'IEdmAddCustomRefs')` 拿到的物件只有 CLSID，
+  沒有任何方法（`AttributeError: no attribute 'AddReferencesID'`）。
+- **dynamic dispatch 會回「類型不符」**：`AddReferencesPath` 第二個參數的型別是
+  「SAFEARRAY(BSTR) 的**指標**」，pywin32 推不出來，必須用 `InvokeTypes` 明確指定
+  `VT_BYREF|VT_ARRAY|VT_BSTR` = `0x4000|0x2000|8` = 24584。
+- memid 是從型別庫查的：`AddReferencesPath=2`、`CreateTree=4`、`CreateReferences=6`。
+- 主檔取出中做沒問題，簽入後參考仍在（實測 RR2608017）。
+- 唯讀確認結果：`f5.GetReferenceTree(folder.ID, 0)` → `IEdmReference5.GetFirstChildPosition('', True, True, 0)`
+  （這個回傳的是 tuple `(pos, projectName)`，要取出有 `IsNull` 的那個才是 position）。
+
 ## Workflow（申請單流程）
 
 - 檔案 AddFile 後是「取出」狀態、**沒有 workflow 狀態**（CurrentState.Name 是空字串）。

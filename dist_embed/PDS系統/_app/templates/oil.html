@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加工部查詢系統PDS - 油品管理</title>
+    <link rel="icon" type="image/png" href="/static/app-icon.png">
+    <link href="/static/vendor/bootstrap.min.css" rel="stylesheet">
+    <!-- 字型跟全站其他頁面用同一個來源（Noto Sans TC）。少了這行的話，有外網的電腦上
+         其他頁面是 Noto Sans TC、只有這頁退回系統字型，導覽列一眼就看得出不一樣。
+         內網沒外網的電腦則是所有頁面一起退回 sans-serif，彼此仍然一致。 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --erp-blue:        #1565C0;
+            --erp-blue-dark:   #0D47A1;
+            --erp-blue-mid:    #1976D2;
+            --erp-blue-light:  #E3F2FD;
+            --erp-blue-pale:   #F0F7FF;
+            --erp-bg:          #F5F4ED;
+            --erp-surface:     #FFFFFF;
+            --erp-surface-2:   #FAF9F5;
+            --erp-border:      #E5E4DF;
+            --erp-border-dark: #D8D5CC;
+            --erp-text:        #3D3D3A;
+            --erp-text-muted:  #5C5950;
+            --erp-muted:       #8A8778;
+            --erp-row-even:    #FAF9F5;
+            --erp-row-hover:   #FBEFE6;
+            --success:         #2E7D32;
+            --success-bg:      #E8F5E9;
+            --warning:         #E65100;
+            --warning-bg:      #FFF3E0;
+            --danger:          #C62828;
+            --danger-bg:       #FDECEA;
+            --radius:          8px;
+            --radius-sm:       5px;
+            --shadow-sm:       0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+        }
+        * { box-sizing: border-box; }
+        /* 尾端的 emoji 字型備援跟管理頁一致（左側選單、徽章都有 emoji） */
+        body, * { font-family: 'Noto Sans TC', 'Source Han Sans TC', 'Segoe UI Emoji',
+                               'Apple Color Emoji', 'Noto Color Emoji', sans-serif; }
+        body {
+            background: var(--erp-bg); color: var(--erp-text);
+            font-size: .85rem; margin: 0; height: 100vh; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+        .header{background:#1565C0;color:#fff;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.3);z-index:100}
+        .header-inner{display:flex;align-items:flex-end;padding:.4rem 1rem 0}
+        .header-logo{margin-left:auto;align-self:center;font-size:1.15rem;font-weight:800;font-style:italic;letter-spacing:.03em;color:#F5A623}
+        .header-title{font-size:1.1rem;font-weight:700;padding-bottom:.45rem;white-space:nowrap;margin-right:.5rem}
+        .header-tabs{display:flex;align-items:flex-end;gap:2px}
+        .header-tab{display:inline-block;padding:.3rem .75rem;font-size:1rem;font-weight:600;white-space:nowrap;
+          color:rgba(255,255,255,.85);text-decoration:none;border-radius:0;
+          background:rgba(255,255,255,.15);cursor:pointer;transition:background .15s}
+        .header-tab.active,.header-tab:hover{background:#fff;color:#1565C0}
+        .header-tab-mgmt{background:#06C755;color:#fff}
+        .header-tab-mgmt.active,.header-tab-mgmt:hover{background:#05A649;color:#fff}
+        .header-tab-zumen{background:#4FC3F7;color:#fff;letter-spacing:.06em}
+        .header-tab-zumen.active,.header-tab-zumen:hover{background:#039BE5;color:#fff}
+
+        /* ══ 版面：左側選單 + 內容（比照設備管理／管理頁）══ */
+        .page-layout { flex:1; display:flex; overflow:hidden; min-height:0; }
+        .page-sub-nav {
+            display:flex; flex-direction:column; gap:0; width:230px; flex-shrink:0;
+            padding:.6rem .5rem; background:var(--erp-bg);
+            border-right:1px solid var(--erp-border); overflow-y:auto;
+        }
+        .nav-group { margin-bottom:.25rem; }
+        .nav-group + .nav-group { border-top:1px solid var(--erp-border); padding-top:.4rem; margin-top:.25rem; }
+        .nav-group-header { display:flex; align-items:center; gap:.55rem; padding:.3rem .5rem .4rem; user-select:none; }
+        .nav-group-icon { width:30px; height:30px; border-radius:8px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center; font-size:1rem; }
+        .nav-group-icon.g-data { background:#E3F2FD; }
+        .nav-group-icon.g-doc  { background:#FFF3E0; }
+        .nav-group-label { font-size:.88rem; font-weight:700; letter-spacing:.03em; color:var(--erp-text-muted); }
+        .page-sub-tab {
+            display:flex; align-items:center; gap:.55rem; padding:.38rem .6rem .38rem 1.7rem; font-size:.88rem; font-weight:600;
+            color:var(--erp-text-muted); text-decoration:none; border-radius:var(--radius-sm);
+            background:transparent; border:1px solid transparent; transition:all .15s;
+            text-align:left; white-space:nowrap; cursor:pointer;
+        }
+        .page-sub-tab .tab-icon { width:30px; flex-shrink:0; text-align:center; font-size:.92rem; }
+        .page-sub-tab.active {
+            background:#1565C0; color:#fff; border-color:#1565C0; font-weight:700;
+            box-shadow:0 2px 6px rgba(21,101,192,.35), inset 4px 0 0 #0D47A1;
+        }
+        .page-sub-tab:not(.active):hover { background:var(--erp-surface-2); color:#1565C0; }
+
+        .page-body { flex:1; display:flex; flex-direction:column; padding:.75rem; gap:.55rem; overflow:hidden; min-width:0; }
+        .sub-page { flex:1; display:flex; flex-direction:column; gap:.55rem; overflow:hidden; min-height:0; }
+
+        .card {
+            background:var(--erp-surface); border:1px solid var(--erp-border);
+            border-radius:var(--radius); box-shadow:var(--shadow-sm); overflow:hidden;
+        }
+        .card-header {
+            font-size:.95rem; font-weight:800; padding:.7rem 1rem; color:#fff;
+            background:linear-gradient(90deg, var(--erp-blue-mid) 0%, var(--erp-blue-dark) 100%);
+            border-left:4px solid var(--erp-blue-dark);
+        }
+
+        .toolbar {
+            background:var(--erp-surface); border:1px solid var(--erp-border);
+            border-radius:var(--radius); padding:.6rem .8rem; display:flex; align-items:center;
+            gap:.5rem; flex-wrap:wrap; flex-shrink:0;
+        }
+        .toolbar input[type=text] { font-size:.84rem; padding:.35rem .6rem; border:1px solid var(--erp-border-dark); border-radius:4px; }
+        .toolbar .btn { font-size:.82rem; }
+        .toolbar .spacer { flex:1; }
+        #searchInput, #fileSearchInput, #chgSearchInput { width:340px; }
+        .count-txt { font-size:.78rem; color:var(--erp-text-muted); white-space:nowrap; }
+        .warn-txt { font-size:.78rem; color:var(--danger); font-weight:600; white-space:nowrap; cursor:pointer; }
+
+        /* 篩選列：徽章單擊＝設定對應選單、雙擊＝清空（docs/badge-filter-convention.md）*/
+        .filter-bar {
+            display:flex; align-items:center; gap:.45rem; flex-wrap:wrap;
+            background:var(--erp-surface); border:1px solid var(--erp-border);
+            border-radius:var(--radius); padding:.5rem .9rem; flex-shrink:0;
+        }
+        .filter-label { font-size:.82rem; font-weight:600; color:var(--erp-text-muted); white-space:nowrap; }
+        .filter-bar select {
+            font-size:.82rem; padding:.3rem .5rem; border:1px solid var(--erp-border-dark);
+            border-radius:4px; background:#fff; color:var(--erp-text); cursor:pointer;
+        }
+        .filter-bar select:focus { outline:none; border-color:var(--erp-blue-mid); box-shadow:0 0 0 2px rgba(21,101,192,.12); }
+        .filter-bar select.on { border-color:var(--erp-blue); background:var(--erp-blue-light); font-weight:700; color:var(--erp-blue-dark); }
+        .filter-bar .sep { width:1px; height:20px; background:var(--erp-border); margin:0 .25rem; }
+        .filter-bar .btn { font-size:.78rem; padding:.22rem .6rem; }
+
+        .table-wrap { flex:1; overflow:auto; background:var(--erp-surface); border:1px solid var(--erp-border); border-radius:var(--radius); }
+        table.oil-table { width:100%; border-collapse:collapse; }
+        table.oil-table th {
+            position:sticky; top:0; z-index:2; padding:.5rem .7rem; font-size:.8rem; font-weight:600;
+            text-align:left; color:rgba(255,255,255,.95); white-space:nowrap;
+            background:linear-gradient(180deg, var(--erp-blue-mid), var(--erp-blue-dark));
+        }
+        table.oil-table td { padding:.4rem .7rem; font-size:.85rem; color:var(--erp-text); border-bottom:1px solid #F0EEE8; vertical-align:middle; }
+        table.oil-table tr:nth-child(even) td { background:var(--erp-row-even); }
+        table.oil-table tbody tr { cursor:pointer; }
+        table.oil-table tbody tr:hover td { background:var(--erp-row-hover); }
+        table.oil-table tr.selected td { background:#FBE3D3 !important; }
+        td.o-code { font-weight:700; color:var(--erp-blue-dark); white-space:nowrap;
+            font-family:'Consolas','Courier New',monospace; font-size:.92rem; }
+        td.o-name { min-width:220px; padding:.2rem .4rem; }
+        /* 快速編輯：解鎖後「油品代號」與「品名」可以在清單上直接改，改完離開欄位自動存檔
+           （綠框閃一下＝存好了），比照設備管理的停機時數欄。
+           用 contenteditable 而不是 <input>：品名常常比欄寬長（STORK金屬加工液 SW5031-030），
+           input 只會把後面切掉看不到，contenteditable 跟原本的純文字一樣會自動折行。
+           鎖著的時候完全不輸出 contenteditable，純文字一個都動不到 */
+        .cell-edit {
+            padding:.2rem .3rem; border:1px solid transparent; border-radius:4px;
+            min-height:1.5em; word-break:break-word;
+        }
+        table.oil-table tbody tr:hover .cell-edit { border-color:var(--erp-border-dark); background:#fff; }
+        .cell-edit:focus { outline:none; border-color:var(--erp-blue-mid); background:#fff;
+            box-shadow:0 0 0 2px rgba(21,101,192,.15); }
+        .cell-edit.ok  { border-color:var(--success); background:var(--success-bg); }
+        .cell-edit.err { border-color:var(--danger);  background:var(--danger-bg); }
+        td.o-code .cell-edit { display:inline-block; min-width:120px; }
+        /* 解鎖狀態要一眼看得出來，不然會忘了自己開著（代號是主鍵，誤改會牽動一串子表）*/
+        .quick-btn {
+            font-size:.82rem; font-weight:700; padding:.3rem .7rem; white-space:nowrap;
+            border:1px solid var(--erp-border-dark); border-radius:999px;
+            background:var(--erp-surface-2); color:var(--erp-muted); cursor:pointer;
+        }
+        .quick-btn:hover { background:var(--erp-blue-pale); border-color:var(--erp-blue-mid); color:var(--erp-blue-dark); }
+        .quick-btn.on { background:#FFF3E0; border-color:#FFB74D; color:#E65100; }
+        table.oil-table.quick tbody tr { cursor:text; }
+        td.o-sub { color:var(--erp-text-muted); font-size:.8rem; }
+        td.o-num { text-align:center; font-size:.8rem; color:var(--erp-text-muted); white-space:nowrap; }
+        td.o-date { white-space:nowrap; font-size:.78rem; color:var(--erp-text-muted); }
+        td.o-units { font-size:.8rem; color:var(--erp-text-muted); max-width:230px;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .no-msds { color:var(--danger); font-weight:700; }
+
+        /* 分類／狀態徽章。分類色票沿用表格小圓標的做法（docs/table-design.md）*/
+        .cat-badge, .st-badge, .sup-badge {
+            display:inline-block; padding:.15rem .5rem; border-radius:5px;
+            font-size:.86rem; font-weight:700; white-space:nowrap;
+        }
+        .cat-水性切削液{background:#E3F2FD;color:#1565C0} .cat-切削油{background:#FFF3E0;color:#E65100}
+        .cat-切削油膏{background:#FFF8E1;color:#F57F17}  .cat-液壓油{background:#E8F5E9;color:#2E7D32}
+        .cat-滑道油{background:#F3E5F5;color:#6A1B9A}    .cat-主軸油{background:#E0F7FA;color:#00838F}
+        .cat-機油{background:#EFEBE9;color:#4E342E}      .cat-齒輪油{background:#E8EAF6;color:#283593}
+        .cat-防銹油{background:#E0F2F1;color:#00695C}    .cat-清潔劑{background:#FCE4EC;color:#AD1457}
+        .cat-燃料{background:#FBE9E7;color:#BF360C}      .cat-潤滑脂{background:#F1F8E9;color:#558B2F}
+        .cat-其他,.cat-未分類{background:#ECEFF1;color:#455A64}
+        .st-使用中{background:var(--success-bg);color:var(--success)}
+        /* 停用用紅色（跟設備主檔的「報廢」同一組 danger 色票）：這支油品已經不能再領用，
+           要跟「使用中」一眼分得出來，灰色太安靜會被掃過去 */
+        .st-停用{background:var(--danger-bg);color:var(--danger)}
+        .sup-badge{background:var(--erp-blue-pale);color:var(--erp-blue-dark);font-weight:600;font-size:.8rem}
+        .src-manual { display:inline-block; margin-left:.25rem; font-size:.62rem; font-weight:700;
+            padding:.02rem .25rem; border-radius:3px; background:#EDE7F6; color:#5E35B1; vertical-align:middle; }
+        .obs-flag { display:inline-block; margin-left:.3rem; font-size:.68rem; font-weight:700;
+            padding:.02rem .3rem; border-radius:3px; background:#ECEFF1; color:#607D8B; }
+
+        #emptyMsg, #loadingMsg, .empty-msg { text-align:center; padding:2rem; color:var(--erp-text-muted); }
+
+        /* ══ 新增／編輯油品表單 ══ */
+        .form-scroll { flex:1; overflow-y:auto; background:var(--erp-bg); }
+        .form-inner { max-width:1180px; margin:0 auto; padding:1.2rem 1.4rem 1.6rem; }
+        .form-sect {
+            background:var(--erp-surface); border:1px solid var(--erp-border); border-radius:var(--radius);
+            box-shadow:var(--shadow-sm); padding:1.1rem 1.3rem 1.3rem; margin-bottom:1rem;
+        }
+        .form-sect h6 {
+            display:flex; align-items:baseline; gap:.65rem; font-size:1.12rem; font-weight:800;
+            color:var(--erp-text); border-bottom:1px solid var(--erp-border);
+            padding:0 0 .65rem .75rem; margin-bottom:1.05rem; position:relative;
+        }
+        .form-sect h6::before {
+            content:''; position:absolute; left:0; top:.12em; width:4px; height:1em;
+            background:var(--erp-blue); border-radius:2px;
+        }
+        .sect-sub { font-size:.84rem; font-weight:500; color:var(--erp-muted); }
+        .form-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.85rem 1.1rem; }
+        .fld { display:flex; flex-direction:column; gap:.3rem; }
+        .fld.wide { grid-column:1 / -1; }
+        .fld label { font-size:.85rem; font-weight:600; color:var(--erp-text-muted); }
+        .fld label .req { color:var(--danger); }
+        .fld input, .fld select, .fld textarea {
+            font-size:.94rem; padding:.5rem .7rem; border:1px solid var(--erp-border-dark);
+            border-radius:var(--radius-sm); background:#fff; color:var(--erp-text); width:100%;
+        }
+        .fld input:focus, .fld select:focus, .fld textarea:focus { outline:none; border-color:var(--erp-blue-mid); box-shadow:0 0 0 2px rgba(21,101,192,.12); }
+        .fld .hint { font-size:.78rem; color:var(--erp-muted); }
+        .unit-box { border:1px solid var(--erp-border); border-radius:var(--radius-sm); background:var(--erp-surface-2); padding:.55rem .8rem; }
+        .unit-head, .unit-row { display:grid; grid-template-columns:200px 210px 1fr 34px; gap:.6rem; align-items:center; }
+        .unit-head { padding:0 0 .45rem; font-size:.78rem; font-weight:700; color:var(--erp-muted); letter-spacing:.03em; }
+        .unit-row { padding:.35rem 0; border-top:1px solid var(--erp-border); }
+        .unit-row:first-child { border-top:none; }
+        .unit-row input, .unit-row select { font-size:.92rem; padding:.4rem .6rem; border:1px solid var(--erp-border-dark); border-radius:var(--radius-sm); width:100%; background:#fff; }
+        .btn-x { border:none; background:transparent; color:var(--danger); font-size:1.1rem; cursor:pointer; border-radius:4px; line-height:1; padding:.2rem; }
+        .btn-x:hover { background:var(--danger-bg); }
+        .form-footer { flex-shrink:0; padding:.75rem 0; border-top:1px solid var(--erp-border); background:var(--erp-surface-2); }
+        .form-footer .footer-inner { max-width:1180px; margin:0 auto; padding:0 1.4rem; display:flex; align-items:center; gap:.7rem; }
+        .form-footer .footer-spacer { flex:1; }
+        .form-msg { font-size:.9rem; font-weight:600; }
+        .form-msg.ok { color:var(--success); }
+        .form-msg.err { color:var(--danger); }
+
+        /* ══ 右側油品詳情抽屜 ══ */
+        #drawerMask { position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:900; display:none; }
+        #drawer {
+            position:fixed; top:0; right:0; height:100vh; width:760px; max-width:95vw; z-index:901;
+            background:var(--erp-surface); box-shadow:-6px 0 24px rgba(0,0,0,.18);
+            transform:translateX(100%); transition:transform .22s ease; display:flex; flex-direction:column;
+        }
+        #drawer.open { transform:translateX(0); }
+        .dw-head { background:linear-gradient(95deg, var(--erp-blue-mid), var(--erp-blue-dark)); color:#fff; padding:.9rem 1.1rem; flex-shrink:0; position:relative; }
+        .dw-code { font-size:1.5rem; font-weight:800; font-family:'Consolas','Courier New',monospace; letter-spacing:.02em; }
+        .dw-sub { font-size:1rem; opacity:.92; margin-top:.2rem; }
+        .dw-close { position:absolute; top:.7rem; right:.9rem; background:transparent; border:none; color:#fff; font-size:1.7rem; line-height:1; cursor:pointer; opacity:.85; }
+        .dw-close:hover { opacity:1; }
+        .dw-tools { display:flex; gap:.4rem; padding:.55rem 1.1rem; border-bottom:1px solid var(--erp-border); background:var(--erp-surface-2); flex-shrink:0; }
+        .dw-tools .btn { font-size:.88rem; }
+        .dw-body { flex:1; overflow-y:auto; padding:1rem 1.1rem 2rem; }
+        .dw-sect { margin-bottom:1.3rem; }
+        .dw-sect h6 { font-size:1.05rem; font-weight:800; color:var(--erp-blue-dark);
+            border-bottom:2px solid var(--erp-blue-light); padding-bottom:.35rem; margin-bottom:.6rem;
+            display:flex; align-items:center; gap:.5rem; }
+        .dw-sect h6 .btn { font-size:.76rem; padding:.1rem .5rem; font-weight:600; }
+        .dw-sect h6 .push { margin-left:auto; }
+        .dw-grid { display:grid; grid-template-columns:auto 1fr; gap:.45rem 3rem; font-size:1rem; }
+        .dw-grid dt { color:var(--erp-text-muted); font-weight:500; white-space:nowrap; }
+        .dw-grid dd { margin:0; color:var(--erp-text); word-break:break-all; font-weight:500; }
+        .dw-file { display:flex; align-items:center; gap:.4rem; padding:.35rem .5rem; border-radius:5px;
+            color:var(--erp-blue-dark); text-decoration:none; font-size:.92rem; border-bottom:1px solid #F5F3EE; }
+        .dw-file:hover { background:var(--erp-blue-pale); }
+        .dw-file .sz { margin-left:auto; font-size:.82rem; color:var(--erp-text-muted); white-space:nowrap; }
+        .dw-file.obs { color:var(--erp-muted); }
+        .dw-line { display:flex; align-items:center; gap:.55rem; font-size:.95rem; padding:.4rem 0;
+            border-bottom:1px dashed var(--erp-border); }
+        .dw-line .d { color:var(--erp-text-muted); white-space:nowrap; font-family:'Consolas',monospace; font-size:.88rem; }
+        .dw-line .t { flex:1; }
+        .dw-line .by { font-size:.74rem; color:var(--erp-muted); white-space:nowrap; }
+        .dw-line .a { flex-shrink:0; padding:.05rem .4rem; border-radius:4px; font-size:.8rem; font-weight:700;
+            white-space:nowrap; background:var(--erp-blue-light); color:var(--erp-blue-dark); }
+        .dw-empty { color:var(--erp-muted); font-size:.92rem; padding:.3rem 0; }
+        .dw-note { background:var(--warning-bg); border-left:4px solid var(--warning); color:#8A4500;
+            padding:.6rem .8rem; border-radius:var(--radius-sm); margin-bottom:1rem; font-size:.92rem; line-height:1.6; }
+        .dw-form { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.5rem; margin:.5rem 0 .3rem; }
+        .dw-form input, .dw-form select { font-size:.9rem; padding:.35rem .55rem; border:1px solid var(--erp-border-dark);
+            border-radius:var(--radius-sm); background:#fff; width:100%; }
+        .dw-form .full { grid-column:1 / -1; display:flex; gap:.4rem; align-items:center; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">加工部查詢系統PDS</div>
+    <div class="header-tabs">
+      <a href="/"           class="header-tab">製令查詢</a>
+      <a href="/production" class="header-tab">生產中製令</a>
+      <a href="/equipment"  class="header-tab">設備稼動</a>
+      <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
+      <a href="/routing"    class="header-tab">產品途程查詢</a>
+      <a href="/batch_cost" class="header-tab">批成本</a>
+      <a href="/cnc_program" class="header-tab">程式管理</a>
+      <span                 class="header-tab active">油品管理</span>
+      <a href="/equipment_master" class="header-tab">設備管理</a>
+      <a href="/zumen" class="header-tab header-tab-zumen">ZUMEN</a>
+      <a href="/management" class="header-tab header-tab-mgmt">管理</a>
+    </div>
+    <span class="header-logo">MAXCLAW</span>
+  </div>
+</div>
+
+<div class="page-layout">
+
+<div class="page-sub-nav">
+  <div class="nav-group">
+    <div class="nav-group-header">
+      <span class="nav-group-icon g-data">📁</span>
+      <span class="nav-group-label">油品資料</span>
+    </div>
+    <span class="page-sub-tab active" onclick="switchSubPage('list')"><span class="tab-icon">🛢️</span>油品清單</span>
+    <span class="page-sub-tab" onclick="switchSubPage('new')"><span class="tab-icon" style="font-weight:800">＋</span>新增油品</span>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-header">
+      <span class="nav-group-icon g-doc">📁</span>
+      <span class="nav-group-label">文件與記錄</span>
+    </div>
+    <span class="page-sub-tab" onclick="switchSubPage('files')"><span class="tab-icon">📄</span>MSDS 文件</span>
+    <span class="page-sub-tab" onclick="switchSubPage('change')"><span class="tab-icon">🔁</span>更換記錄</span>
+  </div>
+</div>
+
+<div class="page-body">
+
+  <!-- ══ 油品清單 ══ -->
+  <div id="sub-page-list" class="sub-page">
+    <div class="toolbar">
+      <input type="text" id="searchInput" class="form-control"
+             placeholder="代號/品名/品牌/供應商/規格/使用單位關鍵字，空格=AND，-前綴=排除（留空＝全部）">
+      <button class="btn btn-primary" id="btnSearch">🔍 搜尋</button>
+      <button class="btn btn-outline-secondary" id="btnClear">清除條件</button>
+      <span class="spacer"></span>
+      <span id="msdsWarn" class="warn-txt" style="display:none"></span>
+      <button id="btnQuick" class="quick-btn" onclick="toggleQuickEdit()"
+              title="解鎖後可在清單上直接修改油品代號與品名">🔒 快速編輯</button>
+      <button class="btn btn-outline-secondary" onclick="rescan()">🔄 重新掃描</button>
+      <button class="btn btn-outline-secondary" onclick="exportExcel()">📤 匯出Excel</button>
+      <button class="btn btn-outline-secondary" onclick="openFolder('')">📂 資料夾</button>
+      <span id="resultCount" class="count-txt"></span>
+    </div>
+
+    <div class="filter-bar">
+      <span class="filter-label">分類</span>
+      <select id="fltCat" onchange="applyFilters()" style="min-width:150px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">供應商</span>
+      <select id="fltSup" onchange="applyFilters()" style="min-width:130px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">狀態</span>
+      <select id="fltStatus" onchange="applyFilters()" style="min-width:110px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">MSDS</span>
+      <select id="fltMsds" onchange="applyFilters()" style="min-width:110px">
+        <option value="">全部</option>
+        <option value="0">僅缺 MSDS</option>
+        <option value="1">僅有 MSDS</option>
+      </select>
+      <button class="btn btn-outline-secondary" onclick="clearFilters()">清除篩選</button>
+      <span class="spacer"></span>
+      <span class="count-txt" id="scanMsg"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table class="oil-table" id="oilTable">
+        <thead>
+          <tr>
+            <th style="width:110px">油品代號</th>
+            <th style="min-width:230px">品名</th>
+            <th style="width:110px">分類</th>
+            <th style="width:100px">供應商</th>
+            <th style="width:90px">品牌</th>
+            <th style="width:150px">規格</th>
+            <th style="width:110px">包裝</th>
+            <th style="width:80px">狀態</th>
+            <th style="width:180px">使用單位</th>
+            <th style="width:60px">MSDS</th>
+            <th style="width:92px">MSDS日期</th>
+            <th style="width:92px">最近更換</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div id="loadingMsg">載入中…</div>
+      <div id="emptyMsg" style="display:none">沒有符合條件的油品</div>
+    </div>
+  </div>
+
+  <!-- ══ 新增／編輯油品 ══ -->
+  <div id="sub-page-new" class="sub-page" style="display:none">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+      <div class="card-header" id="formTitle">➕ 新增油品</div>
+      <div class="form-scroll">
+        <div class="form-inner">
+
+          <div class="form-sect">
+            <h6>基本資料<span class="sect-sub">代號是主鍵，建議照 MSDS 檔名的 [代號] 填（AW-30、DS-32…）</span></h6>
+            <div class="form-row">
+              <div class="fld">
+                <label>油品代號 <span class="req">*</span></label>
+                <input type="text" id="fCode" placeholder="AW-30">
+                <span class="hint" id="codeHint"></span>
+              </div>
+              <div class="fld"><label>品名</label><input type="text" id="fName" placeholder="STORK金屬加工液"></div>
+              <div class="fld"><label>品牌</label><input type="text" id="fBrand" placeholder="STORK"></div>
+              <div class="fld">
+                <label>供應商</label>
+                <input type="text" id="fSupplier" list="supplierList" placeholder="唯勝">
+                <datalist id="supplierList"></datalist>
+              </div>
+              <div class="fld">
+                <label>分類</label>
+                <select id="fCategory">
+                  <option value="">（未分類）</option>
+                  <option>水性切削液</option><option>切削油</option><option>切削油膏</option>
+                  <option>液壓油</option><option>滑道油</option><option>主軸油</option>
+                  <option>機油</option><option>齒輪油</option><option>防銹油</option>
+                  <option>潤滑脂</option><option>清潔劑</option><option>燃料</option><option>其他</option>
+                </select>
+              </div>
+              <div class="fld">
+                <label>狀態</label>
+                <select id="fStatus"><option>使用中</option><option>停用</option></select>
+              </div>
+              <div class="fld"><label>規格</label><input type="text" id="fSpec" placeholder="稀釋 8~12%／ISO VG32"></div>
+              <div class="fld"><label>包裝</label><input type="text" id="fPack" placeholder="18L桶／200L鐵桶"></div>
+              <div class="fld">
+                <label>替代油品</label>
+                <input type="text" id="fReplacedBy" placeholder="停用後由哪支接手，例如 DS-32">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-sect">
+            <h6>使用單位<span class="sect-sub">哪個單位／哪台設備在用這支油，設備欄可留空</span></h6>
+            <div class="unit-box">
+              <div class="unit-head"><span>使用單位</span><span>設備（選填）</span><span>備註</span><span></span></div>
+              <div id="unitRows"></div>
+            </div>
+            <button class="btn btn-sm btn-outline-primary" style="margin-top:.5rem" onclick="addUnitRow()">＋ 加一列</button>
+          </div>
+
+          <div class="form-sect">
+            <h6>說明<span class="sect-sub">使用注意事項、濃度管理方式、稀釋比例…</span></h6>
+            <div class="form-row">
+              <div class="fld wide"><label>使用說明</label><textarea id="fUsageNote" rows="3"></textarea></div>
+              <div class="fld wide"><label>備註</label><textarea id="fRemark" rows="2"></textarea></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <div class="form-footer">
+        <div class="footer-inner">
+          <button class="btn btn-primary" onclick="saveOil()">💾 存檔</button>
+          <button class="btn btn-outline-secondary" onclick="resetForm();switchSubPage('list')">取消</button>
+          <span class="footer-spacer"></span>
+          <span class="form-msg" id="formMsg"></span>
+          <button class="btn btn-outline-danger" id="btnDelete" style="display:none" onclick="deleteOil()">🗑 刪除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MSDS 文件 ══ -->
+  <div id="sub-page-files" class="sub-page" style="display:none">
+    <div class="toolbar">
+      <input type="text" id="fileSearchInput" class="form-control"
+             placeholder="檔名/代號/品名/供應商關鍵字，空格=AND，-前綴=排除">
+      <button class="btn btn-primary" onclick="loadFiles()">🔍 搜尋</button>
+      <button class="btn btn-outline-secondary" onclick="$('fileSearchInput').value='';loadFiles()">清除條件</button>
+      <span class="spacer"></span>
+      <button class="btn btn-outline-secondary" onclick="rescan()">🔄 重新掃描</button>
+      <button class="btn btn-outline-secondary" onclick="openFolder('msds')">📂 MSDS 資料夾</button>
+      <span id="fileCount" class="count-txt"></span>
+    </div>
+
+    <div class="filter-bar">
+      <span class="filter-label">類型</span>
+      <select id="fltRoot" onchange="renderFiles()" style="min-width:120px">
+        <option value="">全部</option><option value="msds">MSDS</option><option value="doc">簡介／文件</option>
+      </select>
+      <span class="sep"></span>
+      <span class="filter-label">歸位</span>
+      <select id="fltOrphan" onchange="renderFiles()" style="min-width:130px">
+        <option value="">全部</option><option value="1">僅未歸位</option><option value="0">僅已歸位</option>
+      </select>
+      <span class="sep"></span>
+      <span class="filter-label">版本</span>
+      <select id="fltObs" onchange="renderFiles()" style="min-width:120px">
+        <option value="0">僅現行</option><option value="">全部</option><option value="1">僅報廢區</option>
+      </select>
+      <span class="spacer"></span>
+      <span class="count-txt">未歸位的檔案可在「歸屬油品」欄直接指定</span>
+    </div>
+
+    <div class="table-wrap">
+      <table class="oil-table">
+        <thead>
+          <tr>
+            <th style="width:76px">類型</th>
+            <th style="min-width:320px">檔名</th>
+            <th style="width:210px">歸屬油品</th>
+            <th style="width:180px">品名</th>
+            <th style="width:96px">版本日期</th>
+            <th style="width:80px">大小</th>
+            <th style="width:150px">檔案時間</th>
+          </tr>
+        </thead>
+        <tbody id="fileTbody"></tbody>
+      </table>
+      <div class="empty-msg" id="fileEmpty" style="display:none">沒有符合條件的檔案</div>
+    </div>
+  </div>
+
+  <!-- ══ 更換記錄 ══ -->
+  <div id="sub-page-change" class="sub-page" style="display:none">
+    <div class="toolbar">
+      <input type="text" id="chgSearchInput" class="form-control"
+             placeholder="油品/設備/日期/登錄人關鍵字，空格=AND，-前綴=排除">
+      <button class="btn btn-primary" onclick="loadChanges()">🔍 搜尋</button>
+      <button class="btn btn-outline-secondary" onclick="$('chgSearchInput').value='';loadChanges()">清除條件</button>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" onclick="openChangeForm()">＋ 登錄更換</button>
+      <span id="chgCount" class="count-txt"></span>
+    </div>
+
+    <div class="filter-bar">
+      <span class="filter-label">油品</span>
+      <select id="fltChgOil" onchange="renderChanges()" style="min-width:170px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">設備</span>
+      <select id="fltChgEq" onchange="renderChanges()" style="min-width:150px"></select>
+      <span class="sep"></span>
+      <span class="filter-label">來源</span>
+      <select id="fltChgSrc" onchange="renderChanges()" style="min-width:120px">
+        <option value="">全部</option><option value="user">系統登錄</option><option value="excel">Excel匯入</option>
+      </select>
+      <button class="btn btn-outline-secondary" onclick="clearChgFilters()">清除篩選</button>
+    </div>
+
+    <!-- 登錄表單：預設收起，按「＋ 登錄更換」才展開 -->
+    <div class="card" id="chgFormCard" style="display:none">
+      <div class="card-header">＋ 登錄一筆油品更換</div>
+      <div style="padding:.8rem 1rem">
+        <div class="form-row">
+          <div class="fld"><label>油品 <span class="req">*</span></label><select id="cfOil"></select></div>
+          <div class="fld"><label>更換日期 <span class="req">*</span></label><input type="date" id="cfDate"></div>
+          <div class="fld"><label>設備</label><select id="cfEquip"></select></div>
+          <div class="fld"><label>數量</label><input type="text" id="cfQty" placeholder="例：18L"></div>
+          <div class="fld"><label>登錄人</label><input type="text" id="cfOperator"></div>
+          <div class="fld"><label>備註</label><input type="text" id="cfNote"></div>
+        </div>
+        <div style="margin-top:.7rem;display:flex;gap:.5rem;align-items:center">
+          <button class="btn btn-primary btn-sm" onclick="saveChange()">💾 存檔</button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="$('chgFormCard').style.display='none'">取消</button>
+          <span class="form-msg" id="chgMsg"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="oil-table">
+        <thead>
+          <tr>
+            <th style="width:100px">更換日期</th>
+            <th style="width:110px">油品代號</th>
+            <th style="min-width:200px">品名</th>
+            <th style="width:110px">設備編碼</th>
+            <th style="width:110px">設備名稱</th>
+            <th style="width:90px">數量</th>
+            <th style="width:90px">登錄人</th>
+            <th style="min-width:180px">備註</th>
+            <th style="width:90px">來源</th>
+            <th style="width:44px"></th>
+          </tr>
+        </thead>
+        <tbody id="chgTbody"></tbody>
+      </table>
+      <div class="empty-msg" id="chgEmpty" style="display:none">沒有符合條件的更換記錄</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<div id="drawerMask"></div>
+<div id="drawer">
+  <div class="dw-head">
+    <button class="dw-close" id="dwClose">&times;</button>
+    <div class="dw-code" id="dwCode"></div>
+    <div class="dw-sub" id="dwSub"></div>
+  </div>
+  <div class="dw-tools">
+    <button class="btn btn-sm btn-primary" id="dwEdit">✏️ 編輯這支油品</button>
+    <button class="btn btn-sm btn-outline-secondary" id="dwUpMsds">📤 上傳 MSDS</button>
+    <button class="btn btn-sm btn-outline-secondary" id="dwUpDoc">📎 上傳文件／Excel</button>
+  </div>
+  <input type="file" id="fileUploadInput" multiple style="display:none">
+  <div class="dw-body" id="dwBody"></div>
+</div>
+
+<script src="/static/vendor/bootstrap.bundle.min.js"></script>
+<script>
+let ALL = [];                                        // 油品清單（搜尋在後端、篩選在前端）
+let FILTER = { cat:'', sup:'', status:'', msds:'' };
+let ALL_FILES = [];                                  // MSDS 文件頁
+let ALL_CHG = [];                                    // 更換記錄頁
+let EQUIPS = [];                                     // 設備選項（來自設備主檔）
+let EDITING = null;                                  // null = 新增模式，否則是編輯中的原始代號
+let FIRST_LOAD = true;                               // 第一次載入把狀態篩選預設成「使用中」
+let CUR_CODE = '';                                   // 抽屜目前開著的油品
+
+const esc = s => (s ?? '').toString()
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const $ = id => document.getElementById(id);
+
+async function postJSON(url, body) {
+    try {
+        return await (await fetch(url, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body || {})
+        })).json();
+    } catch (e) { return {success: false, error: '連線失敗：' + e}; }
+}
+
+function fmtSize(n) {
+    if (!n && n !== 0) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n/1024).toFixed(0) + ' KB';
+    return (n/1048576).toFixed(1) + ' MB';
+}
+
+// 日期字串一律手組，不用 toISOString()（UTC 會差一天）
+function today() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function switchSubPage(name) {
+    ['list','new','files','change'].forEach(n => $('sub-page-' + n).style.display = (n === name ? 'flex' : 'none'));
+    document.querySelectorAll('.page-sub-tab').forEach(el => {
+        el.classList.toggle('active', el.getAttribute('onclick').includes(`'${name}'`));
+    });
+    if (name === 'files' && !ALL_FILES.length) loadFiles();
+    if (name === 'change' && !ALL_CHG.length) loadChanges();
+}
+
+// ══════════ 油品清單 ══════════
+// 徽章單擊＝設定對應下拉選單的值、雙擊＝清空（docs/badge-filter-convention.md）
+function filterByCat(v)    { $('fltCat').value = v; applyFilters(); }
+function filterBySup(v)    { $('fltSup').value = v; applyFilters(); }
+function filterByStatus(v) { $('fltStatus').value = v; applyFilters(); }
+
+function applyFilters() {
+    FILTER = { cat:$('fltCat').value, sup:$('fltSup').value,
+               status:$('fltStatus').value, msds:$('fltMsds').value };
+    render();
+}
+
+function clearFilters() {
+    ['fltCat','fltSup','fltStatus','fltMsds'].forEach(id => $(id).value = '');
+    applyFilters();
+}
+
+async function loadStats() {
+    const json = await (await fetch('/api/oil/stats')).json();
+    if (!json.success) return;
+    const total = json.statuses.reduce((s, x) => s + x.cnt, 0);
+    const opt = (v, cnt) => `<option value="${esc(v)}">${esc(v)}（${cnt}）</option>`;
+    const keep = {c:$('fltCat').value, s:$('fltSup').value, t:$('fltStatus').value};
+    $('fltCat').innerHTML = `<option value="">全部分類（${total}）</option>` +
+        json.categories.map(x => opt(x.name, x.cnt)).join('');
+    $('fltSup').innerHTML = `<option value="">全部（${total}）</option>` +
+        json.suppliers.map(x => opt(x.name, x.cnt)).join('');
+    $('fltStatus').innerHTML = `<option value="">全部（${total}）</option>` +
+        json.statuses.map(x => opt(x.name, x.cnt)).join('');
+    $('fltCat').value = keep.c; $('fltSup').value = keep.s; $('fltStatus').value = keep.t;
+    // 預設不顯示停用的油品（停用＝已經不能領用，平常不該佔畫面）；
+    // 選單本身還是留著「全部」與「停用」，要看的時候自己切，切過之後就不再強制
+    if (FIRST_LOAD) {
+        FIRST_LOAD = false;
+        if (json.statuses.some(s => s.name === '使用中')) {
+            $('fltStatus').value = '使用中';
+            applyFilters();
+        }
+    }
+    $('supplierList').innerHTML = json.suppliers
+        .filter(x => x.name !== '未填').map(x => `<option value="${esc(x.name)}">`).join('');
+
+    const warn = $('msdsWarn');
+    if (json.no_msds > 0) {
+        warn.textContent = `⚠ ${json.no_msds} 支使用中的油品沒有現行 MSDS`;
+        warn.style.display = '';
+        warn.onclick = () => { $('fltMsds').value = ($('fltMsds').value === '0') ? '' : '0';
+                               $('fltStatus').value = '使用中'; applyFilters(); };
+    } else {
+        warn.style.display = 'none';
+    }
+}
+
+async function doSearch() {
+    $('loadingMsg').style.display = '';
+    $('emptyMsg').style.display = 'none';
+    const q = $('searchInput').value.trim();
+    try {
+        const json = await (await fetch('/api/oil/search?q=' + encodeURIComponent(q))).json();
+        if (!json.success) { alert(json.error); ALL = []; } else ALL = json.data;
+    } catch (e) { alert('查詢失敗：' + e); ALL = []; }
+    $('loadingMsg').style.display = 'none';
+    render();
+}
+
+function render() {
+    const rows = ALL.filter(r =>
+        (!FILTER.cat    || (r.category || '未分類') === FILTER.cat) &&
+        (!FILTER.sup    || (r.supplier || '未填')   === FILTER.sup) &&
+        (!FILTER.status || (r.status   || '未填')   === FILTER.status) &&
+        (FILTER.msds === '' || (FILTER.msds === '1' ? r.msds_count > 0 : !r.msds_count)));
+
+    [['fltCat', FILTER.cat], ['fltSup', FILTER.sup],
+     ['fltStatus', FILTER.status], ['fltMsds', FILTER.msds]]
+        .forEach(([id, v]) => $(id).classList.toggle('on', !!v));
+
+    $('resultCount').textContent =
+        `共 ${rows.length} 支` + (rows.length !== ALL.length ? `（全部 ${ALL.length} 支）` : '');
+    $('emptyMsg').style.display = rows.length ? 'none' : '';
+
+    $('tbody').innerHTML = rows.map(r => {
+        const cat = r.category || '未分類';
+        const msds = r.msds_count
+            ? `<span>${r.msds_count}</span>`
+            : `<span class="no-msds" title="沒有現行 MSDS">缺</span>`;
+        const man = r.source === 'manual'
+            ? `<span class="src-manual" title="系統內新增或修改過，重新掃描不會覆蓋">改</span>` : '';
+        // 鎖著就是純文字（連 contenteditable 都不輸出）；解鎖後代號與品名才變成可編輯欄位
+        const codeCell = QUICK_EDIT
+            ? `<div class="cell-edit" contenteditable="plaintext-only" spellcheck="false"
+                    data-edit="code" data-code="${esc(r.code)}"
+                    title="改代號會一併搬移 MSDS 對應、使用單位、更換記錄與保養基準書的引用">${esc(r.code)}</div>`
+            : esc(r.code);
+        const nameCell = QUICK_EDIT
+            ? `<div class="cell-edit" contenteditable="plaintext-only" spellcheck="false"
+                    data-edit="name" data-code="${esc(r.code)}"
+                    title="改完離開欄位自動存檔">${esc(r.name)}</div>`
+            : esc(r.name);
+        return `<tr data-code="${esc(r.code)}">
+          <td class="o-code">${codeCell}${man}</td>
+          <td class="o-name">${nameCell}</td>
+          <td><span class="cat-badge cat-${esc(cat)}" data-f="cat" data-v="${esc(cat)}"
+                    title="單擊篩選／雙擊清除">${esc(cat)}</span></td>
+          <td>${r.supplier ? `<span class="sup-badge" data-f="sup" data-v="${esc(r.supplier)}"
+                    title="單擊篩選／雙擊清除">${esc(r.supplier)}</span>` : ''}</td>
+          <td class="o-sub">${esc(r.brand)}</td>
+          <td class="o-sub">${esc(r.spec)}</td>
+          <td class="o-sub">${esc(r.pack)}</td>
+          <td><span class="st-badge st-${esc(r.status)}" data-f="status" data-v="${esc(r.status)}"
+                    title="單擊篩選／雙擊清除">${esc(r.status)}</span></td>
+          <td class="o-units" title="${esc((r.units || []).join('、'))}">${esc((r.units || []).join('、'))}</td>
+          <td class="o-num">${msds}</td>
+          <td class="o-date">${esc(r.msds_date)}</td>
+          <td class="o-date">${esc(r.last_change)}</td>
+        </tr>`;
+    }).join('');
+
+    document.querySelectorAll('#tbody tr').forEach(tr => {
+        tr.addEventListener('click', () => openDrawer(tr.dataset.code, tr));
+    });
+    // 快速編輯欄位：點欄位不要順便把詳情抽屜打開；Enter 或離開欄位就存檔
+    document.querySelectorAll('#tbody [data-edit]').forEach(el => {
+        el.dataset.orig = el.textContent;
+        el.addEventListener('click', e => e.stopPropagation());
+        el.addEventListener('keydown', e => {
+            e.stopPropagation();
+            if (e.key === 'Enter') { e.preventDefault(); el.blur(); }      // 兩個欄位都是單行
+            if (e.key === 'Escape') { el.textContent = el.dataset.orig; el.blur(); }
+        });
+        el.addEventListener('blur', () => saveCell(el));
+    });
+    document.querySelectorAll('#tbody [data-f]').forEach(el => {
+        const fn = {cat: filterByCat, sup: filterBySup, status: filterByStatus}[el.dataset.f];
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', e => { e.stopPropagation(); fn(el.dataset.v); });
+        el.addEventListener('dblclick', e => { e.stopPropagation(); fn(''); });
+    });
+}
+
+// ── 快速編輯（密碼解鎖後才開放）──
+// 代號是主鍵，誤改會牽動 MSDS 對應／使用單位／更換記錄／保養基準書一整串，
+// 所以預設鎖著，跟設備管理「編碼鎖定」用同一組密碼與同一套互動。
+let QUICK_EDIT = false;
+
+function toggleQuickEdit() {
+    const btn = $('btnQuick');
+    if (!QUICK_EDIT) {
+        const pwd = prompt('快速編輯需要密碼：');
+        if (pwd === null) return;
+        if (pwd !== 'maxclaw') { alert('密碼錯誤'); return; }
+        QUICK_EDIT = true;
+        btn.textContent = '🔓 快速編輯中（代號/品名可直接改）';
+        btn.classList.add('on');
+    } else {
+        QUICK_EDIT = false;
+        btn.textContent = '🔒 快速編輯';
+        btn.classList.remove('on');
+    }
+    $('oilTable').classList.toggle('quick', QUICK_EDIT);
+    render();
+}
+
+// 存檔：成功就只更新 ALL 裡那一筆（不重新 render，避免游標跳掉），
+// 順便把「改」標記補上——這支油品從此不會被重新掃描覆蓋
+async function saveCell(el) {
+    const field = el.dataset.edit;
+    const code = el.dataset.code;
+    const value = el.textContent.trim();
+    if (value === el.dataset.orig) return;          // 沒改就不要打 API
+    // 改代號是搬移一整串子表，值得停下來確認一次（品名打錯改回來就好，不用問）
+    if (field === 'code' && !confirm(
+            `確定把油品代號「${el.dataset.orig}」改成「${value}」嗎？\n\n`
+            + 'MSDS 對應、使用單位、更換記錄、異動歷程，以及設備保養基準書裡引用到這支油的項目，都會一起改過去。')) {
+        el.textContent = el.dataset.orig;
+        return;
+    }
+    const j = await postJSON('/api/oil/inline_save', {code, field, value});
+    el.classList.remove('ok', 'err');
+    if (!j.success) {
+        el.classList.add('err');
+        el.title = j.error;
+        alert(j.error);
+        el.textContent = el.dataset.orig;           // 存不進去就還原，畫面不要留下假資料
+        el.classList.remove('err');
+        return;
+    }
+    const rec = ALL.find(r => r.code === code);
+    if (rec) {
+        rec[field] = value;
+        rec.source = 'manual';
+        if (field === 'code') {
+            // 代號是列的識別碼，改完要把這一列相關的參照一起換掉，否則下次存檔會找不到人
+            el.dataset.code = value;
+            el.closest('tr').dataset.code = value;
+            el.closest('tr').querySelectorAll('[data-edit]').forEach(x => x.dataset.code = value);
+        }
+    }
+    el.dataset.orig = value;
+    el.classList.add('ok');
+    setTimeout(() => el.classList.remove('ok'), 1200);
+    if (j.message) $('resultCount').textContent = j.message;
+}
+
+// ══════════ 詳情抽屜 ══════════
+async function openDrawer(code, tr) {
+    document.querySelectorAll('#tbody tr').forEach(x => x.classList.remove('selected'));
+    if (tr) tr.classList.add('selected');
+    CUR_CODE = code;
+    $('drawerMask').style.display = 'block';
+    $('drawer').classList.add('open');
+    $('dwCode').textContent = code;
+    $('dwSub').textContent = '載入中…';
+    $('dwBody').innerHTML = '';
+    $('dwEdit').onclick = () => { closeDrawer(); startEdit(code); };
+
+    const json = await (await fetch('/api/oil/detail?code=' + encodeURIComponent(code))).json();
+    if (!json.success) { $('dwSub').textContent = json.error; return; }
+    const d = json.data;
+    $('dwSub').textContent = [d.name, d.brand, d.supplier].filter(Boolean).join(' ▸ ');
+
+    const info = [
+        ['品名', d.name], ['品牌', d.brand], ['供應商', d.supplier],
+        ['分類', d.category, 'cat'], ['規格', d.spec], ['包裝', d.pack],
+        ['狀態', d.status, 'st'], ['替代油品', d.replaced_by],
+        ['資料來源', (d.origin || '') === 'manual' ? '系統內新增' : 'MSDS 掃描'],
+        ['最後更新', d.updated_at],
+    ].filter(([, v]) => v);
+    const infoVal = ([, v, badge]) =>
+        badge === 'cat' ? `<span class="cat-badge cat-${esc(v)}">${esc(v)}</span>`
+      : badge === 'st'  ? `<span class="st-badge st-${esc(v)}">${esc(v)}</span>` : esc(v);
+
+    const msdsFiles = d.files.filter(f => f.root === 'msds');
+    const docFiles  = d.files.filter(f => f.root === 'doc');
+    const fileLine = f => `<a class="dw-file ${f.obsolete ? 'obs' : ''}" target="_blank"
+          href="/api/oil/file?root=${esc(f.root)}&relpath=${encodeURIComponent(f.relpath)}">
+          ${f.ext === '.pdf' ? '📕' : '📎'} ${esc(f.filename)}
+          ${f.obsolete ? '<span class="obs-flag">報廢區</span>' : ''}
+          <span class="sz">${esc(f.file_date)}　${fmtSize(f.size)}</span></a>`;
+
+    $('dwBody').innerHTML = `
+      ${d.status === '使用中' && !msdsFiles.filter(f => !f.obsolete).length
+        ? `<div class="dw-note">⚠ 這支油品標記為使用中，但沒有現行版本的 MSDS。
+             請上傳最新的 MSDS（法規要求現場備有物質安全資料表）。</div>` : ''}
+      <div class="dw-sect">
+        <h6>基本資料</h6>
+        <dl class="dw-grid">${info.map(row => `<dt>${esc(row[0])}</dt><dd>${infoVal(row)}</dd>`).join('')}</dl>
+      </div>
+      ${d.usage_note || d.remark ? `
+      <div class="dw-sect">
+        <h6>說明</h6>
+        ${d.usage_note ? `<div style="white-space:pre-wrap;font-size:.95rem">${esc(d.usage_note)}</div>` : ''}
+        ${d.remark ? `<div class="dw-empty" style="white-space:pre-wrap">備註：${esc(d.remark)}</div>` : ''}
+      </div>` : ''}
+      <div class="dw-sect">
+        <h6>使用單位（${d.units.length}）</h6>
+        ${d.units.length ? d.units.map(u => `<div class="dw-line">
+            <span class="a">${esc(u.unit || '未填')}</span>
+            <span class="t">${esc(u.equip_code)} ${esc(u.note)}</span></div>`).join('')
+          : '<div class="dw-empty">尚未登錄使用單位（可按上方「編輯這支油品」補上）</div>'}
+      </div>
+      <div class="dw-sect">
+        <h6>MSDS（${msdsFiles.length}）</h6>
+        ${msdsFiles.length ? msdsFiles.map(fileLine).join('') : '<div class="dw-empty">尚無 MSDS 檔案</div>'}
+      </div>
+      <div class="dw-sect">
+        <h6>相關文件／Excel（${docFiles.length}）</h6>
+        ${docFiles.length ? docFiles.map(fileLine).join('') : '<div class="dw-empty">尚無其他文件</div>'}
+      </div>
+      <div class="dw-sect">
+        <h6>更換記錄（${d.changes.length}）</h6>
+        ${d.changes.length ? d.changes.slice(0, 30).map(c => `<div class="dw-line">
+            <span class="d">${esc(c.date)}</span>
+            <span class="t">${esc(c.equip_name || c.equip_code)} ${esc(c.qty)} ${esc(c.note)}</span>
+            <span class="by">${c.user === 'excel' ? 'Excel' : esc(c.operator || '人工')}</span></div>`).join('')
+          : '<div class="dw-empty">尚無更換記錄</div>'}
+      </div>
+      <div class="dw-sect">
+        <h6>異動歷程（${d.history.length}）</h6>
+        ${d.history.length ? d.history.map(h => `<div class="dw-line">
+            <span class="d">${esc(h.date)}</span><span class="a">${esc(h.action)}</span>
+            <span class="t">${esc(h.detail)}</span></div>`).join('')
+          : '<div class="dw-empty">尚無異動記錄</div>'}
+      </div>
+      <div class="form-msg" id="uploadMsg"></div>`;
+}
+
+function closeDrawer() {
+    $('drawer').classList.remove('open');
+    $('drawerMask').style.display = 'none';
+    document.querySelectorAll('#tbody tr').forEach(x => x.classList.remove('selected'));
+}
+
+// 上傳（MSDS / 其他文件共用同一個 input，用 dataset.kind 區分）
+function pickFiles(kind) {
+    const inp = $('fileUploadInput');
+    inp.dataset.kind = kind;
+    inp.accept = kind === 'msds' ? '.pdf' : '';
+    inp.value = '';
+    inp.click();
+}
+
+async function uploadFiles(kind, fileList) {
+    if (!CUR_CODE || !fileList.length) return;
+    const fd = new FormData();
+    fd.append('code', CUR_CODE);
+    fd.append('kind', kind);
+    for (const f of fileList) fd.append('files', f);
+    const msg = $('uploadMsg');
+    if (msg) { msg.className = 'form-msg'; msg.textContent = '上傳中…'; }
+    let j;
+    try {
+        j = await (await fetch('/api/oil/file/upload', {method: 'POST', body: fd})).json();
+    } catch (e) { j = {success: false, error: '連線失敗：' + e}; }
+    await openDrawer(CUR_CODE, null);       // dwBody 整段重畫，訊息元素要重抓
+    const msg2 = $('uploadMsg');
+    if (msg2) {
+        msg2.className = 'form-msg ' + (j.success ? 'ok' : 'err');
+        msg2.textContent = j.success ? j.message : j.error;
+    }
+    if (j.success) { loadStats(); doSearch(); ALL_FILES = []; }
+}
+
+// ══════════ 新增／編輯 ══════════
+function addUnitRow(u) {
+    const div = document.createElement('div');
+    div.className = 'unit-row';
+    div.innerHTML = `
+      <input type="text" class="u-unit" placeholder="加工課／成品課" value="${esc(u && u.unit)}">
+      <select class="u-eq">${equipOptions(u && u.equip_code)}</select>
+      <input type="text" class="u-note" placeholder="備註" value="${esc(u && u.note)}">
+      <button class="btn-x" title="刪除這列" onclick="this.parentElement.remove()">✕</button>`;
+    $('unitRows').appendChild(div);
+}
+
+function equipOptions(sel) {
+    return `<option value="">（不指定設備）</option>` + EQUIPS.map(e =>
+        `<option value="${esc(e.code)}" ${e.code === sel ? 'selected' : ''}>${esc(e.code)}${
+            e.old_code ? ' ' + esc(e.old_code) : ''} ${esc(e.type_name)}</option>`).join('');
+}
+
+function resetForm() {
+    EDITING = null;
+    $('formTitle').textContent = '➕ 新增油品';
+    ['fCode','fName','fBrand','fSupplier','fSpec','fPack','fReplacedBy','fUsageNote','fRemark']
+        .forEach(id => $(id).value = '');
+    $('fCategory').value = '';
+    $('fStatus').value = '使用中';
+    $('fCode').readOnly = false;
+    $('codeHint').textContent = '';
+    $('unitRows').innerHTML = '';
+    addUnitRow();
+    $('formMsg').textContent = '';
+    $('btnDelete').style.display = 'none';
+}
+
+async function startEdit(code) {
+    const j = await (await fetch('/api/oil/detail?code=' + encodeURIComponent(code))).json();
+    if (!j.success) { alert(j.error); return; }
+    const d = j.data;
+    EDITING = code;
+    $('formTitle').textContent = '✏️ 編輯油品 ' + code;
+    $('fCode').value = d.code;
+    $('fName').value = d.name || '';
+    $('fBrand').value = d.brand || '';
+    $('fSupplier').value = d.supplier || '';
+    $('fCategory').value = d.category || '';
+    $('fStatus').value = d.status || '使用中';
+    $('fSpec').value = d.spec || '';
+    $('fPack').value = d.pack || '';
+    $('fReplacedBy').value = d.replaced_by || '';
+    $('fUsageNote').value = d.usage_note || '';
+    $('fRemark').value = d.remark || '';
+    $('codeHint').textContent = '改代號會一併搬移 MSDS 對應、使用單位、更換記錄與歷程';
+    $('unitRows').innerHTML = '';
+    (d.units.length ? d.units : [null]).forEach(u => addUnitRow(u));
+    $('formMsg').textContent = '';
+    // 硬刪除只開放給系統內新增的油品；掃描來的只能停用（原因見 docs/oil-management.md）
+    $('btnDelete').style.display = '';
+    $('btnDelete').textContent = (d.origin === 'manual') ? '🗑 刪除' : '🚫 改為停用';
+    switchSubPage('new');
+}
+
+async function saveOil() {
+    const code = $('fCode').value.trim();
+    if (!code) { setFormMsg('油品代號必填', false); return; }
+    const units = [...document.querySelectorAll('#unitRows .unit-row')].map(row => ({
+        unit: row.querySelector('.u-unit').value.trim(),
+        equip_code: row.querySelector('.u-eq').value,
+        note: row.querySelector('.u-note').value.trim(),
+    })).filter(u => u.unit || u.equip_code);
+
+    const j = await postJSON('/api/oil/save', {
+        code, orig_code: EDITING || '',
+        name: $('fName').value, brand: $('fBrand').value, supplier: $('fSupplier').value,
+        category: $('fCategory').value, spec: $('fSpec').value, pack: $('fPack').value,
+        status: $('fStatus').value, replaced_by: $('fReplacedBy').value,
+        usage_note: $('fUsageNote').value, remark: $('fRemark').value, units,
+    });
+    if (!j.success) { setFormMsg(j.error, false); return; }
+    setFormMsg('已存檔：' + j.code, true);
+    EDITING = j.code;
+    $('formTitle').textContent = '✏️ 編輯油品 ' + j.code;
+    loadStats(); doSearch(); ALL_CHG = [];
+}
+
+async function deleteOil() {
+    if (!EDITING) return;
+    const hard = $('btnDelete').textContent.includes('刪除');
+    if (!confirm(hard ? `確定要刪除油品 ${EDITING}？（不可復原）`
+                      : `確定要把 ${EDITING} 改為停用？`)) return;
+    const j = await postJSON('/api/oil/delete', {code: EDITING, hard});
+    if (!j.success) { setFormMsg(j.error, false); return; }
+    setFormMsg(j.message, true);
+    loadStats(); doSearch();
+    if (hard) { resetForm(); switchSubPage('list'); }
+}
+
+function setFormMsg(text, ok) {
+    const el = $('formMsg');
+    el.textContent = text;
+    el.className = 'form-msg ' + (ok ? 'ok' : 'err');
+}
+
+// ══════════ MSDS 文件 ══════════
+async function loadFiles() {
+    const q = $('fileSearchInput').value.trim();
+    const json = await (await fetch('/api/oil/file/list?q=' + encodeURIComponent(q))).json();
+    ALL_FILES = json.success ? json.data : [];
+    if (!json.success) alert(json.error);
+    renderFiles();
+}
+
+function renderFiles() {
+    const root = $('fltRoot').value, orphan = $('fltOrphan').value, obs = $('fltObs').value;
+    const rows = ALL_FILES.filter(f =>
+        (!root || f.root === root) &&
+        (orphan === '' || (orphan === '1' ? !f.code : !!f.code)) &&
+        (obs === '' || String(f.obsolete) === obs));
+    $('fileCount').textContent = `共 ${rows.length} 個檔案` +
+        (rows.length !== ALL_FILES.length ? `（全部 ${ALL_FILES.length}）` : '');
+    $('fileEmpty').style.display = rows.length ? 'none' : '';
+    $('fileTbody').innerHTML = rows.map(f => `<tr>
+        <td class="o-sub">${f.root === 'msds' ? '📕 MSDS' : '📎 文件'}${
+            f.obsolete ? '<span class="obs-flag">報廢</span>' : ''}</td>
+        <td><a href="/api/oil/file?root=${esc(f.root)}&relpath=${encodeURIComponent(f.relpath)}"
+               target="_blank" style="color:var(--erp-blue-dark);text-decoration:none">${esc(f.filename)}</a></td>
+        <td><select class="claim-sel" data-rel="${esc(f.relpath)}"
+                    style="width:100%;font-size:.82rem;padding:.2rem .35rem;border:1px solid ${
+                        f.code ? 'var(--erp-border-dark)' : 'var(--danger)'};border-radius:4px">
+              ${oilOptions(f.code)}
+            </select></td>
+        <td class="o-sub">${esc(f.oil_name)}</td>
+        <td class="o-date">${esc(f.file_date)}</td>
+        <td class="o-num">${fmtSize(f.size)}</td>
+        <td class="o-date">${esc(f.mtime)}</td>
+      </tr>`).join('');
+
+    document.querySelectorAll('.claim-sel').forEach(sel => {
+        sel.addEventListener('change', async () => {
+            const j = await postJSON('/api/oil/file/claim',
+                {relpath: sel.dataset.rel, code: sel.value});
+            if (!j.success) { alert(j.error); return; }
+            loadFiles(); loadStats(); doSearch();
+        });
+    });
+}
+
+function oilOptions(sel) {
+    return `<option value="">（未歸位）</option>` + ALL.map(o =>
+        `<option value="${esc(o.code)}" ${o.code === sel ? 'selected' : ''}>${esc(o.code)} ${esc(o.name)}</option>`
+    ).join('');
+}
+
+// ══════════ 更換記錄 ══════════
+async function loadChanges() {
+    const q = $('chgSearchInput').value.trim();
+    const json = await (await fetch('/api/oil/change/list?q=' + encodeURIComponent(q))).json();
+    ALL_CHG = json.success ? json.data : [];
+    if (!json.success) alert(json.error);
+    fillChangeFilters();
+    renderChanges();
+}
+
+function fillChangeFilters() {
+    const cnt = (key) => {
+        const m = new Map();
+        ALL_CHG.forEach(c => { const v = c[key] || ''; if (v) m.set(v, (m.get(v) || 0) + 1); });
+        return [...m.entries()].sort((a, b) => b[1] - a[1]);
+    };
+    const keepOil = $('fltChgOil').value, keepEq = $('fltChgEq').value;
+    $('fltChgOil').innerHTML = `<option value="">全部（${ALL_CHG.length}）</option>` +
+        cnt('code').map(([v, n]) => `<option value="${esc(v)}">${esc(v)}（${n}）</option>`).join('');
+    $('fltChgEq').innerHTML = `<option value="">全部（${ALL_CHG.length}）</option>` +
+        cnt('equip_name').map(([v, n]) => `<option value="${esc(v)}">${esc(v)}（${n}）</option>`).join('');
+    $('fltChgOil').value = keepOil; $('fltChgEq').value = keepEq;
+}
+
+function clearChgFilters() {
+    ['fltChgOil','fltChgEq','fltChgSrc'].forEach(id => $(id).value = '');
+    renderChanges();
+}
+
+function renderChanges() {
+    const fo = $('fltChgOil').value, fe = $('fltChgEq').value, fs = $('fltChgSrc').value;
+    const rows = ALL_CHG.filter(c =>
+        (!fo || c.code === fo) && (!fe || c.equip_name === fe) && (!fs || c.user === fs));
+    [['fltChgOil', fo], ['fltChgEq', fe], ['fltChgSrc', fs]]
+        .forEach(([id, v]) => $(id).classList.toggle('on', !!v));
+    $('chgCount').textContent = `共 ${rows.length} 筆` +
+        (rows.length !== ALL_CHG.length ? `（全部 ${ALL_CHG.length}）` : '');
+    $('chgEmpty').style.display = rows.length ? 'none' : '';
+    $('chgTbody').innerHTML = rows.map(c => `<tr data-code="${esc(c.code)}">
+        <td class="o-date">${esc(c.date)}</td>
+        <td class="o-code">${esc(c.code)}</td>
+        <td>${esc(c.oil_name)}</td>
+        <td class="o-sub">${esc(c.equip_code)}</td>
+        <td class="o-sub">${esc(c.equip_name)}</td>
+        <td class="o-sub">${esc(c.qty)}</td>
+        <td class="o-sub">${esc(c.operator)}</td>
+        <td class="o-sub">${esc(c.note)}</td>
+        <td class="o-sub">${c.user === 'excel' ? 'Excel匯入' : '系統登錄'}</td>
+        <td class="o-num">${c.user === 'user'
+            ? `<button class="btn-x" data-del="${c.id}" title="刪除這筆">✕</button>` : ''}</td>
+      </tr>`).join('');
+
+    document.querySelectorAll('#chgTbody tr').forEach(tr => {
+        tr.addEventListener('click', e => {
+            if (e.target.dataset.del) return;
+            openDrawer(tr.dataset.code, null);
+        });
+    });
+    document.querySelectorAll('#chgTbody [data-del]').forEach(btn => {
+        btn.addEventListener('click', async e => {
+            e.stopPropagation();
+            if (!confirm('確定要刪除這筆更換記錄？')) return;
+            const j = await postJSON('/api/oil/change/delete', {id: Number(btn.dataset.del)});
+            if (!j.success) { alert(j.error); return; }
+            loadChanges(); doSearch();
+        });
+    });
+}
+
+function openChangeForm() {
+    $('chgFormCard').style.display = '';
+    $('cfOil').innerHTML = ALL.map(o =>
+        `<option value="${esc(o.code)}">${esc(o.code)} ${esc(o.name)}</option>`).join('');
+    $('cfEquip').innerHTML = equipOptions('');
+    $('cfDate').value = today();
+    $('cfQty').value = ''; $('cfOperator').value = ''; $('cfNote').value = '';
+    $('chgMsg').textContent = '';
+}
+
+async function saveChange() {
+    const eqSel = $('cfEquip');
+    const eqCode = eqSel.value;
+    const eq = EQUIPS.find(x => x.code === eqCode);
+    const j = await postJSON('/api/oil/change/save', {
+        code: $('cfOil').value, date: $('cfDate').value,
+        equip_code: eqCode, equip_name: eq ? (eq.old_code || eq.code) : '',
+        qty: $('cfQty').value, operator: $('cfOperator').value, note: $('cfNote').value,
+    });
+    const msg = $('chgMsg');
+    msg.className = 'form-msg ' + (j.success ? 'ok' : 'err');
+    msg.textContent = j.success ? '已登錄' : j.error;
+    if (j.success) { loadChanges(); doSearch(); }
+}
+
+// ══════════ 工具列動作 ══════════
+async function rescan() {
+    $('scanMsg').textContent = '掃描中…';
+    const j = await postJSON('/api/oil/rebuild', {});
+    $('scanMsg').textContent = j.success ? j.message : ('掃描失敗：' + j.error);
+    if (j.success) { loadStats(); doSearch(); ALL_FILES = []; if ($('sub-page-files').style.display !== 'none') loadFiles(); }
+}
+
+async function exportExcel() {
+    $('scanMsg').textContent = '匯出中…';
+    const j = await postJSON('/api/oil/export', {});
+    $('scanMsg').textContent = j.success ? `${j.message}：${j.path}` : ('匯出失敗：' + j.error);
+}
+
+async function openFolder(root) {
+    const j = await postJSON('/api/oil/open_folder', {root});
+    if (!j.success) alert(j.error);
+}
+
+async function loadEquips() {
+    try {
+        const j = await (await fetch('/api/oil/equipment_options')).json();
+        EQUIPS = j.success ? j.data : [];
+    } catch (e) { EQUIPS = []; }
+}
+
+// ── 初始化 ──
+$('btnSearch').addEventListener('click', doSearch);
+$('btnClear').addEventListener('click', () => { $('searchInput').value = ''; doSearch(); });
+$('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+$('fileSearchInput').addEventListener('keydown', e => { if (e.key === 'Enter') loadFiles(); });
+$('chgSearchInput').addEventListener('keydown', e => { if (e.key === 'Enter') loadChanges(); });
+$('dwClose').addEventListener('click', closeDrawer);
+$('drawerMask').addEventListener('click', closeDrawer);
+$('dwUpMsds').addEventListener('click', () => pickFiles('msds'));
+$('dwUpDoc').addEventListener('click', () => pickFiles('doc'));
+$('fileUploadInput').addEventListener('change', e => {
+    if (e.target.files.length) uploadFiles(e.target.dataset.kind || 'doc', e.target.files);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+loadEquips().then(() => { resetForm(); });
+loadStats();
+doSearch();
+
+// 從別的頁面帶 ?code= 進來時直接開那支油品的詳情
+// （設備保養基準書的「使用油品」徽章就是這樣連過來看 MSDS 的）
+const _deepCode = new URLSearchParams(location.search).get('code');
+if (_deepCode) openDrawer(_deepCode, null);
+</script>
+</body>
+</html>

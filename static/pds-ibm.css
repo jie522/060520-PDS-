@@ -265,6 +265,25 @@ tbody td {
   border: 1px solid #c9d8f7;
 }
 
+/* ── 廠內單位徽章（自家三個單位各一色）────────────────────────
+   用在「廠商名稱／加工廠商」這類欄位：加工課／成品部／製三課三個自家單位
+   各給一個顏色，一眼看出這道製程歸誰做；外包廠商維持純文字不加底色。
+   色相避開同列「性質」徽章的藍/橙/紫，用綠/青/玫瑰（Tailwind 100/700 色階）。
+   共用位置：產品途程查詢（routing.html 主表格＋查看途程彈窗）、
+             製令查詢的製令詳細資訊彈窗（index.html 製程資訊）。 */
+.dept-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.55rem;
+  border-radius: 12px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.dept-jiagong  { background: #DCFCE7; color: #15803D; }   /* 加工課 */
+.dept-chengpin { background: #CFFAFE; color: #0E7490; }   /* 成品部 */
+.dept-zhisan   { background: #FCE7F3; color: #BE185D; }   /* 製三課 */
+
 /* ── Detail sections (index.html modal) ───────────────────────── */
 .detail-section-material .detail-section-title { background: #e5f5ec; color: #0e6027; }
 .detail-section-process  .detail-section-title { background: #fdf2ec; color: #7a3300; }

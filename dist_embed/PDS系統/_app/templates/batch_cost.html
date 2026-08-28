@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
@@ -38,7 +38,7 @@
     .header-title { font-size:1.1rem; font-weight:700; padding-bottom:.45rem; white-space:nowrap; margin-right:.5rem; }
     .header-tabs { display:flex; align-items:flex-end; gap:2px; }
     .header-tab {
-      display: inline-block; padding:.3rem 1rem; font-size:1rem; font-weight:600;
+      display: inline-block; padding:.3rem .75rem; font-size:1rem; font-weight:600; white-space:nowrap;
       color:rgba(255,255,255,.85); text-decoration:none; background:rgba(255,255,255,.15); cursor:pointer; transition:background .15s;
     }
     .header-tab.active,.header-tab:hover { background:#fff; color:#1565C0; }
@@ -202,11 +202,12 @@
       <a href="/"           class="header-tab">製令查詢</a>
       <a href="/production" class="header-tab">生產中製令</a>
       <a href="/equipment"  class="header-tab">設備稼動</a>
-      <a href="/equipment_master" class="header-tab">設備管理</a>
       <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
       <a href="/routing"    class="header-tab">產品途程查詢</a>
       <span                 class="header-tab active">批成本</span>
       <a href="/cnc_program" class="header-tab">程式管理</a>
+      <a href="/oil"        class="header-tab">油品管理</a>
+      <a href="/equipment_master" class="header-tab">設備管理</a>
       <a href="/zumen" class="header-tab header-tab-zumen">ZUMEN</a>
       <a href="/management" class="header-tab header-tab-mgmt">管理</a>
     </div>
@@ -1470,12 +1471,19 @@ function bcRenderRecordsList() {
                 <th style="width:60px">刀號</th><th style="width:340px">刀具名稱</th>
                 <th style="width:90px">項目</th><th style="width:90px">供應商</th>
                 <th style="width:80px;text-align:right">單價</th><th style="width:80px;text-align:right">使用次數</th><th style="width:90px;text-align:right">小計</th>
+                <th style="width:100px;text-align:right">刀具壽命(件/次)</th>
               </tr></thead>
-              <tbody>${tools.map(t => `
+              <tbody>${tools.map(t => {
+                const qty = parseFloat(r['完成數量']) || 0;
+                const useCount = parseFloat(t['使用次數']) || 0;
+                const lifespan = useCount > 0 ? Math.round(qty / useCount) : null;
+                return `
                 <tr><td>${esc(t['刀號'])}</td><td>${esc(t['刀具名稱'])}</td>
                   <td>${esc(t['項目'])}</td><td>${esc(t['供應商'])}</td>
                   <td style="text-align:right">${esc(t['單價'])}</td><td style="text-align:right">${esc(t['使用次數'])}</td>
-                  <td style="text-align:right">${esc(t['小計'])}</td></tr>`).join('')}</tbody>
+                  <td style="text-align:right">${esc(t['小計'])}</td>
+                  <td style="text-align:right">${lifespan === null ? '—' : lifespan.toLocaleString()}</td></tr>`;
+              }).join('')}</tbody>
             </table>
           </td>
         </tr>` : '';
@@ -1556,6 +1564,9 @@ function bcToggleRecordExpand(expandId, btn) {
 }
 
 async function bcDeleteRecord(rowNo) {
+  const pwd = prompt('刪除需要密碼：');
+  if (pwd === null) return;
+  if (pwd !== 'maxclaw') { alert('密碼錯誤'); return; }
   if (!confirm('確定要刪除這筆批成本明細嗎？')) return;
   try {
     const res = await fetch('/api/batch_cost/record/delete', {

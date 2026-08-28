@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -19,7 +19,7 @@
         .header-logo{margin-left:auto;align-self:center;font-size:1.15rem;font-weight:800;font-style:italic;letter-spacing:.03em;color:#F5A623}
         .header-title{font-size:1.1rem;font-weight:700;padding-bottom:.45rem;white-space:nowrap;margin-right:.5rem}
         .header-tabs{display:flex;align-items:flex-end;gap:2px}
-        .header-tab{display:inline-block;padding:.3rem 1rem;font-size:1rem;font-weight:600;
+        .header-tab{display:inline-block;padding:.3rem .75rem;font-size:1rem;font-weight:600;white-space:nowrap;
           color:rgba(255,255,255,.85);text-decoration:none;border-radius:0;
           background:rgba(255,255,255,.15);cursor:pointer;transition:background .15s}
         .header-tab.active,.header-tab:hover{background:#fff;color:#1565C0}
@@ -54,11 +54,12 @@
       <a href="/" class="header-tab">製令查詢</a>
       <a href="/production" class="header-tab">生產中製令</a>
       <a href="/equipment" class="header-tab">設備稼動</a>
-      <a href="/equipment_master" class="header-tab">設備管理</a>
       <a href="/drawing" class="header-tab">PDM圖面查詢</a>
       <a href="/routing" class="header-tab">產品途程查詢</a>
       <a href="/batch_cost" class="header-tab">批成本</a>
       <a href="/cnc_program" class="header-tab">程式管理</a>
+      <a href="/oil"        class="header-tab">油品管理</a>
+      <a href="/equipment_master" class="header-tab">設備管理</a>
       <span                 class="header-tab header-tab-zumen active">ZUMEN</span>
       <a href="/management" class="header-tab header-tab-mgmt">管理</a>
     </div>
@@ -88,7 +89,8 @@ function zumenMsg(text, showRetry) {
 
 function zumenShowFrame(url) {
   const frame = document.getElementById('zumen-frame');
-  if (!_zumenLoaded) { frame.src = url; _zumenLoaded = true; }
+  // 帶著 PDS 這邊的 ?id=&q= 深連結參數轉給 iframe 裡的 ZUMEN GUI，讓它直接開啟指定圖面
+  if (!_zumenLoaded) { frame.src = url + location.search; _zumenLoaded = true; }
   document.getElementById('zumen-msg').style.display = 'none';
   frame.style.display = 'flex';   // CSS 預設 display:none，設空字串不會覆蓋，必須明確指定
 }

@@ -23,6 +23,20 @@ PDM_DB_PATH = _os.path.join(_os.environ.get('LOCALAPPDATA', r'C:\Users\Public'),
 # Flask 設定（GUI 版綁定 127.0.0.1，不對外開放）
 FLASK_HOST = '127.0.0.1'
 FLASK_PORT = 5088
+
+# ── 手機掃碼回報（設備保養 P3，見 docs/equipment-maintenance.md）──────
+# 預設 False：程式只綁 127.0.0.1，跟以前完全一樣，手機連不進來。
+# 改成 True 之後才會改綁 0.0.0.0，讓同一個內網的手機用 http://<這台電腦IP>:5088/m 進來。
+#
+# 打開之前請先確認三件事：
+#   1. 這台電腦要常開（關機手機就進不來），建議固定一台當服務端，不要用個人電腦
+#   2. Windows 防火牆要放行 5088 埠的「私人網路」連入
+#   3. 系統**沒有登入機制**——同一個內網掃到 QR 的人都能回報保養、看設備資料
+MOBILE_ACCESS = True
+# 產生 QR 標籤時要寫進去的網址開頭（例如 'http://192.168.1.50:5088'）。
+# 留空就用列印當下瀏覽器的網址——但桌面應用的網址是 http://127.0.0.1:5088，
+# 那樣印出來的 QR 手機掃了會連到手機自己，什麼都不會出現，所以這裡一定要填服務端的內網 IP。
+MOBILE_BASE_URL = 'http://192.168.1.163:5088'
 FLASK_DEBUG = False   # EXE 模式請保持 False
 
 # 視窗設定
@@ -115,6 +129,30 @@ EQUIPMENT_TECH_ROOT   = EQUIPMENT_ROOT_PATH + r'\設備技術資料'
 # 異動歷程匯出用的獨立檔案（刻意不寫進 EQUIPMENT_CODING_XLSX——那份的 PDM編碼欄是公式，
 # openpyxl 開檔存檔會把公式快取值洗掉，2026-07 實測踩過，見 docs/equipment-master.md）
 EQUIPMENT_HISTORY_EXPORT_XLSX = EQUIPMENT_ROOT_PATH + r'\設備歷程.xlsx'
+# 設備主檔資料庫（2026-08-07 從本機搬到網芳，讓多人共用同一份設備資料）：
+# SQLite 直接放 Windows 網芳給多人同時讀寫，鎖檔機制不像本機硬碟可靠，這是刻意接受的
+# 風險換來的多人共用——app.py 開連線時有加 busy timeout 降低「database is locked」，
+# 但仍應避免多人「同時」大量寫入（例如同時上傳多張照片、同時編輯同一台設備）。
+EQUIPMENT_DB_PATH = EQUIPMENT_ROOT_PATH + r'\equipment.db'
+# ── 設備保養基準書（見 docs/equipment-maintenance.md）─────────────
+# 基準書資料存在 equipment.db 的 mt_* 表；下面是附件與匯出檔案的存放位置。
+EQUIPMENT_MAINT_ROOT  = EQUIPMENT_ROOT_PATH + r'\保養基準書'          # 基準書附件（PDF/圖片），資料夾不存在時自動建立
+EQUIPMENT_MAINT_PHOTO_ROOT = EQUIPMENT_ROOT_PATH + r'\保養回報照片'    # 現場回報時拍的照片（依設備編碼分資料夾）
+EQUIPMENT_MAINT_EXPORT_XLSX = EQUIPMENT_ROOT_PATH + r'\設備保養基準書.xlsx'   # 匯出用獨立檔案
+# 舊的維護一覽表（一次性匯入來源，匯入後就不再使用這個檔案）
+EQUIPMENT_MAINT_LEGACY_XLSX = EQUIPMENT_TECH_ROOT + r'\設備維護一覽表.xlsx'
+
+# ── 油品管理（油品主檔／MSDS／更換記錄，網路資料夾）設定 ──────────
+# 詳見 docs/oil-management.md。油品資料正本是 oil.db（跟 equipment.db 一樣放網芳共用），
+# MSDS/簡介 PDF 實體檔案留在網芳，系統只建索引與連結。
+OIL_ROOT_PATH   = r'\\192.168.1.99\加工部-資料夾\【技術資料】\O.油品'
+OIL_MSDS_ROOT   = OIL_ROOT_PATH + r'\MSDS'          # MSDS，子資料夾「報廢」= 停用油品
+OIL_DOC_ROOT    = OIL_ROOT_PATH + r'\油品簡介'       # 型錄/使用注意事項等文件
+OIL_DB_PATH     = OIL_ROOT_PATH + r'\oil.db'        # 油品主檔資料庫（網芳共用，多人同時使用）
+# 更換記錄的一次性匯入來源（匯入後正本在 oil.db，不再回頭改這個檔案）
+OIL_CHANGE_LEGACY_XLSX = OIL_ROOT_PATH + r'\油品更換記錄表.xlsx'
+# 匯出用獨立檔案（每次重建，不覆寫上面那份舊表）
+OIL_EXPORT_XLSX = OIL_ROOT_PATH + r'\油品主檔.xlsx'
 
 # ── ERP SQL Server 連線設定（BOM查詢用）──────────────────────────
 # 連線至 192.168.1.140 的 Computech ERP YC01 資料庫

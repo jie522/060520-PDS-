@@ -22,7 +22,8 @@ python build_pdm_index.py --update --deploy   # PDM 圖面索引增量更新
 python build_jig_index.py --deploy   # 治檢具索引重建
 python build_dcn_index.py --deploy   # DCN 索引重建
 python build_cnc_program_index.py --deploy    # CNC 程式索引重建
-python build_equipment_index.py --deploy      # 設備主檔匯入（Excel→equipment.db）
+python build_equipment_index.py --deploy      # 設備主檔匯入（Excel→equipment.db，網芳共用，--deploy 已無實際作用只是相容）
+python build_oil_index.py            # 油品主檔匯入（MSDS 檔名→oil.db，網芳共用，同上不需 --deploy）
 ```
 
 ## 重要檔案
@@ -35,6 +36,7 @@ python build_equipment_index.py --deploy      # 設備主檔匯入（Excel→equ
 | `templates/management.html` | 管理頁（多個子頁，改前必讀 `docs/management-page.md`） |
 | `templates/batch_cost.html` | 批成本計算（改前必讀 `docs/batch-cost.md`） |
 | `templates/cnc_program.html` | CNC 程式管理 |
+| `templates/oil.html` | 油品管理（油品主檔／MSDS／更換記錄，改前必讀 `docs/oil-management.md`） |
 | 其他 templates | drawing / bom / routing / equipment / production / print_report |
 | `build_*.py` | 各索引重建工具 |
 
@@ -50,13 +52,22 @@ dist_embed/PDS系統/
 1. 改 .py 後先 `python -m py_compile` 再同步。
 2. 「user-mapped section open」= dist 版程式執行中鎖檔，先處理程序再同步。
 3. 每天第一次完成更新時：`app.py` 的 `APP_VERSION` 改為當日 `VYYYYMMDD`（同日多次更新不用重改），同步後請使用者重啟測試。
-4. **`equipment.db`／`cnc_program_index.db`／`calendar.db` 不在 `sync_to_dist.py` 的同步清單裡**——
-   這三個是執行期資料庫，桌面應用執行中會直接寫入（照片上傳、設備編輯、CNC 程式上傳、
-   行事曆工作日設定、維修停機時數）。曾經跟原始碼放一起無條件覆蓋，結果使用者在正式
-   桌面應用上傳的照片被開發機的舊資料庫蓋掉（2026-07-30 真實故障，檔案還在網芳但資料庫
-   記錄消失）。要推送前兩個，一律用各自明確的指令（`build_equipment_index.py --deploy` /
-   `build_cnc_program_index.py --deploy`），不要手動 `shutil.copy2` 或改回加進 `sync_to_dist.py`。
+4. **`cnc_program_index.db`／`calendar.db` 不在 `sync_to_dist.py` 的同步清單裡**——
+   這兩個是執行期資料庫，桌面應用執行中會直接寫入（CNC 程式上傳、行事曆工作日設定）。
+   曾經跟原始碼放一起無條件覆蓋，結果使用者在正式桌面應用寫入的資料被開發機的舊資料庫
+   蓋掉（2026-07-30 真實故障）。要推送 `cnc_program_index.db`，用明確指令
+   `build_cnc_program_index.py --deploy`，不要手動 `shutil.copy2` 或改回加進 `sync_to_dist.py`。
    **`calendar.db` 更沒有任何 build 工具能重建**（純使用者手動點選的資料），蓋掉就救不回來。
+5. **`equipment.db` 已改放網芳共用**（2026-08-07 起，`config.EQUIPMENT_DB_PATH`，
+   `\\192.168.1.99\加工部-資料夾\【技術資料】\D.設備\equipment.db`）：讓多人在不同電腦
+   同時使用設備管理。不再是本機檔案，跟 dist_embed 同步完全無關；本機留下的舊
+   `equipment.db`（根目錄與 `dist_embed/PDS系統/_app/`）已停用，僅供緊急備援參考，不會
+   再被讀寫。SQLite 直接開在 Windows 網芳上，鎖檔機制不如本機硬碟可靠，是刻意接受的
+   風險換多人共用；`_eq_conn()` 有加 `timeout=15` 降低「database is locked」，但仍應避免
+   多人同時大量寫入（例如同時上傳多張照片）。細節見 `docs/equipment-master.md`。
+6. **`oil.db` 同樣放網芳共用**（2026-08-11 起，`config.OIL_DB_PATH`，
+   `\\192.168.1.99\加工部-資料夾\【技術資料】\O.油品\oil.db`），本機沒有副本，
+   `sync_to_dist.py` 只同步 `build_oil_index.py` 原始碼。見 `docs/oil-management.md`。
 
 ## 延伸文件（不自動載入，碰到對應功能時用 Read 查）
 
@@ -73,8 +84,10 @@ dist_embed/PDS系統/
 | `docs/batch-cost.md` | 改批成本計算 |
 | `docs/management-page.md` | 改管理頁任何子頁 |
 | `docs/category-colors.md` / `docs/chart-style.md` / `docs/table-design.md` / `docs/badge-filter-convention.md` | 分類圖表配色／趨勢折線圖樣式／新表格樣式／徽章篩選互動 |
-| `docs/dcn-index.md` / `docs/cnc-program.md` / `docs/sfcr06.md` / `docs/zumen.md` | 對應功能 |
+| `docs/dcn-index.md` / `docs/cnc-program.md` / `docs/sfcr06.md` / `docs/zumen.md` / `docs/erp-order.md` | 對應功能 |
 | `docs/equipment-master.md` | 改設備管理（設備主檔／編碼／照片／規格／妥善率） |
+| `docs/equipment-maintenance.md` | 改設備保養基準書／排程／手機掃碼回報（P1~P3 已完成），或做年度計畫／統計（P4 之後） |
+| `docs/oil-management.md` | 改油品管理（油品主檔／MSDS／使用單位／更換記錄） |
 | `docs/calendar.md` | 改管理頁行事曆，或任何需要「工作天數」的統計 |
 | `docs/nav-design.md` | 新增頂層分頁或改導覽列 |
 | `docs/dev-workflow.md` | push GitHub、preview 工具驗證前端 |

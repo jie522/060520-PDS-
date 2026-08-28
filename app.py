@@ -71,7 +71,13 @@ ZUME_DB_PATH = os.path.join(_APP_DIR, 'zume_drawings.db')
 CNC_DB_PATH = os.path.join(_APP_DIR, 'cnc_program_index.db')
 
 # ── 設備主檔資料庫（build_equipment_index.py 建立，見 docs/equipment-master.md）──
-EQ_DB_PATH = os.path.join(_APP_DIR, 'equipment.db')
+# 2026-08-07：改讀 config.EQUIPMENT_DB_PATH（網芳共用路徑，多人共用同一份設備資料）；
+# 沒設定時退回本機路徑，向下相容舊的 config.py。
+EQ_DB_PATH = getattr(config, 'EQUIPMENT_DB_PATH', None) or os.path.join(_APP_DIR, 'equipment.db')
+
+# ── 油品主檔資料庫（build_oil_index.py 建立，見 docs/oil-management.md）──────────
+# 跟 equipment.db 一樣放網芳共用，讓多人在不同電腦同時使用；沒設定時退回本機路徑。
+OIL_DB_PATH = getattr(config, 'OIL_DB_PATH', None) or os.path.join(_APP_DIR, 'oil.db')
 
 # ── 工作日行事曆（純使用者輸入，沒有任何 build 工具會產生它，見 docs/calendar.md）──
 # 執行期資料庫：桌面應用執行中會直接寫入，絕對不可以加進 sync_to_dist.py 的覆蓋清單
@@ -654,7 +660,7 @@ def servcloud_get_history(machine_ids, date_str):
     return all_recs
 
 
-APP_VERSION = 'V20260806'
+APP_VERSION = 'V20260820'
 
 @app.route('/ver')
 def ver_check():
@@ -822,7 +828,7 @@ def detail():
         # 報表回傳三段式 CSV（空行分隔）：材料、製程、移轉單
         csv_text = csv_text.replace('\r\n', '\n').replace('\r', '\n')
         sections = [s.strip() for s in csv_text.split('\n\n') if s.strip()]
-        result = {'materials': [], 'processes': [], 'transfers': []}
+        result = {'materials': [], 'processes': [], 'transfers': [], 'product': None, 'order': None}
 
         for section in sections:
             reader = csv.reader(io.StringIO(section))
@@ -859,10 +865,38 @@ def detail():
                     WHERE a.TA001 = ? AND a.TA002 = ?
                     ORDER BY a.TA003
                 """, oid_parts)
+                # 同一個 cursor 下一個 execute 會把這批結果沖掉，所以先撈完再查下一段
+                proc_rows = erp_cur.fetchall()
 
                 def _fmt_date(s):
                     s = (s or '').strip()
                     return f'{s[:4]}/{s[4:6]}/{s[6:8]}' if len(s) == 8 else ''
+
+                # 成品本身的庫存數（跟產品途程明細那頁的「庫存數」同一個算法：
+                # INVMC.MC007 現有量加總）。品號從製令主檔 MOCTA.TA006 撈，不靠前端傳，
+                # 這樣不管從哪個畫面打開詳細資訊都看得到。
+                # TA026/TA027 = 這張製令的來源訂單（訂單單別/訂單單號，COPTC/COPTD 的
+                # TC001/TC002、TD001/TD002）——不是每張製令都有（庫存單這類沒有客戶訂單來源
+                # 的製令，這兩欄是空字串），前端靠這個決定要不要顯示「展開訂單」按鈕。
+                erp_cur.execute("""
+                    SELECT RTRIM(a.TA006), RTRIM(ISNULL(b.MB002,'')), RTRIM(ISNULL(b.MB004,'')),
+                           CAST(ISNULL((SELECT SUM(c.MC007) FROM INVMC c
+                                         WHERE RTRIM(c.MC001) = RTRIM(a.TA006)),0) AS VARCHAR(20)),
+                           RTRIM(ISNULL(a.TA026,'')), RTRIM(ISNULL(a.TA027,''))
+                      FROM MOCTA a LEFT JOIN INVMB b ON RTRIM(b.MB001) = RTRIM(a.TA006)
+                     WHERE a.TA001 = ? AND a.TA002 = ?
+                """, oid_parts)
+                prow = erp_cur.fetchone()
+                if prow and (prow[0] or '').strip():
+                    result['product'] = {
+                        'item_no':   prow[0].strip(),
+                        'item_name': (prow[1] or '').strip(),
+                        'unit':      (prow[2] or '').strip(),
+                        'stock_qty': str(prow[3] or '0').strip(),
+                    }
+                    so_type, so_no = (prow[4] or '').strip(), (prow[5] or '').strip()
+                    if so_type and so_no:
+                        result['order'] = {'type': so_type, 'no': so_no}
 
                 result['processes'] = [{
                     '加工順序': r[0],
@@ -876,7 +910,7 @@ def detail():
                     '實際開工日': _fmt_date(r[8]),
                     '實際完工日': _fmt_date(r[9]),
                     '製程敘述': r[10],
-                } for r in erp_cur.fetchall()]
+                } for r in proc_rows]
                 erp_conn.close()
             except Exception:
                 pass
@@ -2481,6 +2515,38 @@ def bom_routing():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+_proc_codes_cache = {'ts': 0, 'data': None}
+
+
+@app.route('/api/proc_codes')
+def proc_codes():
+    """全部製程代號主檔（CMSMW，MW001=代號/MW002=名稱），供治檢具申請單「製程代號」
+    欄位的自動完成清單用。這張表跟 /api/bom/routing、SFCR06 用的是同一份代碼表。
+
+    治檢具申請單的製程代號欄位（management.html ja2-proc-list）原本是手 key 的固定
+    30 筆清單，缺很多實際存在的代號（2026-08-26 實測：品號 0310302000E17007 的真實
+    製程是 M46，固定清單裡沒有這一筆，使用者只能看到清單裡湊巧存在的 M42），
+    改成直接查主檔，快取 1 小時（純代碼表，不會頻繁變動，不用像製令資料那樣短 TTL）。
+    """
+    now = time.time()
+    if not _proc_codes_cache['data'] or now - _proc_codes_cache['ts'] > 3600:
+        try:
+            conn = get_erp_conn()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT RTRIM(MW001), RTRIM(ISNULL(MW002,''))
+                FROM CMSMW WHERE RTRIM(ISNULL(MW001,'')) <> '' ORDER BY MW001
+            """)
+            rows = cur.fetchall()
+            conn.close()
+            _proc_codes_cache.update(ts=now, data=[{'code': r[0], 'name': r[1]} for r in rows])
+        except Exception as e:
+            if not _proc_codes_cache['data']:
+                return jsonify({'success': False, 'error': str(e)}), 502
+            # 已有舊快取：這次查詢失敗就沿用舊資料，不要讓使用者連清單都看不到
+    return jsonify({'success': True, 'data': _proc_codes_cache['data']})
+
+
 @app.route('/api/inventory/history')
 def inventory_history():
     """取得指定品號的庫存異動歷史（INVTB + INVTK + MOCTE + MOCTG UNION）。
@@ -2722,6 +2788,79 @@ def inventory_future():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/order')
+def order_detail():
+    """客戶訂單詳情（訂單主檔 COPTC + 明細 COPTD），給製令詳細資訊彈窗的「展開訂單」用。
+
+    製令主檔 MOCTA 的 TA026/TA027（訂單單別/訂單單號）唯一對得上的訂單資料表，
+    2026-08-20 唯讀探測實機驗證：COPTC 是訂單頭（1 張訂單 1 列），COPTD 是訂單品項明細
+    （TD003 序號，跟 ERP 原生畫面「客戶訂單建立作業(COPI06)」逐欄核對過，見 docs/erp-order.md）。
+    """
+    order_type = request.args.get('type', '').strip()
+    order_no = request.args.get('no', '').strip()
+    if not order_type or not order_no:
+        return jsonify({'success': False, 'error': '請提供訂單單別與訂單單號'}), 400
+
+    try:
+        conn = get_erp_conn()
+        cur = conn.cursor()
+
+        def fmt_date(s):
+            s = (s or '').strip()
+            return f'{s[:4]}/{s[4:6]}/{s[6:8]}' if len(s) == 8 else ''
+
+        cur.execute("""
+            SELECT RTRIM(ISNULL(TC004,'')), RTRIM(ISNULL(TC053,'')), TC003, RTRIM(ISNULL(TC040,''))
+            FROM COPTC WHERE TC001 = ? AND TC002 = ?
+        """, (order_type, order_no))
+        hrow = cur.fetchone()
+        if not hrow:
+            return jsonify({'success': False, 'error': f'查無訂單 {order_type}-{order_no}'}), 404
+
+        confirmer_id = (hrow[3] or '').strip()
+        confirmer_name = confirmer_id
+        if confirmer_id:
+            try:
+                confirmer_name = fetch_employee_name_map().get(confirmer_id, confirmer_id)
+            except Exception:
+                pass
+
+        header = {
+            'type': order_type, 'no': order_no,
+            'customer_no': hrow[0], 'customer_name': hrow[1],
+            'order_date': fmt_date(hrow[2]), 'confirmer': confirmer_name,
+        }
+
+        cur.execute("SELECT RTRIM(MC001), RTRIM(ISNULL(MC002,'')) FROM CMSMC")
+        wh_map = {r[0]: r[1] for r in cur.fetchall()}
+
+        cur.execute("""
+            SELECT RTRIM(ISNULL(TD003,'')), RTRIM(ISNULL(TD004,'')), RTRIM(ISNULL(TD005,'')),
+                   RTRIM(ISNULL(TD006,'')), RTRIM(ISNULL(TD007,'')), TD008, TD009, TD013
+            FROM COPTD WHERE TD001 = ? AND TD002 = ? ORDER BY TD003
+        """, (order_type, order_no))
+
+        def fmt_qty(v):
+            try:
+                f = float(v or 0)
+            except (TypeError, ValueError):
+                return str(v or '')
+            return '{:,.3f}'.format(f).rstrip('0').rstrip('.')
+
+        lines = [{
+            'seq': r[0], 'item_no': r[1], 'item_name': r[2], 'spec': r[3],
+            'warehouse': r[4], 'wh_name': wh_map.get(r[4], ''),
+            'order_qty': fmt_qty(r[5]), 'delivered_qty': fmt_qty(r[6]),
+            'due_date': fmt_date(r[7]),
+        } for r in cur.fetchall()]
+        conn.close()
+
+        return jsonify({'success': True, 'header': header, 'lines': lines})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/cache/refresh', methods=['POST'])
 def refresh_cache():
     """手動清除快取，下次查詢時會重新抓取 SSRS 資料"""
@@ -2880,6 +3019,40 @@ def _file_matches_type(form_type, filename):
 def application_page():
     """申請單主頁"""
     return render_template('application.html', form_types=_FORM_TYPES)
+
+
+@app.route('/api/application/order_lookup')
+def application_order_lookup():
+    """異常處理單「品名」欄位打字搜尋目前的製令，選一筆代入生產製令/產品編號/批量。
+
+    直接呼叫 search_orders()（未完工製令報表，跟製令查詢首頁同一份資料源、支援
+    CLAUDE.md 講的空格=AND／-前綴=排除語法），不像 /api/query 額外查 SFT／效率報表
+    ——那兩支是 SOAP/SSRS 呼叫，這裡只是打字自動完成用，跑那些純粹拖慢速度。
+    """
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify({'success': False, 'error': '請輸入品名'}), 400
+    try:
+        records = search_orders(order_id='', product_name=q, unit='*', release_status='已發放')
+        # 同一張製令會因為多道製程出現好幾列，只取每張製令第一筆代表
+        seen = set()
+        results = []
+        for r in records:
+            mo_no = r.get('單別', '').strip()
+            if not mo_no or mo_no in seen:
+                continue
+            seen.add(mo_no)
+            results.append({
+                'mo_no':      mo_no,
+                'item_no':    r.get('品號', '').strip(),
+                'item_name':  r.get('品名', '').rstrip('|').strip(),
+                'qty':        r.get('預計生產數', '').strip(),
+            })
+            if len(results) >= 30:
+                break
+        return jsonify({'success': True, 'data': results, 'count': len(results)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/application/list')
@@ -4398,10 +4571,14 @@ def batch_cost_page():
 # ══════════════════════════════════════════════════════════
 
 def _eq_conn():
-    """開啟設備主檔資料庫；索引未建立時回傳 None"""
+    """開啟設備主檔資料庫；索引未建立時回傳 None。
+
+    EQ_DB_PATH 現在多半指向網芳（多人共用），timeout=15 讓遇到別人正在寫入時等待
+    重試而不是立刻丟「database is locked」；刻意不開 WAL 模式——WAL 需要 shared memory
+    mmap，Windows SMB 網芳不可靠支援，網芳上還是用預設的 rollback journal 比較安全。"""
     if not os.path.exists(EQ_DB_PATH):
         return None
-    conn = sqlite3.connect(EQ_DB_PATH)
+    conn = sqlite3.connect(EQ_DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     _eq_ensure_model_column(conn)
     return conn
@@ -4715,7 +4892,7 @@ def equipment_master_repair_list():
         return jsonify({'success': True, 'count': 0, 'data': []})
     try:
         # 已售出／報廢的設備不列出來：機器已經不是我們的，那些維修是死歷史，
-        # 而且清單上每一列都可以填停機時數，填了卻永遠不會被妥善率採計（妥善率只算在用），
+        # 而且清單上每一列都可以填停機時數，填了卻永遠不會被妥善率採計（妥善率只算使用中），
         # 留著只會讓人白填。對應不到設備的列本來就會被濾掉，所以從 codes 拿掉就等於排除
         codes = {r['code'] for r in conn.execute(
             "SELECT code FROM equipment WHERE status NOT IN ('已售出','報廢')")}
@@ -4988,7 +5165,7 @@ def _eq_workdays(start, end):
 def equipment_master_availability():
     """設備妥善率：(應有稼動時數 - 停機時數) / 應有稼動時數
 
-    應有稼動時數 = 在用台數 × 每日工時 × 平日天數（週一~週五）
+    應有稼動時數 = 使用中台數 × 每日工時 × 平日天數（週一~週五）
     停機時數     = 期間內該群組設備已登記的停機時數合計（eq_downtime）
 
     `location` 保管位置是分子分母**一起**套用的過濾條件（預設只看加工課自己的設備）：
@@ -5020,8 +5197,8 @@ def equipment_master_availability():
         return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
     try:
         _eq_ensure_downtime(conn)
-        # 分母只算「在用」設備——已售出／報廢的機器本來就不該列入應有稼動
-        conds, args = ["e.status='在用'"], []
+        # 分母只算「使用中」設備——已售出／報廢的機器本來就不該列入應有稼動
+        conds, args = ["e.status='使用中'"], []
         if group:
             conds.append('e.group_code=?')
             args.append(group)
@@ -5049,7 +5226,7 @@ def equipment_master_availability():
     total_down = 0.0
     for r in rows:
         if r['code'] not in codes:
-            continue                       # 不在本次統計範圍（別的群組或非在用）
+            continue                       # 不在本次統計範圍（別的群組或非使用中）
         # _purchase_date_key 回傳 'YYYY-MM-DD'（有連字號），比字串時兩邊格式必須一致，
         # 寫成 '%Y%m%d' 會因為 '0' > '-' 而永遠比不中，停機時數全部被濾掉
         key = _purchase_date_key(r['date'])
@@ -5230,7 +5407,7 @@ def equipment_master_save():
                   (d.get('model') or '').strip(),
                   (d.get('buy_date') or '').strip(), (d.get('remark') or '').strip(),
                   (d.get('note') or '').strip(), (d.get('location') or '').strip(),
-                  (d.get('status') or '在用').strip())
+                  (d.get('status') or '使用中').strip())
 
         if is_new:
             cur.execute(
@@ -5282,8 +5459,48 @@ def equipment_master_save():
                     'message': f'已{"新增" if is_new else "更新"}設備 {code}'})
 
 
+# 可以在清單表格裡直接改的欄位（白名單，不接受任意欄位名；仿油品清單「快速編輯」的做法）
+_EQ_INLINE_FIELDS = {'vendor': '廠商', 'model': '型號', 'buy_date': '採購時間'}
+
+
+@app.route('/api/equipment_master/inline_save', methods=['POST'])
+def equipment_master_inline_save():
+    """清單表格內直接編輯單一欄位（廠商／型號／採購日）。密碼在前端擋
+    （跟編碼鎖定、油品清單快速編輯同一組 maxclaw），這裡只做欄位白名單與寫入。
+
+    這三個欄位都在 _EQ_TRACKED_FIELDS 裡，所以沿用跟整份編輯表單同一套 _eq_log_changes
+    寫進異動歷程——但那個函式是拿完整的 after dict 跟 before 逐欄比對，只丟
+    {field: value} 進去的話，其餘追蹤欄位會被當成「改成空白」誤記一筆，所以要把
+    before 的其他欄位原封不動地一起帶進去，只換掉正在編輯的那一個。"""
+    d = request.get_json(silent=True) or {}
+    code = (d.get('code') or '').strip().upper()
+    field = (d.get('field') or '').strip()
+    value = (d.get('value') or '').strip()
+    if field not in _EQ_INLINE_FIELDS:
+        return jsonify({'success': False, 'error': f'不支援編輯欄位 {field}'}), 400
+    conn = _eq_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        cur = conn.cursor()
+        before = cur.execute(
+            'SELECT location, status, vendor, model, old_code, buy_date FROM equipment WHERE code=?',
+            (code,)).fetchone()
+        if before is None:
+            return jsonify({'success': False, 'error': f'查無設備 {code}'}), 404
+        after = {k: before[k] for k in before.keys()}
+        after[field] = value
+        _eq_log_changes(cur, code, before, after)
+        cur.execute(f"UPDATE equipment SET {field}=?, source='manual', "
+                    "updated_at=datetime('now','localtime') WHERE code=?", (value, code))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'code': code, 'field': field, 'value': value})
+
+
 _EQ_LOCATIONS = {'加工', '詠設', '成品', '生技'}
-_EQ_STATUSES = {'在用', '閒置', '轉賣', '已售出', '報廢'}
+_EQ_STATUSES = {'使用中', '閒置', '轉賣', '已售出', '報廢'}
 # 這幾種動作代表設備當下狀態真的變了，補記錄時要連動更新設備本身的欄位，
 # 不能只是寫一筆純文字歷程了事，否則詳情頁上方的「保管位置／狀態」會跟歷程對不上
 _EQ_HIST_LOCATION_ACTIONS = {'移轉'}
@@ -5588,6 +5805,1492 @@ def equipment_master_tech_download():
     if not full or not os.path.isfile(full):
         return jsonify({'success': False, 'error': '檔案不存在'}), 404
     return send_file(full, as_attachment=True, download_name=os.path.basename(full))
+
+
+# ══════════════════════════════════════════════════════════
+#  設備保養基準書（P1）  詳見 docs/equipment-maintenance.md
+# ══════════════════════════════════════════════════════════
+#  基準書掛在「群組+機台類型」層當範本（scope='type'），單台設備用差異表
+#  mt_equip_item 覆寫（停用某項／改週期），單台專屬的加項則放 scope='equip'
+#  的基準書。刻意不把範本複製給每一台——範本改一個字要同步 189 台是災難，
+#  而且事後分不清「這台真的不同」還是「忘了同步」。
+
+# 週期代碼 → (顯示名稱, 排序, 量詞)。日／週點檢不預先展開（見文件 3.5），但基準書本身要能寫
+_MT_CYCLES = {
+    'day':     ('每日',   1, '日'),
+    'week':    ('每週',   2, '週'),
+    'month':   ('每月',   3, '個月'),
+    'quarter': ('每季',   4, '季'),
+    'half':    ('每半年', 5, '半年'),
+    'year':    ('每年',   6, '年'),
+}
+_MT_EXPORT_SHEET = '保養基準書'
+
+
+def _mt_ensure_tables(conn):
+    """建立保養基準書相關資料表（第一次用到時才建，不用另外做 schema 遷移）。
+
+    只在保養相關端點呼叫，不放進 _eq_conn()——EQ_DB_PATH 在網芳上，每開一次連線多跑
+    三個 CREATE 是不必要的網路來回。"""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mt_standard (
+            id         INTEGER PRIMARY KEY,
+            scope      TEXT,      -- 'type'（類型範本）| 'equip'（單台專屬加項）
+            group_code TEXT,      -- scope='type' 用
+            type_code  TEXT,
+            code       TEXT,      -- scope='equip' 用（設備編碼）
+            title      TEXT,
+            rev        TEXT,      -- 版次 A/B/C
+            rev_date   TEXT,
+            author     TEXT,
+            status     TEXT,      -- 草稿 / 生效 / 停用
+            note       TEXT,
+            created_at TEXT, updated_at TEXT
+        )""")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mt_item (
+            id         INTEGER PRIMARY KEY,
+            std_id     INTEGER,
+            seq        INTEGER,   -- 項次
+            part       TEXT,      -- 部位：主軸／導軌／潤滑／氣壓／電氣
+            name       TEXT,      -- 保養內容
+            method     TEXT,      -- 目視／清潔／加油／更換／量測／校正
+            criteria   TEXT,      -- 判定基準（基準書跟待辦清單的分水嶺）
+            cycle_kind TEXT, cycle_n INTEGER,
+            anchor     TEXT,      -- 起算基準日（空=用設備採購日）
+            duration_min INTEGER, -- 標準工時（分）
+            need_stop  INTEGER,   -- 是否需停機
+            owner      TEXT,      -- 操作員／保養員／委外廠商
+            tools      TEXT,      -- 工具與耗材
+            oil_code   TEXT,      -- 使用油品：油品主檔（oil.db）的代號，優先
+            oil        TEXT,      -- 使用油品：主檔沒有這支時的自行輸入文字
+            safety     TEXT,      -- 安全注意事項
+            attach     TEXT,      -- 附件檔名
+            active     INTEGER,
+            created_at TEXT, updated_at TEXT
+        )""")
+    # P2 展開後的保養工作。UNIQUE(code,item_id,period_key) 是整個展開機制的關鍵：
+    # 展開作業可以重複執行任意次，只會補上缺的，不會產生重複待辦。不要拿 due_date 當
+    # 唯一鍵——調整週期時 due_date 會變，period_key 不會。
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mt_plan (
+            id         INTEGER PRIMARY KEY,
+            code       TEXT,      -- 設備編碼
+            item_id    INTEGER,   -- 來源保養項目
+            due_date   TEXT,      -- 應執行日 YYYY-MM-DD
+            period_key TEXT,      -- 2026 / 2026-H1 / 2026-Q3 / 2026-08 / 2026-W32 / 2026-08-10
+            status     TEXT,      -- 待辦 / 已完成 / 跳過
+            done_date  TEXT, done_by TEXT,
+            result     TEXT,      -- OK / NG
+            minutes    REAL,      -- 實際工時
+            remark     TEXT,
+            photo      TEXT,
+            created_at TEXT, updated_at TEXT
+        )""")
+    conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_mt_plan_uniq '
+                 'ON mt_plan(code, item_id, period_key)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_mt_plan_due ON mt_plan(due_date, status)')
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mt_equip_item (
+            code    TEXT,         -- 設備編碼
+            item_id INTEGER,      -- 範本項目
+            disabled INTEGER,     -- 1 = 這台不做這項
+            cycle_kind TEXT, cycle_n INTEGER,   -- NULL = 沿用範本
+            anchor  TEXT,         -- NULL = 沿用範本
+            note    TEXT,
+            updated_at TEXT,
+            PRIMARY KEY(code, item_id)
+        )""")
+    _mt_ensure_columns(conn)
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_mt_item_std ON mt_item(std_id)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_mt_std_type ON mt_standard(group_code, type_code)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_mt_std_code ON mt_standard(code)')
+    conn.commit()
+
+
+# 上線後才補的欄位：表名 → {欄位: 型別}
+# CREATE TABLE IF NOT EXISTS 對「已存在」的表不會補欄位，正式機那份 mt_item 是舊的，
+# 只改上面的 CREATE 沒有用（同 equipment.db 加 model 欄位踩過的坑，見 docs/equipment-master.md）
+_MT_ADDED_COLUMNS = {
+    'mt_item': {'oil': 'TEXT',          # 2026-08-11 使用油品（自行輸入）
+                'oil_code': 'TEXT'},    # 2026-08-11 使用油品（對應 oil.db 的代號）
+}
+
+
+def _mt_ensure_columns(conn):
+    """補上舊資料庫沒有的欄位。PRAGMA table_info 很便宜，每次開連線檢查一次成本可忽略。"""
+    for table, cols in _MT_ADDED_COLUMNS.items():
+        have = {r['name'] for r in conn.execute(f'PRAGMA table_info({table})')}
+        for name, decl in cols.items():
+            if name not in have:
+                conn.execute(f'ALTER TABLE {table} ADD COLUMN {name} {decl}')
+
+
+def _mt_conn():
+    """開設備資料庫並確保保養資料表存在；索引未建立時回傳 None"""
+    conn = _eq_conn()
+    if conn is not None:
+        _mt_ensure_tables(conn)
+    return conn
+
+
+def _mt_now():
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _mt_cycle_label(kind, n):
+    """(month, 3) → 每 3 個月；(quarter, 1) → 每季"""
+    c = _MT_CYCLES.get(kind)
+    if not c:
+        return ''
+    try:
+        n = int(n or 1)
+    except (TypeError, ValueError):
+        n = 1
+    return c[0] if n <= 1 else f'每 {n} {c[2]}'
+
+
+def _mt_std_row(r):
+    d = dict(r)
+    d['id'] = int(d['id'])
+    return d
+
+
+def _mt_item_rows(conn, std_id):
+    return [dict(r) for r in conn.execute(
+        'SELECT * FROM mt_item WHERE std_id=? ORDER BY seq, id', (std_id,))]
+
+
+def _mt_fill_oil(items):
+    """把項目的 oil_code 對回油品主檔（`oil.db`，見 docs/oil-management.md）。
+
+    油品主檔跟設備主檔是**兩個不同的資料庫檔案**，join 不了，所以在 Python 這邊補；
+    一次把用到的代號查完，不要每筆各開一次連線（都在網芳上，來回很貴）。
+
+    **顯示名稱一律以主檔當下的值為準**，不是存基準書時的快照——油品在主檔改了品名或
+    改成停用，基準書上要立刻看得到，不然現場照著一份寫著已停用油品的基準書去領料。
+    """
+    codes = {(it.get('oil_code') or '').strip() for it in items}
+    codes.discard('')
+    info = {}
+    if codes:
+        conn = _oil_conn()
+        if conn is not None:
+            try:
+                ph = ','.join('?' * len(codes))
+                info = {r['code']: dict(r) for r in conn.execute(
+                    f'SELECT code, name, category, supplier, status FROM oil WHERE code IN ({ph})',
+                    list(codes))}
+            except sqlite3.Error:
+                info = {}
+            finally:
+                conn.close()
+    for it in items:
+        code = (it.get('oil_code') or '').strip()
+        o = info.get(code)
+        it['oil_name'] = (o or {}).get('name') or ''
+        it['oil_status'] = (o or {}).get('status') or ''
+        it['oil_category'] = (o or {}).get('category') or ''
+        # 主檔查不到（油品被硬刪或改了代號）要看得出來，不能默默顯示成空白
+        it['oil_missing'] = bool(code) and o is None
+        # 顯示只用代號：代號本身已經帶中文說明（「半合成切削液」AW-30），
+        # 再接上完整品名（STORK金屬加工液 SW5031-030）會把表格欄位撐爆。
+        # 品名放 oil_name 給前端當 tooltip，需要時滑過去看。
+        it['oil_label'] = code if code else (it.get('oil') or '').strip()
+    return items
+
+
+@app.route('/api/equipment_master/maint/oil_options')
+def maint_oil_options():
+    """「使用油品」的候選清單，直接讀油品主檔 oil.db。
+
+    停用的油品也一起回傳（前端會標註）：基準書可能引用到已經停用的油，把它藏起來
+    只會讓人看不懂為什麼下拉裡選不到現在這支。排序沿用油品清單那套分類優先的規則。"""
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': True, 'oils': [], 'note': '尚未建立油品主檔'})
+    try:
+        rows = [dict(r) for r in conn.execute(
+            'SELECT code, name, category, supplier, status FROM oil')]
+    except sqlite3.Error as e:
+        return jsonify({'success': True, 'oils': [], 'note': f'油品主檔讀取失敗：{e}'})
+    finally:
+        conn.close()
+    rows.sort(key=_oil_sort_key)
+    return jsonify({'success': True, 'oils': rows})
+
+
+@app.route('/api/equipment_master/maint/tree')
+def maint_tree():
+    """基準書總覽：每個群組／機台類型有幾台設備、有沒有建基準書、幾個項目。
+
+    未建基準書的類型也要回傳（前端要顯示「尚未建立」讓人去建），所以是以設備與
+    編碼字典為主體 LEFT JOIN 基準書，不是列舉 mt_standard。"""
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        groups = {r['code']: dict(r) for r in conn.execute('SELECT code, name FROM eq_group ORDER BY code')}
+        # 類型清單以字典為主，並補上字典裡沒有但設備上有的類型（編碼待修正的設備會出現這種）
+        types = {}
+        for r in conn.execute('SELECT group_code, code, name FROM eq_type ORDER BY group_code, code'):
+            types[(r['group_code'], r['code'])] = {'group_code': r['group_code'], 'type_code': r['code'],
+                                                   'type_name': r['name'], 'equip_cnt': 0, 'active_cnt': 0}
+        for r in conn.execute(
+                "SELECT group_code, type_code, COUNT(*) AS c,"
+                " SUM(CASE WHEN status IN ('使用中','閒置') THEN 1 ELSE 0 END) AS a"
+                ' FROM equipment GROUP BY group_code, type_code'):
+            key = (r['group_code'], r['type_code'])
+            t = types.setdefault(key, {'group_code': r['group_code'], 'type_code': r['type_code'],
+                                       'type_name': '', 'equip_cnt': 0, 'active_cnt': 0})
+            t['equip_cnt'] = r['c']
+            t['active_cnt'] = r['a'] or 0
+        stds = {}
+        for r in conn.execute(
+                "SELECT s.id, s.scope, s.group_code, s.type_code, s.code, s.title, s.rev, s.status,"
+                ' (SELECT COUNT(*) FROM mt_item i WHERE i.std_id=s.id) AS item_cnt'
+                ' FROM mt_standard s'):
+            d = _mt_std_row(r)
+            if d['scope'] == 'type':
+                stds[(d['group_code'], d['type_code'])] = d
+        for key, t in types.items():
+            t.update({'std_id': None, 'item_cnt': 0, 'status': '', 'rev': '', 'title': ''})
+            s = stds.get(key)
+            if s:
+                t.update({'std_id': s['id'], 'item_cnt': s['item_cnt'],
+                          'status': s['status'] or '', 'rev': s['rev'] or '', 'title': s['title'] or ''})
+        # 單台專屬基準書另外列（掛在設備上，不屬於任何類型範本）
+        equip_stds = [_mt_std_row(r) for r in conn.execute(
+            "SELECT s.*, (SELECT COUNT(*) FROM mt_item i WHERE i.std_id=s.id) AS item_cnt"
+            " FROM mt_standard s WHERE s.scope='equip' ORDER BY s.code")]
+        # 已經用過的油品／部位，給表單當下拉候選：41 種類型各自打字很容易把同一種油
+        # 打成三種寫法，之後要統計用油量或叫料就對不起來
+        oils = [r[0] for r in conn.execute(
+            "SELECT DISTINCT oil FROM mt_item WHERE IFNULL(oil,'')<>'' ORDER BY oil")]
+        parts = [r[0] for r in conn.execute(
+            "SELECT DISTINCT part FROM mt_item WHERE IFNULL(part,'')<>'' ORDER BY part")]
+    finally:
+        conn.close()
+    out = sorted(types.values(), key=lambda x: (x['group_code'] or '', x['type_code'] or ''))
+    return jsonify({'success': True, 'groups': list(groups.values()),
+                    'types': out, 'equip_stds': equip_stds, 'oils': oils, 'parts': parts,
+                    'cycles': [{'kind': k, 'label': v[0]} for k, v in
+                               sorted(_MT_CYCLES.items(), key=lambda x: x[1][1])]})
+
+
+@app.route('/api/equipment_master/maint/standard')
+def maint_standard_get():
+    """讀一份基準書＋所有項目。可用 id、(group_code,type_code)、或 code（單台專屬）指定。"""
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    sid = request.args.get('id', '').strip()
+    g = request.args.get('group_code', '').strip().upper()
+    t = request.args.get('type_code', '').strip()
+    code = request.args.get('code', '').strip().upper()
+    try:
+        if sid:
+            row = conn.execute('SELECT * FROM mt_standard WHERE id=?', (sid,)).fetchone()
+        elif code:
+            row = conn.execute("SELECT * FROM mt_standard WHERE scope='equip' AND code=?", (code,)).fetchone()
+        elif g and t:
+            row = conn.execute("SELECT * FROM mt_standard WHERE scope='type' AND group_code=? AND type_code=?",
+                               (g, t)).fetchone()
+        else:
+            return jsonify({'success': False, 'error': '請指定基準書'}), 400
+        if row is None:
+            return jsonify({'success': True, 'standard': None, 'items': []})
+        std = _mt_std_row(row)
+        folder = _mt_std_folder(row)
+        items = _mt_fill_oil(_mt_item_rows(conn, std['id']))
+        for it in items:
+            it['cycle_label'] = _mt_cycle_label(it['cycle_kind'], it['cycle_n'])
+            it['attach_files'] = _mt_attach_list(it['attach'], folder)
+        # 這份範本適用哪些設備（單台專屬的就是那一台）
+        if std['scope'] == 'type':
+            equips = [dict(r) for r in conn.execute(
+                'SELECT code, old_code, status, location FROM equipment'
+                ' WHERE group_code=? AND type_code=? ORDER BY code', (std['group_code'], std['type_code']))]
+        else:
+            equips = [dict(r) for r in conn.execute(
+                'SELECT code, old_code, status, location FROM equipment WHERE code=?', (std['code'],))]
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'standard': std, 'items': items, 'equips': equips, 'folder': folder})
+
+
+@app.route('/api/equipment_master/maint/standard/save', methods=['POST'])
+def maint_standard_save():
+    """新增或修改基準書表頭。scope='type' 時同一個類型只能有一份（重複建立會回傳既有那份）。"""
+    d = request.get_json(silent=True) or {}
+    scope = (d.get('scope') or 'type').strip()
+    g = (d.get('group_code') or '').strip().upper()
+    t = (d.get('type_code') or '').strip()
+    code = (d.get('code') or '').strip().upper()
+    if scope == 'type' and not (g and t):
+        return jsonify({'success': False, 'error': '請指定群組與機台類型'}), 400
+    if scope == 'equip' and not code:
+        return jsonify({'success': False, 'error': '請指定設備編碼'}), 400
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        sid = d.get('id')
+        now = _mt_now()
+        fields = {
+            'title':  (d.get('title') or '').strip(),
+            'rev':    (d.get('rev') or '').strip(),
+            'rev_date': (d.get('rev_date') or '').strip(),
+            'author': (d.get('author') or '').strip(),
+            'status': (d.get('status') or '生效').strip(),
+            'note':   (d.get('note') or '').strip(),
+        }
+        if not sid:
+            # 同一個類型／同一台設備只允許一份基準書，已存在就直接沿用（避免重複按新增建出兩份）
+            exist = conn.execute(
+                "SELECT id FROM mt_standard WHERE scope=? AND IFNULL(group_code,'')=? "
+                "AND IFNULL(type_code,'')=? AND IFNULL(code,'')=?",
+                (scope, g, t, code)).fetchone()
+            if exist:
+                sid = exist['id']
+        if not fields['title']:
+            if scope == 'type':
+                tn = conn.execute('SELECT name FROM eq_type WHERE group_code=? AND code=?', (g, t)).fetchone()
+                fields['title'] = f'{g}{t} {tn["name"] if tn else ""} 保養基準書'.replace('  ', ' ').strip()
+            else:
+                fields['title'] = f'{code} 專屬保養基準書'
+        if sid:
+            conn.execute('UPDATE mt_standard SET title=?, rev=?, rev_date=?, author=?, status=?, note=?,'
+                         ' updated_at=? WHERE id=?',
+                         (fields['title'], fields['rev'], fields['rev_date'], fields['author'],
+                          fields['status'], fields['note'], now, sid))
+        else:
+            cur = conn.execute(
+                'INSERT INTO mt_standard (scope, group_code, type_code, code, title, rev, rev_date,'
+                ' author, status, note, created_at, updated_at)'
+                ' VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                (scope, g or None, t or None, code or None, fields['title'], fields['rev'],
+                 fields['rev_date'], fields['author'], fields['status'], fields['note'], now, now))
+            sid = cur.lastrowid
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'id': sid})
+
+
+@app.route('/api/equipment_master/maint/standard/delete', methods=['POST'])
+def maint_standard_delete():
+    """刪除整份基準書（連同項目與各台的覆寫設定）"""
+    sid = (request.get_json(silent=True) or {}).get('id')
+    if not sid:
+        return jsonify({'success': False, 'error': '缺少 id'}), 400
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        ids = [r['id'] for r in conn.execute('SELECT id FROM mt_item WHERE std_id=?', (sid,))]
+        if ids:
+            conn.execute('DELETE FROM mt_equip_item WHERE item_id IN (%s)' % ','.join('?' * len(ids)), ids)
+        conn.execute('DELETE FROM mt_item WHERE std_id=?', (sid,))
+        conn.execute('DELETE FROM mt_standard WHERE id=?', (sid,))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'deleted_items': len(ids)})
+
+
+@app.route('/api/equipment_master/maint/standard/copy', methods=['POST'])
+def maint_standard_copy():
+    """把某份基準書的項目複製到另一個機台類型。
+
+    41 種類型 × 10~20 項要人工建，沒有這個功能內容永遠建不完（見文件第九節）。
+    目標已有基準書時採「附加」而非覆蓋，項次接在後面，避免一次誤操作洗掉既有內容。"""
+    d = request.get_json(silent=True) or {}
+    from_id = d.get('from_id')
+    g = (d.get('to_group') or '').strip().upper()
+    t = (d.get('to_type') or '').strip()
+    if not from_id or not (g and t):
+        return jsonify({'success': False, 'error': '請指定來源基準書與目標機台類型'}), 400
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        src = conn.execute('SELECT * FROM mt_standard WHERE id=?', (from_id,)).fetchone()
+        if src is None:
+            return jsonify({'success': False, 'error': '來源基準書不存在'}), 404
+        if src['scope'] == 'type' and src['group_code'] == g and src['type_code'] == t:
+            return jsonify({'success': False, 'error': '來源與目標是同一個機台類型'}), 400
+        now = _mt_now()
+        dst = conn.execute("SELECT id FROM mt_standard WHERE scope='type' AND group_code=? AND type_code=?",
+                           (g, t)).fetchone()
+        if dst:
+            dst_id = dst['id']
+        else:
+            tn = conn.execute('SELECT name FROM eq_type WHERE group_code=? AND code=?', (g, t)).fetchone()
+            title = f'{g}{t} {tn["name"] if tn else ""} 保養基準書'.replace('  ', ' ').strip()
+            dst_id = conn.execute(
+                "INSERT INTO mt_standard (scope, group_code, type_code, title, rev, status, note,"
+                " created_at, updated_at) VALUES ('type',?,?,?,?,?,?,?,?)",
+                (g, t, title, src['rev'], '草稿', f'複製自 {src["title"]}', now, now)).lastrowid
+        base = conn.execute('SELECT IFNULL(MAX(seq),0) FROM mt_item WHERE std_id=?', (dst_id,)).fetchone()[0]
+        rows = conn.execute('SELECT * FROM mt_item WHERE std_id=? ORDER BY seq, id', (from_id,)).fetchall()
+        for i, r in enumerate(rows, 1):
+            conn.execute(
+                'INSERT INTO mt_item (std_id, seq, part, name, method, criteria, cycle_kind, cycle_n,'
+                ' anchor, duration_min, need_stop, owner, tools, oil_code, oil, safety, attach, active,'
+                ' created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                (dst_id, base + i, r['part'], r['name'], r['method'], r['criteria'], r['cycle_kind'],
+                 r['cycle_n'], r['anchor'], r['duration_min'], r['need_stop'], r['owner'], r['tools'],
+                 r['oil_code'], r['oil'], r['safety'], r['attach'], r['active'], now, now))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'id': dst_id, 'copied': len(rows)})
+
+
+def _mt_item_payload(d):
+    """把前端送來的項目欄位整理成寫入用的 tuple（不含 std_id/seq）"""
+    kind = (d.get('cycle_kind') or '').strip()
+    if kind not in _MT_CYCLES:
+        kind = 'year'
+    try:
+        n = max(1, int(d.get('cycle_n') or 1))
+    except (TypeError, ValueError):
+        n = 1
+    try:
+        mins = int(d.get('duration_min') or 0) or None
+    except (TypeError, ValueError):
+        mins = None
+    return ((d.get('part') or '').strip(), (d.get('name') or '').strip(),
+            (d.get('method') or '').strip(), (d.get('criteria') or '').strip(),
+            kind, n, (d.get('anchor') or '').strip() or None, mins,
+            1 if d.get('need_stop') else 0, (d.get('owner') or '').strip(),
+            (d.get('tools') or '').strip(), (d.get('oil_code') or '').strip(),
+            (d.get('oil') or '').strip(), (d.get('safety') or '').strip(),
+            (d.get('attach') or '').strip(), 0 if d.get('active') in (0, '0', False) else 1)
+
+
+@app.route('/api/equipment_master/maint/item/save', methods=['POST'])
+def maint_item_save():
+    """新增或修改一個保養項目"""
+    d = request.get_json(silent=True) or {}
+    if not (d.get('name') or '').strip():
+        return jsonify({'success': False, 'error': '請填寫保養內容'}), 400
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        now = _mt_now()
+        vals = _mt_item_payload(d)
+        iid = d.get('id')
+        if iid:
+            conn.execute(
+                'UPDATE mt_item SET part=?, name=?, method=?, criteria=?, cycle_kind=?, cycle_n=?,'
+                ' anchor=?, duration_min=?, need_stop=?, owner=?, tools=?, oil_code=?, oil=?,'
+                ' safety=?, attach=?, active=?, updated_at=? WHERE id=?', vals + (now, iid))
+        else:
+            std_id = d.get('std_id')
+            if not std_id:
+                return jsonify({'success': False, 'error': '缺少 std_id'}), 400
+            seq = (conn.execute('SELECT IFNULL(MAX(seq),0) FROM mt_item WHERE std_id=?',
+                                (std_id,)).fetchone()[0] or 0) + 1
+            iid = conn.execute(
+                'INSERT INTO mt_item (std_id, seq, part, name, method, criteria, cycle_kind, cycle_n,'
+                ' anchor, duration_min, need_stop, owner, tools, oil_code, oil, safety, attach, active,'
+                ' created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                (std_id, seq) + vals + (now, now)).lastrowid
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'id': iid})
+
+
+@app.route('/api/equipment_master/maint/item/delete', methods=['POST'])
+def maint_item_delete():
+    """刪除保養項目（連同各台設備對它的覆寫設定）"""
+    iid = (request.get_json(silent=True) or {}).get('id')
+    if not iid:
+        return jsonify({'success': False, 'error': '缺少 id'}), 400
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        conn.execute('DELETE FROM mt_equip_item WHERE item_id=?', (iid,))
+        conn.execute('DELETE FROM mt_item WHERE id=?', (iid,))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/equipment_master/maint/item/move', methods=['POST'])
+def maint_item_move():
+    """項目上移／下移（跟相鄰的那筆交換 seq）"""
+    d = request.get_json(silent=True) or {}
+    iid, direction = d.get('id'), d.get('dir')
+    if not iid or direction not in ('up', 'down'):
+        return jsonify({'success': False, 'error': '參數錯誤'}), 400
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        rows = [dict(r) for r in conn.execute(
+            'SELECT id, seq FROM mt_item WHERE std_id=(SELECT std_id FROM mt_item WHERE id=?)'
+            ' ORDER BY seq, id', (iid,))]
+        idx = next((i for i, r in enumerate(rows) if r['id'] == int(iid)), -1)
+        j = idx - 1 if direction == 'up' else idx + 1
+        if idx < 0 or j < 0 or j >= len(rows):
+            return jsonify({'success': True, 'moved': False})
+        rows[idx], rows[j] = rows[j], rows[idx]
+        # seq 重新從 1 編號（舊資料可能有重複或空的 seq，交換兩筆的值不一定有效）
+        for i, r in enumerate(rows, 1):
+            conn.execute('UPDATE mt_item SET seq=? WHERE id=?', (i, r['id']))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'moved': True})
+
+
+@app.route('/api/equipment_master/maint/for_equip')
+def maint_for_equip():
+    """某一台設備實際適用的保養項目 = 類型範本 + 這台的覆寫 + 這台專屬的加項。
+
+    範本項目一律回傳（含被這台停用的，前端要顯示成刪除線讓人可以再啟用），
+    週期欄位回傳的是套用覆寫後的有效值，另外附上範本原值供對照。"""
+    code = request.args.get('code', '').strip().upper()
+    if not code:
+        return jsonify({'success': False, 'error': '缺少設備編碼'}), 400
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        eq = conn.execute('SELECT code, group_code, type_code FROM equipment WHERE code=?', (code,)).fetchone()
+        if eq is None:
+            return jsonify({'success': False, 'error': '設備不存在'}), 404
+        std = conn.execute("SELECT * FROM mt_standard WHERE scope='type' AND group_code=? AND type_code=?",
+                           (eq['group_code'], eq['type_code'])).fetchone()
+        own = conn.execute("SELECT * FROM mt_standard WHERE scope='equip' AND code=?", (code,)).fetchone()
+        ov = {r['item_id']: dict(r) for r in conn.execute(
+            'SELECT * FROM mt_equip_item WHERE code=?', (code,))}
+        items = []
+        for src, kind in ((std, 'type'), (own, 'equip')):
+            if src is None:
+                continue
+            folder = _mt_std_folder(src)
+            for it in _mt_fill_oil(_mt_item_rows(conn, src['id'])):
+                it['attach_files'] = _mt_attach_list(it['attach'], folder)
+                it['folder'] = folder
+                o = ov.get(it['id']) or {}
+                eff_kind = o.get('cycle_kind') or it['cycle_kind']
+                eff_n = o.get('cycle_n') or it['cycle_n']
+                items.append(dict(it, from_scope=kind,
+                                  base_cycle_label=_mt_cycle_label(it['cycle_kind'], it['cycle_n']),
+                                  cycle_kind=eff_kind, cycle_n=eff_n,
+                                  cycle_label=_mt_cycle_label(eff_kind, eff_n),
+                                  anchor=o.get('anchor') or it['anchor'],
+                                  disabled=1 if o.get('disabled') else 0,
+                                  override_note=o.get('note') or '',
+                                  overridden=bool(o.get('cycle_kind') or o.get('cycle_n') or o.get('anchor'))))
+        std_out = _mt_std_row(std) if std is not None else None
+        own_out = _mt_std_row(own) if own is not None else None
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'standard': std_out, 'own_standard': own_out, 'items': items})
+
+
+@app.route('/api/equipment_master/maint/equip_item/save', methods=['POST'])
+def maint_equip_item_save():
+    """單台設備對某個範本項目的覆寫（停用／改週期／備註）。
+
+    全部都是預設值時直接刪掉該筆，表裡不累積無意義資料——同行事曆 cal_day 的做法
+    （見 docs/calendar.md），這樣「有沒有被動過手腳」一眼就看得出來。"""
+    d = request.get_json(silent=True) or {}
+    code = (d.get('code') or '').strip().upper()
+    iid = d.get('item_id')
+    if not code or not iid:
+        return jsonify({'success': False, 'error': '參數錯誤'}), 400
+    disabled = 1 if d.get('disabled') else 0
+    kind = (d.get('cycle_kind') or '').strip() or None
+    if kind not in _MT_CYCLES:
+        kind = None
+    try:
+        n = int(d.get('cycle_n') or 0) or None
+    except (TypeError, ValueError):
+        n = None
+    anchor = (d.get('anchor') or '').strip() or None
+    note = (d.get('note') or '').strip()
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        if not disabled and not kind and not n and not anchor and not note:
+            conn.execute('DELETE FROM mt_equip_item WHERE code=? AND item_id=?', (code, iid))
+        else:
+            conn.execute(
+                'INSERT OR REPLACE INTO mt_equip_item (code, item_id, disabled, cycle_kind, cycle_n,'
+                ' anchor, note, updated_at) VALUES (?,?,?,?,?,?,?,?)',
+                (code, iid, disabled, kind, n, anchor, note, _mt_now()))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True})
+
+
+# 基準書附件允許的副檔名：以原廠保養手冊／注意事項的 PDF 為主，另收圖片與 Office 檔
+_MT_ATTACH_EXT = {'.pdf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp',
+                  '.doc', '.docx', '.xls', '.xlsx', '.txt'}
+
+
+def _mt_std_folder(row):
+    """基準書附件的資料夾名稱：類型範本用 B01、單台專屬用設備編碼。
+
+    用看得懂的名字而不是 std_id，是因為這是網芳資料夾——沒裝系統的人直接開資料夾
+    也要知道那疊 PDF 是哪個機型的（同 EQUIPMENT_PHOTO_ROOT 以編碼命名的理由）。"""
+    name = (f'{row["group_code"] or ""}{row["type_code"] or ""}'
+            if row['scope'] == 'type' else (row['code'] or ''))
+    return _cnc_safe_filename(name) if name else f'std{row["id"]}'
+
+
+def _mt_attach_list(value, folder):
+    """把 attach 欄位（'a.pdf|b.pdf'）拆成清單，並標記檔案是否真的在網芳上。
+
+    舊資料（例如舊維護一覽表匯入的「240329 機械手臂電池更換注意事項」）只是一段文字、
+    沒有對應檔案，exists=False，前端就顯示純文字不做成連結。"""
+    out = []
+    for name in [x.strip() for x in (value or '').split('|') if x.strip()]:
+        full = _eq_safe_path(config.EQUIPMENT_MAINT_ROOT, os.path.join(folder, name))
+        out.append({'name': name, 'exists': bool(full and os.path.isfile(full))})
+    return out
+
+
+@app.route('/api/equipment_master/maint/attach/upload', methods=['POST'])
+def maint_attach_upload():
+    """上傳基準書附件（可一次多個）到網芳 EQUIPMENT_MAINT_ROOT\\<基準書資料夾>\\。
+
+    附件掛在「基準書」層而不是「項目」層，所以項目還沒存檔就能先上傳——前端拖進來
+    就立刻上傳，回傳的檔名再填進項目的 attach 欄位。撞名時加時間戳記，不覆蓋既有檔案。"""
+    std_id = (request.form.get('std_id') or '').strip()
+    files = request.files.getlist('files')
+    if not std_id:
+        return jsonify({'success': False, 'error': '缺少 std_id'}), 400
+    if not files or not any(f and f.filename for f in files):
+        return jsonify({'success': False, 'error': '請選擇檔案'}), 400
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        row = conn.execute('SELECT * FROM mt_standard WHERE id=?', (std_id,)).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return jsonify({'success': False, 'error': '基準書不存在'}), 404
+
+    folder = _mt_std_folder(row)
+    dest_dir = _eq_safe_path(config.EQUIPMENT_MAINT_ROOT, folder)
+    if not dest_dir:
+        return jsonify({'success': False, 'error': '資料夾名稱不合法'}), 400
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+    except OSError as e:
+        return jsonify({'success': False, 'error': f'無法建立資料夾（{dest_dir}）：{e}'}), 500
+
+    saved, rejected = [], []
+    for f in files:
+        if not f or not f.filename:
+            continue
+        ext = os.path.splitext(f.filename)[1].lower()
+        if ext not in _MT_ATTACH_EXT:
+            rejected.append(f.filename)
+            continue
+        filename = _cnc_safe_filename(f.filename)
+        dest = os.path.join(dest_dir, filename)
+        if os.path.exists(dest):
+            stem, ex = os.path.splitext(filename)
+            filename = f'{stem}_{int(time.time())}{ex}'
+            dest = os.path.join(dest_dir, filename)
+        try:
+            f.save(dest)
+        except OSError as e:
+            rejected.append(f'{f.filename}（存檔失敗：{e}）')
+            continue
+        saved.append(filename)
+
+    if not saved:
+        err = '沒有成功上傳的檔案'
+        if rejected:
+            err += '：' + '、'.join(rejected) + '（僅支援 ' + '/'.join(sorted(_MT_ATTACH_EXT)) + '）'
+        return jsonify({'success': False, 'error': err}), 400
+    msg = f'已上傳 {len(saved)} 個檔案'
+    if rejected:
+        msg += f'，{len(rejected)} 個格式不支援已略過'
+    return jsonify({'success': True, 'message': msg, 'saved': saved, 'folder': folder})
+
+
+@app.route('/api/equipment_master/maint/attach')
+def maint_attach_get():
+    """開啟／下載基準書附件。PDF 預設用瀏覽器內建檢視器開（as_attachment=False），
+    看完就關比先下載到磁碟再開順手；路徑一律走 _eq_safe_path 擋跳脫。"""
+    from flask import send_file
+    folder = request.args.get('folder', '')
+    name = request.args.get('f', '')
+    full = _eq_safe_path(config.EQUIPMENT_MAINT_ROOT, os.path.join(folder, name))
+    if not full or not os.path.isfile(full):
+        return jsonify({'success': False, 'error': '檔案不存在'}), 404
+    return send_file(full, as_attachment=False, download_name=os.path.basename(full))
+
+
+# 舊「設備維護一覽表.xlsx」的週期文字 → 週期代碼
+_MT_LEGACY_CYCLE = {
+    '每日': ('day', 1), '日': ('day', 1),
+    '每週': ('week', 1), '週': ('week', 1), '每周': ('week', 1),
+    '每月': ('month', 1), '月': ('month', 1),
+    '每季': ('quarter', 1), '季': ('quarter', 1), '三個月': ('month', 3),
+    '半年': ('half', 1), '每半年': ('half', 1), '六個月': ('month', 6),
+    '一年': ('year', 1), '每年': ('year', 1), '年': ('year', 1),
+    '兩年': ('year', 2), '二年': ('year', 2), '三年': ('year', 3),
+}
+
+
+@app.route('/api/equipment_master/maint/import_legacy', methods=['POST'])
+def maint_import_legacy():
+    """把舊的「設備維護一覽表.xlsx」匯進來（一次性；重複執行不會產生重複資料）。
+
+    總表 → 該台設備的專屬基準書（scope='equip'，因為原表本來就是逐台寫的）；
+    維護記錄 → eq_history（`user='user'`）。**刻意不寫成 `user='excel'`**：
+    build_equipment_index.py 匯入時會 `DELETE WHERE user='excel'` 再重寫，
+    寫成 excel 的話下次重匯就整批消失。"""
+    path = getattr(config, 'EQUIPMENT_MAINT_LEGACY_XLSX', '')
+    if not path or not os.path.isfile(path):
+        return jsonify({'success': False, 'error': f'找不到舊維護一覽表：{path}'}), 404
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    added_items = added_hist = skipped = 0
+    notes = []
+    try:
+        wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+        now = _mt_now()
+        known = {r['code'] for r in conn.execute('SELECT code FROM equipment')}
+
+        if '總表' in wb.sheetnames:
+            for row in wb['總表'].iter_rows(min_row=2, values_only=True):
+                cells = list(row) + [None] * 6
+                eq_name, code, cycle, content, safety, attach = [
+                    (str(c).strip() if c is not None else '') for c in cells[:6]]
+                code = code.upper()
+                if not code:
+                    continue
+                if code not in known:
+                    skipped += 1
+                    notes.append(f'{code}：設備主檔查無此編碼，略過')
+                    continue
+                kind, n = _MT_LEGACY_CYCLE.get(cycle, ('year', 1))
+                if cycle and cycle not in _MT_LEGACY_CYCLE:
+                    notes.append(f'{code}：週期「{cycle}」無法辨識，先當成每年')
+                std = conn.execute("SELECT id FROM mt_standard WHERE scope='equip' AND code=?",
+                                   (code,)).fetchone()
+                if std:
+                    sid = std['id']
+                else:
+                    sid = conn.execute(
+                        "INSERT INTO mt_standard (scope, code, title, rev, status, note, created_at, updated_at)"
+                        " VALUES ('equip',?,?,?,?,?,?,?)",
+                        (code, f'{code} 專屬保養基準書', 'A', '生效',
+                         f'由舊「設備維護一覽表」匯入（原設備名稱：{eq_name}）', now, now)).lastrowid
+                # 沒填維護內容的列照樣建起來（週期是有意義的資訊），但標成停用讓人補
+                name = content or '（原表未填維護內容，待補）'
+                active = 1 if content else 0
+                dup = conn.execute('SELECT id FROM mt_item WHERE std_id=? AND name=?', (sid, name)).fetchone()
+                if dup:
+                    continue
+                seq = (conn.execute('SELECT IFNULL(MAX(seq),0) FROM mt_item WHERE std_id=?',
+                                    (sid,)).fetchone()[0] or 0) + 1
+                conn.execute(
+                    'INSERT INTO mt_item (std_id, seq, name, criteria, cycle_kind, cycle_n, safety,'
+                    ' attach, active, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                    (sid, seq, name, '', kind, n, safety, attach, active, now, now))
+                added_items += 1
+
+        if '維護記錄' in wb.sheetnames:
+            for row in wb['維護記錄'].iter_rows(min_row=2, values_only=True):
+                cells = list(row) + [None] * 5
+                dt, _eq_name, code, content, vendor = cells[:5]
+                code = (str(code).strip().upper() if code else '')
+                if not code or code not in known:
+                    continue
+                if isinstance(dt, datetime):
+                    dstr = dt.strftime('%Y-%m-%d')
+                else:
+                    dstr = (str(dt).strip()[:10] if dt else '')
+                detail = ' '.join(x for x in [(str(content).strip() if content else ''),
+                                              (f'（廠商：{str(vendor).strip()}）' if vendor else '')] if x)
+                detail = (detail or '保養') + '｜舊維護一覽表匯入'
+                dup = conn.execute('SELECT rowid FROM eq_history WHERE code=? AND date=? AND detail=?',
+                                   (code, dstr, detail)).fetchone()
+                if dup:
+                    continue
+                conn.execute('INSERT INTO eq_history (code, date, action, detail, user)'
+                             " VALUES (?,?,'保養',?,'user')", (code, dstr, detail))
+                added_hist += 1
+        wb.close()
+        conn.commit()
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'匯入失敗：{type(e).__name__} {e}'}), 500
+    finally:
+        conn.close()
+    msg = f'匯入完成：新增 {added_items} 個保養項目、{added_hist} 筆保養歷程'
+    if skipped:
+        msg += f'，略過 {skipped} 列'
+    return jsonify({'success': True, 'message': msg, 'notes': notes})
+
+
+@app.route('/api/equipment_master/maint/export', methods=['POST'])
+def maint_export():
+    """把全部基準書匯出成獨立檔案 config.EQUIPMENT_MAINT_EXPORT_XLSX。
+
+    每次整份重建一個新活頁簿（不載入既有檔案）——理由同 export_history：
+    本專案的共用 Excel 有公式欄位，開檔存檔會洗掉快取值（見 docs/equipment-master.md）。"""
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        rows = [dict(r) for r in conn.execute("""
+            SELECT s.scope, s.group_code, s.type_code, s.code AS std_code, s.title, s.rev, s.status,
+                   t.name AS type_name, i.*
+              FROM mt_standard s
+              JOIN mt_item i ON i.std_id = s.id
+              LEFT JOIN eq_type t ON t.group_code = s.group_code AND t.code = s.type_code
+             ORDER BY s.scope, s.group_code, s.type_code, s.code, i.seq, i.id""")]
+    finally:
+        conn.close()
+    _mt_fill_oil(rows)   # 匯出的油品欄要寫主檔當下的品名，不是存檔當時的快照
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = _MT_EXPORT_SHEET
+    ws.append(['適用範圍', '基準書', '版次', '狀態', '項次', '部位', '保養內容', '方法', '判定基準',
+               '週期', '標準工時(分)', '需停機', '負責', '工具耗材', '使用油品', '安全注意事項',
+               '附件', '啟用'])
+    for r in rows:
+        scope = (f'{r["group_code"]}{r["type_code"]} {r["type_name"] or ""}'.strip()
+                 if r['scope'] == 'type' else f'{r["std_code"]}（單台）')
+        ws.append([scope, r['title'], r['rev'], r['status'], r['seq'], r['part'], r['name'], r['method'],
+                   r['criteria'], _mt_cycle_label(r['cycle_kind'], r['cycle_n']), r['duration_min'],
+                   '是' if r['need_stop'] else '', r['owner'], r['tools'], r['oil_label'], r['safety'],
+                   r['attach'], '' if r['active'] else '停用'])
+    ws.freeze_panes = 'A2'
+    for col, width in zip(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I',
+                           'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R'],
+                          (22, 30, 6, 8, 6, 12, 34, 10, 30, 12, 12, 8, 10, 22, 16, 30, 20, 8)):
+        ws.column_dimensions[col].width = width
+
+    path = getattr(config, 'EQUIPMENT_MAINT_EXPORT_XLSX', '') or os.path.join(
+        os.path.expanduser('~'), 'Desktop', '設備保養基準書.xlsx')
+    try:
+        wb.save(path)
+        return jsonify({'success': True, 'message': f'已匯出 {len(rows)} 個保養項目：{path}'})
+    except (PermissionError, OSError) as e:
+        desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+        os.makedirs(desktop, exist_ok=True)
+        fallback = os.path.join(desktop, f'設備保養基準書_{int(time.time())}.xlsx')
+        wb.save(fallback)
+        return jsonify({'success': True,
+                        'message': f'原始檔案無法寫入（{type(e).__name__}，可能被開啟中），'
+                                   f'已改存 {len(rows)} 個項目到桌面：{fallback}'})
+
+
+# ══════════════════════════════════════════════════════════
+#  設備保養排程（P2：展開 → 待辦 → 回報）
+# ══════════════════════════════════════════════════════════
+#  展開規則見 docs/equipment-maintenance.md 3.4／3.5：
+#  ① 固定錨點、不順延——晚做只標「逾期完成」，不把整條時間軸往後推。
+#     年度計畫甘特表要事先畫得出來、稽核要能對照，浮動週期做不到這件事。
+#  ② 日／週不預先展開（189 台 × 10 項 × 365 天 ≈ 69 萬筆空待辦，會把網芳上的
+#     SQLite 拖垮），清單上以「虛擬列」即時算出來，真的回報了才寫進 mt_plan。
+
+_MT_PLAN_STATUSES = ('待辦', '已完成', '跳過')
+_MT_PLAN_CYCLES = ('month', 'quarter', 'half', 'year')   # 會預先展開的週期
+_MT_LAZY_CYCLES = ('day', 'week')                        # 只在清單視窗內即時算
+_MT_STEP_MONTHS = {'month': 1, 'quarter': 3, 'half': 6, 'year': 12}
+_MT_STEP_DAYS = {'day': 1, 'week': 7}
+_MT_ACTIVE_STATUS = ('使用中', '閒置')   # 報廢／已售出／轉賣不展開保養
+
+
+def _mt_date(s):
+    """把各種寫法的日期字串轉成 date（2015/3/1、2015-03-01…），看不懂回 None"""
+    s = (s or '').strip().replace('/', '-')
+    m = re.match(r'^(\d{4})-(\d{1,2})-(\d{1,2})', s)
+    if not m:
+        return None
+    try:
+        return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError:
+        return None
+
+
+def _mt_add_months(d, n):
+    """加 n 個月；落在該月沒有的日子取當月最後一天（1/31 加一個月 = 2/28）"""
+    import calendar as _cal_mod
+    total = d.year * 12 + (d.month - 1) + n
+    y, m = divmod(total, 12)
+    m += 1
+    return date(y, m, min(d.day, _cal_mod.monthrange(y, m)[1]))
+
+
+def _mt_period_key(kind, d):
+    """週期代碼 + 落點日期 → 期別鍵（同一期只會有一筆待辦）"""
+    if kind == 'year':
+        return f'{d.year}'
+    if kind == 'half':
+        return f'{d.year}-H{1 if d.month <= 6 else 2}'
+    if kind == 'quarter':
+        return f'{d.year}-Q{(d.month - 1) // 3 + 1}'
+    if kind == 'month':
+        return f'{d.year}-{d.month:02d}'
+    if kind == 'week':
+        iso = d.isocalendar()
+        return f'{iso[0]}-W{iso[1]:02d}'
+    return d.strftime('%Y-%m-%d')
+
+
+def _mt_occurrences(anchor, kind, n, start, end):
+    """從 anchor 起每 n 個週期一次，回傳落在 [start, end] 之間的日期。
+
+    固定錨點：不管實際什麼時候做完，落點都是從 anchor 算出來的那幾天。"""
+    n = max(1, int(n or 1))
+    out = []
+    if kind in _MT_STEP_DAYS:
+        step = _MT_STEP_DAYS[kind] * n
+        k = max(0, -(-(start - anchor).days // step))       # 向上取整，跳過 start 之前的期數
+        d = anchor + timedelta(days=k * step)
+        while d <= end:
+            if d >= start:
+                out.append(d)
+            d += timedelta(days=step)
+        return out
+    months = _MT_STEP_MONTHS.get(kind, 12) * n
+    # 先估一個接近 start 的期數再往回退兩期，避免從 anchor 一步一步走（採購日可能是 20 年前）
+    k = max(0, ((start.year * 12 + start.month) - (anchor.year * 12 + anchor.month)) // months - 2)
+    while True:
+        d = _mt_add_months(anchor, k * months)
+        if d > end:
+            break
+        if d >= start:
+            out.append(d)
+        k += 1
+    return out
+
+
+def _mt_shift_workday(d, ov, limit=14):
+    """落在非工作日就往後推到最近的工作日（ov = 預先載好的行事曆例外表）。
+
+    limit 是保險絲：行事曆若被設成整段連假，最多推 14 天就放棄，不要無限迴圈。"""
+    for i in range(limit + 1):
+        x = d + timedelta(days=i)
+        row = ov.get(x.strftime('%Y-%m-%d'))
+        if (row['kind'] if row else _cal_default_kind(x)) == 'work':
+            return x
+    return d
+
+
+def _mt_load_plan_context(conn):
+    """一次把展開需要的東西全部載進記憶體（設備／基準書／項目／單機覆寫）。
+
+    網芳上的 SQLite 最怕 N+1 查詢，189 台設備逐台查會慢到不能用。"""
+    equips = [dict(r) for r in conn.execute(
+        'SELECT code, group_code, type_code, status, buy_date FROM equipment '
+        'WHERE status IN (%s)' % ','.join('?' * len(_MT_ACTIVE_STATUS)), _MT_ACTIVE_STATUS)]
+    std_by_type, std_by_code = {}, {}
+    for r in conn.execute('SELECT * FROM mt_standard'):
+        d = dict(r)
+        if d['scope'] == 'type':
+            std_by_type[(d['group_code'], d['type_code'])] = d
+        else:
+            std_by_code[d['code']] = d
+    items_by_std = {}
+    for r in conn.execute('SELECT * FROM mt_item WHERE IFNULL(active,1)=1'):
+        items_by_std.setdefault(r['std_id'], []).append(dict(r))
+    ov_by_code = {}
+    for r in conn.execute('SELECT * FROM mt_equip_item'):
+        ov_by_code.setdefault(r['code'], {})[r['item_id']] = dict(r)
+    return equips, std_by_type, std_by_code, items_by_std, ov_by_code
+
+
+def _mt_equip_plan_items(eq, std_by_type, std_by_code, items_by_std, ov_by_code):
+    """某台設備實際要做的保養項目（範本 + 單機專屬，套用覆寫、剔除被停用的）。
+
+    回傳 [(item, cycle_kind, cycle_n, anchor_date)]；anchor 依序取
+    單機覆寫 → 項目本身 → 設備採購日 → 今天。"""
+    out = []
+    ov = ov_by_code.get(eq['code'], {})
+    srcs = [std_by_type.get((eq['group_code'], eq['type_code'])), std_by_code.get(eq['code'])]
+    for std in srcs:
+        if not std or (std.get('status') or '') == '停用':
+            continue
+        for it in items_by_std.get(std['id'], []):
+            o = ov.get(it['id']) or {}
+            if o.get('disabled'):
+                continue
+            kind = o.get('cycle_kind') or it['cycle_kind']
+            n = o.get('cycle_n') or it['cycle_n'] or 1
+            anchor = (_mt_date(o.get('anchor')) or _mt_date(it.get('anchor'))
+                      or _mt_date(eq.get('buy_date')) or date.today())
+            out.append((it, kind, n, anchor))
+    return out
+
+
+@app.route('/api/equipment_master/maint/plan/expand', methods=['POST'])
+def maint_plan_expand():
+    """把基準書展開成保養待辦（可重複執行，只補缺的）。
+
+    - 只展開 `使用中`／`閒置` 的設備，`停用` 的基準書整份跳過
+    - 只展開月以上的週期（日／週見上面的說明）
+    - 視窗：今天往前 `back_days` 天（讓剛過期的也建得出來）到往後 `months` 個月。
+      **刻意不從採購日開始補完整歷史**——那會一次生出好幾萬筆從來沒人做過的「逾期」，
+      清單直接不能看，而且那些過去根本沒發生的保養也不該被記成漏做。
+    - 已經存在的期別只更新 `待辦` 那些的 due_date（有人改了週期就跟著修正），
+      已完成／跳過的一律不動
+    - 已經不適用的 `待辦`（項目被刪、被某台停用、設備報廢）會被清掉，避免留下殭屍待辦
+    """
+    d = request.get_json(silent=True) or {}
+    try:
+        months = min(24, max(1, int(d.get('months') or 12)))
+    except (TypeError, ValueError):
+        months = 12
+    back_days = 30
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        today = date.today()
+        win_start, win_end = today - timedelta(days=back_days), _mt_add_months(today, months)
+        ov_cal = _cal_overrides(win_start, win_end + timedelta(days=20))
+        equips, std_by_type, std_by_code, items_by_std, ov_by_code = _mt_load_plan_context(conn)
+
+        now = _mt_now()
+        valid_pairs, rows, eq_hit = set(), [], set()
+        for eq in equips:
+            for it, kind, n, anchor in _mt_equip_plan_items(
+                    eq, std_by_type, std_by_code, items_by_std, ov_by_code):
+                valid_pairs.add((eq['code'], it['id']))
+                if kind not in _MT_PLAN_CYCLES:
+                    continue
+                for raw in _mt_occurrences(anchor, kind, n, win_start, win_end):
+                    due = _mt_shift_workday(raw, ov_cal)
+                    rows.append((eq['code'], it['id'], due.strftime('%Y-%m-%d'),
+                                 _mt_period_key(kind, raw), now, now))
+                    eq_hit.add(eq['code'])
+
+        before = conn.execute("SELECT COUNT(*) FROM mt_plan WHERE status='待辦'").fetchone()[0]
+        conn.executemany(
+            "INSERT INTO mt_plan (code, item_id, due_date, period_key, status, created_at, updated_at)"
+            " VALUES (?,?,?,?,'待辦',?,?)"
+            " ON CONFLICT(code, item_id, period_key) DO UPDATE SET due_date=excluded.due_date,"
+            " updated_at=excluded.updated_at WHERE mt_plan.status='待辦'", rows)
+        # 清掉不再適用的待辦（項目刪了／某台停用了／設備報廢了）
+        removed = 0
+        for r in conn.execute("SELECT id, code, item_id FROM mt_plan WHERE status='待辦'").fetchall():
+            if (r['code'], r['item_id']) not in valid_pairs:
+                conn.execute('DELETE FROM mt_plan WHERE id=?', (r['id'],))
+                removed += 1
+        conn.commit()
+        after = conn.execute("SELECT COUNT(*) FROM mt_plan WHERE status='待辦'").fetchone()[0]
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'message':
+                    f'展開完成：{len(eq_hit)} 台設備、待辦 {before} → {after} 筆'
+                    + (f'（清掉 {removed} 筆已不適用）' if removed else ''),
+                    'equips': len(eq_hit), 'todo': after, 'removed': removed,
+                    'range': [win_start.strftime('%Y-%m-%d'), win_end.strftime('%Y-%m-%d')]})
+
+
+def _mt_plan_window(args):
+    """把前端的 scope 參數換算成查詢區間"""
+    today = date.today()
+    scope = (args.get('scope') or 'due').strip()
+    if scope == 'range':
+        s = _mt_date(args.get('start')) or today
+        e = _mt_date(args.get('end')) or (s + timedelta(days=30))
+        return scope, s, e
+    if scope == 'month':
+        ym = _mt_date((args.get('ym') or today.strftime('%Y-%m')) + '-01') or today
+        return scope, date(ym.year, ym.month, 1), _mt_add_months(date(ym.year, ym.month, 1), 1) - timedelta(days=1)
+    if scope == 'all':
+        return scope, today - timedelta(days=3650), today + timedelta(days=3650)
+    # 預設：逾期 + 未來 7 天（現場真正會問的是「現在該做什麼」）
+    return 'due', today - timedelta(days=3650), today + timedelta(days=7)
+
+
+@app.route('/api/equipment_master/maint/plan/list')
+def maint_plan_list():
+    """保養待辦清單。日／週週期的項目在視窗內以虛擬列即時算出來（還沒進資料庫），
+    真的回報之後才變成 mt_plan 的一筆——虛擬列的 id 是 null，前端用 code+item_id+period_key 回報。"""
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    today = date.today()
+    scope, win_s, win_e = _mt_plan_window(request.args)
+    status_f = (request.args.get('status') or '').strip()
+    # 手機版只要這一台（現場網路不好，不該把全廠的待辦都抓下來）
+    only = (request.args.get('code') or '').strip().upper()
+    try:
+        rows = [dict(r) for r in conn.execute("""
+            SELECT p.*, i.part, i.name AS item_name, i.method, i.criteria, i.cycle_kind, i.cycle_n,
+                   i.need_stop, i.owner, i.tools, i.oil_code, i.oil, i.duration_min, i.attach,
+                   e.group_code, e.type_code, e.old_code, e.location, e.status AS eq_status,
+                   t.name AS type_name
+              FROM mt_plan p
+              JOIN mt_item i ON i.id = p.item_id
+              JOIN equipment e ON e.code = p.code
+              LEFT JOIN eq_type t ON t.group_code = e.group_code AND t.code = e.type_code
+             WHERE p.due_date BETWEEN ? AND ? AND (?='' OR p.code=?)
+             ORDER BY p.due_date, p.code""",
+            (win_s.strftime('%Y-%m-%d'), win_e.strftime('%Y-%m-%d'), only, only))]
+
+        # 日／週的虛擬列：視窗**獨立算**、而且一定要夾在 31 天內。
+        # 不能直接用查詢區間——scope='due' 為了撈到所有逾期待辦會往回抓 10 年，
+        # 拿那個區間去算日檢就是一天一筆生上千列（2026-08-11 實測踩到，當時虛擬列直接被跳過）。
+        lazy_s = max(win_s, today - timedelta(days=14))
+        lazy_e = min(win_e, today + timedelta(days=16))
+        if scope == 'due':
+            # 預設視圖回答的是「現在該做什麼」：日檢只看今天、週檢只看本週。
+            # 前天沒做的日常點檢不會有人回頭補做，列出來只會把真正該處理的
+            # 逾期月保養埋掉（實測 15 台 × 14 天 = 229 筆虛擬列洗版）。
+            day_win = (today, today)
+            week_win = (today - timedelta(days=today.weekday()),
+                        today + timedelta(days=6 - today.weekday()))
+        else:
+            day_win = week_win = (lazy_s, lazy_e)
+        if lazy_s <= lazy_e:
+            have = {(r['code'], r['item_id'], r['period_key']) for r in rows}
+            ov_cal = _cal_overrides(lazy_s, lazy_e + timedelta(days=20))
+            equips, sbt, sbc, ibs, ovc = _mt_load_plan_context(conn)
+            names = {r['code']: dict(r) for r in conn.execute("""
+                SELECT e.code, e.group_code, e.type_code, e.old_code, e.location,
+                       e.status AS eq_status, t.name AS type_name
+                  FROM equipment e
+                  LEFT JOIN eq_type t ON t.group_code = e.group_code AND t.code = e.type_code""")}
+            for eq in equips:
+                if only and eq['code'] != only:
+                    continue
+                for it, kind, n, anchor in _mt_equip_plan_items(eq, sbt, sbc, ibs, ovc):
+                    if kind not in _MT_LAZY_CYCLES:
+                        continue
+                    w = day_win if kind == 'day' else week_win
+                    for raw in _mt_occurrences(anchor, kind, n, w[0], w[1]):
+                        key = _mt_period_key(kind, raw)
+                        if (eq['code'], it['id'], key) in have:
+                            continue
+                        due = _mt_shift_workday(raw, ov_cal)
+                        rows.append(dict(names.get(eq['code'], {}),
+                                         id=None, code=eq['code'], item_id=it['id'],
+                                         due_date=due.strftime('%Y-%m-%d'), period_key=key,
+                                         status='待辦', done_date=None, done_by=None, result=None,
+                                         minutes=None, remark=None,
+                                         part=it['part'], item_name=it['name'], method=it['method'],
+                                         criteria=it['criteria'], cycle_kind=kind, cycle_n=n,
+                                         need_stop=it['need_stop'], owner=it['owner'],
+                                         tools=it['tools'], oil_code=it['oil_code'], oil=it['oil'],
+                                         duration_min=it['duration_min'], attach=it['attach']))
+        _mt_fill_oil(rows)
+    finally:
+        conn.close()
+
+    for r in rows:
+        due = _mt_date(r['due_date'])
+        r['overdue_days'] = (today - due).days if (due and r['status'] == '待辦' and due < today) else 0
+        r['is_today'] = bool(due and due == today)
+        r['cycle_label'] = _mt_cycle_label(r['cycle_kind'], r['cycle_n'])
+        r['eq_name'] = ' '.join(x for x in [r.get('type_name') or '', r.get('old_code') or ''] if x)
+    if scope == 'due':
+        # 已完成的舊資料不要洗版，但**今天剛回報的一定要留著**——
+        # 按了完成結果那列直接消失，會讓人以為沒存進去。
+        ts = today.strftime('%Y-%m-%d')
+        rows = [r for r in rows if r['status'] == '待辦' or r.get('done_date') == ts
+                or (_mt_date(r['due_date']) or today) >= today - timedelta(days=7)]
+    if status_f:
+        rows = [r for r in rows if r['status'] == status_f]
+    rows.sort(key=lambda r: (r['due_date'], r['code']))
+    return jsonify({'success': True, 'data': rows,
+                    'range': [win_s.strftime('%Y-%m-%d'), win_e.strftime('%Y-%m-%d')],
+                    'today': today.strftime('%Y-%m-%d')})
+
+
+@app.route('/api/equipment_master/maint/plan/stats')
+def maint_plan_stats():
+    """到期提醒用的數字：逾期／今天／本週／本月，另附最近一次展開到哪一天"""
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': True, 'overdue': 0, 'today': 0, 'week': 0, 'month': 0})
+    today = date.today()
+    week_end = today + timedelta(days=6 - today.weekday())     # 到本週日
+    month_end = _mt_add_months(date(today.year, today.month, 1), 1) - timedelta(days=1)
+    ts = today.strftime('%Y-%m-%d')
+    try:
+        def cnt(sql, params):
+            return conn.execute('SELECT COUNT(*) FROM mt_plan WHERE ' + sql, params).fetchone()[0]
+        out = {
+            'overdue': cnt("status='待辦' AND due_date < ?", (ts,)),
+            'today':   cnt("status='待辦' AND due_date = ?", (ts,)),
+            'week':    cnt("status='待辦' AND due_date BETWEEN ? AND ?",
+                           (ts, week_end.strftime('%Y-%m-%d'))),
+            'month':   cnt("status='待辦' AND due_date BETWEEN ? AND ?",
+                           (ts, month_end.strftime('%Y-%m-%d'))),
+            'done_month': cnt("status='已完成' AND done_date BETWEEN ? AND ?",
+                              (date(today.year, today.month, 1).strftime('%Y-%m-%d'),
+                               month_end.strftime('%Y-%m-%d'))),
+            'ng_month': cnt("result='NG' AND done_date BETWEEN ? AND ?",
+                            (date(today.year, today.month, 1).strftime('%Y-%m-%d'),
+                             month_end.strftime('%Y-%m-%d'))),
+        }
+        last = conn.execute("SELECT MAX(due_date) FROM mt_plan WHERE status='待辦'").fetchone()[0]
+        out['expanded_to'] = last or ''
+    finally:
+        conn.close()
+    out['success'] = True
+    return jsonify(out)
+
+
+@app.route('/api/equipment_master/maint/plan/done', methods=['POST'])
+def maint_plan_done():
+    """回報保養結果（OK／NG／跳過）。
+
+    日／週的虛擬列沒有 id，帶 code+item_id+period_key 進來時在這裡才真的寫進 mt_plan
+    （lazy 建立，見檔頭說明）。
+
+    **只有月以上週期或 NG 才寫 eq_history**：日／週點檢每天 189 筆會把移轉／狀態變更
+    這些真正重要的歷程洗掉（同 `_EQ_TRACKED_FIELDS` 刻意不追蹤備註的理由）。
+    """
+    d = request.get_json(silent=True) or {}
+    pid = d.get('id')
+    code = (d.get('code') or '').strip().upper()
+    item_id = d.get('item_id')
+    period = (d.get('period_key') or '').strip()
+    status = (d.get('status') or '已完成').strip()
+    if status not in _MT_PLAN_STATUSES:
+        return jsonify({'success': False, 'error': f'不支援的狀態 {status}'}), 400
+    result = (d.get('result') or '').strip().upper()
+    if result and result not in ('OK', 'NG'):
+        return jsonify({'success': False, 'error': '判定只能是 OK 或 NG'}), 400
+    done_date = (d.get('done_date') or '').strip() or date.today().strftime('%Y-%m-%d')
+    done_by = (d.get('done_by') or '').strip()
+    remark = (d.get('remark') or '').strip()
+    photo = (d.get('photo') or '').strip()      # 手機現場拍的照片檔名（多張用 | 分隔）
+    try:
+        minutes = float(d.get('minutes')) if str(d.get('minutes') or '').strip() else None
+    except (TypeError, ValueError):
+        minutes = None
+    if status == '已完成' and not result:
+        result = 'OK'
+
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        now = _mt_now()
+        if pid:
+            row = conn.execute('SELECT * FROM mt_plan WHERE id=?', (pid,)).fetchone()
+            if row is None:
+                return jsonify({'success': False, 'error': '找不到這筆保養工作'}), 404
+            code, item_id, period = row['code'], row['item_id'], row['period_key']
+            due_date = row['due_date']
+        else:
+            if not (code and item_id and period):
+                return jsonify({'success': False, 'error': '參數不足'}), 400
+            due_date = (d.get('due_date') or done_date)
+        conn.execute(
+            'INSERT INTO mt_plan (code, item_id, due_date, period_key, status, done_date, done_by,'
+            ' result, minutes, remark, photo, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
+            ' ON CONFLICT(code, item_id, period_key) DO UPDATE SET status=excluded.status,'
+            ' done_date=excluded.done_date, done_by=excluded.done_by, result=excluded.result,'
+            ' minutes=excluded.minutes, remark=excluded.remark, photo=excluded.photo,'
+            ' updated_at=excluded.updated_at',
+            (code, item_id, due_date, period, status, done_date, done_by, result, minutes,
+             remark, photo, now, now))
+        it = conn.execute('SELECT name, part, cycle_kind, cycle_n FROM mt_item WHERE id=?',
+                          (item_id,)).fetchone()
+        logged = False
+        if it is not None and status == '已完成' and (it['cycle_kind'] in _MT_PLAN_CYCLES or result == 'NG'):
+            label = _mt_cycle_label(it['cycle_kind'], it['cycle_n'])
+            detail = f'{label}保養：{it["name"]}'
+            if it['part']:
+                detail = f'{label}保養：[{it["part"]}] {it["name"]}'
+            detail += f'（判定 {result}）' if result else ''
+            if remark:
+                detail += f' {remark}'
+            conn.execute("INSERT INTO eq_history (code, date, action, detail, user)"
+                         " VALUES (?,?,'保養',?,'system')", (code, done_date, detail))
+            logged = True
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'logged_history': logged})
+
+
+@app.route('/api/equipment_master/maint/plan/undo', methods=['POST'])
+def maint_plan_undo():
+    """把已回報的保養退回待辦（填錯時用）。
+
+    連同那筆自動寫進 eq_history 的保養記錄一起刪掉——留著會變成「歷程說做了、
+    排程說沒做」的矛盾資料。只刪 `user='system'` 且同一天同一台的那筆，
+    不會動到人工補登的歷程。"""
+    d = request.get_json(silent=True) or {}
+    pid = d.get('id')
+    if not pid:
+        return jsonify({'success': False, 'error': '缺少 id'}), 400
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        row = conn.execute('SELECT * FROM mt_plan WHERE id=?', (pid,)).fetchone()
+        if row is None:
+            return jsonify({'success': False, 'error': '找不到這筆保養工作'}), 404
+        it = conn.execute('SELECT name FROM mt_item WHERE id=?', (row['item_id'],)).fetchone()
+        if it is not None and row['done_date']:
+            conn.execute("DELETE FROM eq_history WHERE code=? AND date=? AND action='保養'"
+                         " AND user='system' AND detail LIKE ?",
+                         (row['code'], row['done_date'], f'%{it["name"]}%'))
+        conn.execute("UPDATE mt_plan SET status='待辦', done_date=NULL, done_by=NULL, result=NULL,"
+                     ' minutes=NULL, remark=NULL, updated_at=? WHERE id=?', (_mt_now(), pid))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True})
+
+
+# ══════════════════════════════════════════════════════════
+#  手機掃碼回報（P3）  詳見 docs/equipment-maintenance.md 第六節
+# ══════════════════════════════════════════════════════════
+#  設備上貼 QR（內容是 http://<服務端>:5088/m/eq/<PDM編碼>），現場用手機相機掃了
+#  直接開回報頁。要能用得先把 config.MOBILE_ACCESS 打開（預設關閉，見 _flask_host）。
+
+@app.route('/m')
+@app.route('/m/')
+def mobile_home():
+    """手機版首頁：搜尋設備（掃不到碼或標籤掉了的時候用）"""
+    return render_template('m_equip.html', code='', app_version=APP_VERSION)
+
+
+@app.route('/m/eq/<code>')
+def mobile_equip(code):
+    """手機版設備保養回報頁（QR 掃進來的落點）"""
+    return render_template('m_equip.html', code=(code or '').strip().upper(),
+                           app_version=APP_VERSION)
+
+
+@app.route('/equipment_master/labels')
+def equipment_labels_page():
+    """設備 QR 標籤列印頁（貼在機台上給現場掃）"""
+    return render_template('equipment_labels.html', app_version=APP_VERSION,
+                           base_url=getattr(config, 'MOBILE_BASE_URL', '') or '')
+
+
+@app.route('/api/equipment_master/maint/mobile')
+def maint_mobile_detail():
+    """手機版要的全部資料，一次給完（現場網路不好，來回越少越好）：
+    設備基本資料 + 封面照片 + 這台現在該做的保養。
+
+    **只回這一台**——手機不該把全廠 343 筆待辦抓下來。"""
+    code = (request.args.get('code') or '').strip().upper()
+    if not code:
+        return jsonify({'success': False, 'error': '缺少設備編碼'}), 400
+    conn = _mt_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '設備索引尚未建立'}), 500
+    try:
+        eq = conn.execute("""
+            SELECT e.*, g.name AS group_name, t.name AS type_name, a.name AS attr_name
+              FROM equipment e
+              LEFT JOIN eq_group g ON g.code = e.group_code
+              LEFT JOIN eq_type  t ON t.group_code = e.group_code AND t.code = e.type_code
+              LEFT JOIN eq_attr  a ON a.group_code = e.group_code AND a.type_code = e.type_code
+                                  AND a.code = e.attr_code
+             WHERE e.code = ?""", (code,)).fetchone()
+        if eq is None:
+            return jsonify({'success': False, 'error': f'查無設備 {code}'}), 404
+        photo = conn.execute(
+            'SELECT relpath FROM eq_photo WHERE code=? ORDER BY is_cover DESC, sort LIMIT 1',
+            (code,)).fetchone()
+    finally:
+        conn.close()
+    out = dict(eq)
+    out['photo'] = photo['relpath'] if photo else ''
+    return jsonify({'success': True, 'data': out})
+
+
+@app.route('/api/equipment_master/maint/mobile/search')
+def maint_mobile_search():
+    """手機版搜尋設備（編碼／舊編號／類型關鍵字），只回使用中與閒置的"""
+    q = (request.args.get('q') or '').strip()
+    conn = _eq_conn()
+    if conn is None:
+        return jsonify({'success': True, 'data': []})
+    try:
+        rows = [dict(r) for r in conn.execute("""
+            SELECT e.code, e.old_code, e.location, t.name AS type_name
+              FROM equipment e
+              LEFT JOIN eq_type t ON t.group_code = e.group_code AND t.code = e.type_code
+             WHERE e.status IN ('使用中','閒置') ORDER BY e.code""")]
+    finally:
+        conn.close()
+    if q:
+        keys = [k for k in q.upper().split() if k]
+        rows = [r for r in rows if all(
+            k in ' '.join(str(r.get(f) or '') for f in ('code', 'old_code', 'type_name')).upper()
+            for k in keys)]
+    return jsonify({'success': True, 'data': rows[:60]})
+
+
+@app.route('/api/equipment_master/maint/plan/photo', methods=['POST'])
+def maint_plan_photo():
+    """保養回報時拍的照片，存到網芳 EQUIPMENT_MAINT_PHOTO_ROOT\\<設備編碼>\\。
+
+    回報照片跟設備照片刻意分開放：設備照片是「這台長什麼樣」，回報照片是「那天現場的狀況」，
+    混在一起會把設備相簿灌爆（`scan_photos()` 也會把它們當成設備照片收進 eq_photo）。"""
+    code = (request.form.get('code') or '').strip().upper()
+    files = request.files.getlist('files')
+    if not code:
+        return jsonify({'success': False, 'error': '缺少設備編碼'}), 400
+    if not files or not any(f and f.filename for f in files):
+        return jsonify({'success': False, 'error': '請選擇照片'}), 400
+    root = getattr(config, 'EQUIPMENT_MAINT_PHOTO_ROOT', '')
+    dest_dir = _eq_safe_path(root, code) if root else None
+    if not dest_dir:
+        return jsonify({'success': False, 'error': '保養回報照片資料夾未設定'}), 500
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+    except OSError as e:
+        return jsonify({'success': False, 'error': f'無法建立資料夾：{e}'}), 500
+    saved, rejected = [], []
+    for f in files:
+        if not f or not f.filename:
+            continue
+        ext = os.path.splitext(f.filename)[1].lower()
+        if ext not in _EQ_PHOTO_EXT:
+            rejected.append(f.filename)
+            continue
+        filename = _cnc_safe_filename(f'{code}_{int(time.time() * 1000)}{ext}')
+        try:
+            f.save(os.path.join(dest_dir, filename))
+        except OSError as e:
+            rejected.append(f'{f.filename}（存檔失敗：{e}）')
+            continue
+        saved.append(filename)
+    if not saved:
+        return jsonify({'success': False,
+                        'error': '沒有成功上傳的照片' + ('：' + '、'.join(rejected) if rejected else '')}), 400
+    return jsonify({'success': True, 'saved': saved, 'folder': code})
+
+
+@app.route('/api/equipment_master/maint/plan/photo/get')
+def maint_plan_photo_get():
+    """讀回報照片"""
+    from flask import send_file
+    full = _eq_safe_path(getattr(config, 'EQUIPMENT_MAINT_PHOTO_ROOT', ''),
+                         os.path.join(request.args.get('code', ''), request.args.get('f', '')))
+    if not full or not os.path.isfile(full):
+        return jsonify({'success': False, 'error': '檔案不存在'}), 404
+    return send_file(full)
 
 
 # ══════════════════════════════════════════════════════════
@@ -7438,17 +9141,38 @@ def jig_apply():
 # ══════════════════════════════════════════════════════════
 DCN_APPLY_SERNO = 'RD_RR設計變更申請單'   # PDM 序號產生器名稱（跟檔案總管新增精靈同一個，不會撞號）
 
-# 申請設變原因勾選框：{key: (卡片變數名, 未勾選文字, 勾選文字)}——文字實測自既有申請單，
-# 前後不能有空白差異（跟治檢具的 JIG_CARD_OPTIONS 是同一套慣例）
+# 申請設變原因勾選框：{key: (文字變數名, 未勾選文字, 勾選文字, 勾選旗標變數名)}
+# 這張卡片的每個原因其實有「兩個」變數，兩個都要寫（2026-08-18 實測 RR2608016 才發現）：
+#   1. `..._tasky`  → ■/□ 文字，對應 xlsm 的 docProps 屬性＋工作表儲存格，只管 Excel 印出來的樣子
+#   2. `...F_tasky` → '1'/'0'，**PDM 資料卡上那個勾選框真正綁的變數**，而且它是純資料庫變數
+#      （xlsm 的 custom.xml 跟 defined names 都查無此名），所以只能 SetVar + Flush 寫進 DB，
+#      不會出現在檔案裡，也不能拿 _dcn_read_local_var 讀回比對，要用 GetVar 驗。
+# 只寫 1 不寫 2 的後果：Excel 印出來有 ■，但 PDM 資料卡七個框全空（使用者看到的就是「沒打勾」）。
 DCN_REASON_OPTIONS = {
-    'customer':    ('PP_R_004_客戶要求_tasky',   '□客戶要求',   '■客戶要求'),
-    'design_err':  ('PP_R_004_設計錯誤_tasky',   '□設計錯誤',   '■設計錯誤'),
-    'material':    ('PP_R_004_物料需求_tasky',   '□物料需求',   '■物料需求'),
-    'manufacture': ('PP_R_004_製造問題_tasky',   '□製造問題',   '■製造問題'),
-    'improve':     ('PP_R_004_功能改善_tasky',   '□功能改善',   '■功能改善'),
-    'vendor':      ('PP_R_004_變更供應商_tasky', '□變更供應商', '■變更供應商'),
-    'other':       ('PP_R_004_其他_tasky',       '□其他',       '■其他'),
+    'customer':    ('PP_R_004_客戶要求_tasky',   '□客戶要求',   '■客戶要求',   'PP_R_004_客戶要求F_tasky'),
+    'design_err':  ('PP_R_004_設計錯誤_tasky',   '□設計錯誤',   '■設計錯誤',   'PP_R_004_設計錯誤F_tasky'),
+    'material':    ('PP_R_004_物料需求_tasky',   '□物料需求',   '■物料需求',   'PP_R_004_物料需求F_tasky'),
+    'manufacture': ('PP_R_004_製造問題_tasky',   '□製造問題',   '■製造問題',   'PP_R_004_製造問題F_tasky'),
+    'improve':     ('PP_R_004_功能改善_tasky',   '□功能改善',   '■功能改善',   'PP_R_004_功能改善F_tasky'),
+    'vendor':      ('PP_R_004_變更供應商_tasky', '□變更供應商', '■變更供應商', 'PP_R_004_變更供應商F_tasky'),
+    'other':       ('PP_R_004_其他_tasky',       '□其他',       '■其他',       'PP_R_004_其他F_tasky'),
 }
+DCN_FLAG_ON, DCN_FLAG_OFF = '1', '0'   # 勾選旗標變數的值（實測自人工建立的既有申請單）
+
+
+def _dcn_crlf(text):
+    """PDM 資料卡的多行文字框只認得 CRLF：只寫 \\n 的話卡片上會擠成一整段（RR2608016 實測），
+    Excel 儲存格則兩種都吃。統一正規化成 \\r\\n。"""
+    return (text or '').replace('\r\n', '\n').replace('\r', '\n').replace('\n', '\r\n')
+
+
+def _dcn_same_text(a, b):
+    """比對卡片值：忽略換行符差異。
+    （SetVar 寫入 \\r\\n，但讀回 docProps/custom.xml 時 XML 解析器會把 CRLF 正規化成 LF，
+      直接字串比對會永遠不相等）"""
+    if a is None or b is None:
+        return a == b
+    return str(a).replace('\r\n', '\n').replace('\r', '\n') == str(b).replace('\r\n', '\n').replace('\r', '\n')
 
 
 @app.route('/api/dcn/apply/defaults')
@@ -7590,8 +9314,12 @@ def dcn_apply():
                 '資材部庫存回報':  '□資材部庫存回報',
                 '鼎新品號編修':    '□鼎新品號編修',
             }
-            for _key, (var_name, off_text, _on_text) in DCN_REASON_OPTIONS.items():
-                fill_vals[var_name] = off_text   # 新申請預設全部未勾選，交給 Step2 卡片畫面勾選
+            # 新申請預設全部未勾選，交給 Step2 卡片畫面勾選。旗標變數（F）是純資料庫變數，
+            # 只能靠下面的 SetVar/Flush 寫，寫進 fill_vals 給 _fill_xlsm_custom_vars 也是空轉
+            flag_vals = {}
+            for _key, (var_name, off_text, _on_text, flag_var) in DCN_REASON_OPTIONS.items():
+                fill_vals[var_name] = off_text
+                flag_vals[flag_var] = DCN_FLAG_OFF
 
             tmp_xlsm = os.path.join(tempfile.gettempdir(), xlsm_name)
             _fill_xlsm_custom_vars(config.DCN_APPLY_TEMPLATE_SOURCE, tmp_xlsm, fill_vals)
@@ -7613,7 +9341,7 @@ def dcn_apply():
             fobj = vault.GetObject(1, file_id)  # 1 = EdmObject_File
             f5 = win32com.client.CastTo(fobj, 'IEdmFile5')
             ev2 = f5.GetEnumeratorVariable()
-            for k, v in fill_vals.items():
+            for k, v in list(fill_vals.items()) + list(flag_vals.items()):
                 try:
                     ev2.SetVar(k, '', v)
                 except Exception:
@@ -7716,12 +9444,14 @@ def dcn_apply_card_save():
                 pass
         _dcn_clear_readonly()
 
-        vals = {}
+        vals = {}        # 檔案屬性變數（docProps + 工作表儲存格）
+        flag_vals = {}   # 純資料庫變數（資料卡勾選框綁的那組），只能 SetVar + Flush
         checked = set(d.get('reasons') or [])
-        for key, (var_name, off_text, on_text) in DCN_REASON_OPTIONS.items():
+        for key, (var_name, off_text, on_text, flag_var) in DCN_REASON_OPTIONS.items():
             vals[var_name] = on_text if key in checked else off_text
+            flag_vals[flag_var] = DCN_FLAG_ON if key in checked else DCN_FLAG_OFF
         if 'description' in d:
-            vals['PP_R_004_變更規格敘述_tasky'] = (d.get('description') or '').strip()
+            vals['PP_R_004_變更規格敘述_tasky'] = _dcn_crlf((d.get('description') or '').strip())
 
         # 取出中的檔案，資料卡顯示的是本機檔案內的屬性值：Flush 只寫資料庫，
         # 必須用 IEdmEnumeratorVariable8.CloseFile(True) 同步寫進檔案本體，卡片才會顯示。
@@ -7781,7 +9511,7 @@ def dcn_apply_card_save():
                 mismatches = []
                 for k, v in vals.items():
                     actual = _dcn_read_local_var(k)
-                    if actual != v:
+                    if not _dcn_same_text(actual, v):
                         mismatches.append(f'{k} 預期 {v!r}，實際讀到 {actual!r}')
                 if not mismatches:
                     ok = True
@@ -7791,11 +9521,45 @@ def dcn_apply_card_save():
             if not ok:
                 return jsonify({'success': False, 'error': f'寫入卡片失敗：{last_err}{CONFLICT_HINT}'}), 502
 
-            # docProps 已確認寫入成功，接著同步寫進工作表儲存格（PDM 卡片畫面實際看到的內容）
+            # docProps 已確認寫入成功，接著同步寫進工作表儲存格（Excel 列印出來的內容）。
+            # 儲存格裡的換行用 LF（Excel 慣例，人工建立的既有申請單也是 LF），CRLF 只給 PDM 變數用
+            cell_vals = {k: (v.replace('\r\n', '\n') if isinstance(v, str) else v) for k, v in vals.items()}
             try:
-                _write_xlsm_defined_names(_ro_path, vals)
+                _write_xlsm_defined_names(_ro_path, cell_vals)
             except Exception as e:
                 return jsonify({'success': False, 'error': f'卡片資料已存到資料庫，但工作表儲存格寫入失敗：{e}{CONFLICT_HINT}'}), 502
+
+            # 資料卡勾選框綁的旗標變數（純資料庫變數，檔案裡沒有對應屬性）：
+            # 只能 SetVar + Flush 寫 DB，驗證也只能用 GetVar 讀 DB，不能讀檔案比對
+            flag_err = None
+            for _attempt in range(3):
+                try:
+                    evf = f5.GetEnumeratorVariable()
+                    for k, v in flag_vals.items():
+                        evf.SetVar(k, '', v)
+                    evf.Flush()
+                except Exception as e:
+                    flag_err = str(e)
+                    time.sleep(1.5)
+                    continue
+                bad = []
+                evr = f5.GetEnumeratorVariable()
+                for k, v in flag_vals.items():
+                    try:
+                        r = evr.GetVar(k, '')
+                        actual = r[1] if isinstance(r, tuple) else r
+                    except Exception as e:
+                        actual = f'<讀取失敗 {e}>'
+                    if str(actual) != v:
+                        bad.append(f'{k} 預期 {v!r}，實際讀到 {actual!r}')
+                if not bad:
+                    flag_err = None
+                    break
+                flag_err = '；'.join(bad)
+                time.sleep(1.5)
+            if flag_err:
+                return jsonify({'success': False,
+                                'error': f'申請設變原因的勾選狀態寫入失敗：{flag_err}{CONFLICT_HINT}'}), 502
 
         # 自動存回（簽入）
         if d.get('checkin'):
@@ -7848,10 +9612,33 @@ def dcn_apply_card_save():
         pythoncom.CoUninitialize()
 
 
+def _dcn_paste_as_reference(vault, root_file_id, ref_paths):
+    """把 ref_paths 這些檔案掛成 root_file_id 的 PDM「參考」（等同檔案總管的複製→貼上為參考）。
+
+    2026-08-18 實測打通（RR2608017）。要點：
+    - 用 EdmUtil_AddCustomRefs（=8）→ AddReferencesPath → CreateTree → CreateReferences。
+    - **不能用 gen_py 包裝或 dynamic dispatch 呼叫**：gen_py 產生的 IEdmAddCustomRefs 類別
+      根本沒有這些方法（只有 CLSID），dynamic dispatch 則會回「類型不符」——因為
+      AddReferencesPath 的第二個參數是「SAFEARRAY(BSTR) 的指標」，pywin32 推不出來。
+      要用 InvokeTypes 明確指定 VT_BYREF|VT_ARRAY|VT_BSTR (0x4000|0x2000|8 = 24584)。
+    - memid：AddReferencesPath=2、CreateTree=4、CreateReferences=6（唯讀取自型別庫）。
+    - 人工建立的申請單都是這種結構（既有 RR2608015／RR2607050 實測，附件都是 xlsm 的參考）。
+    """
+    import pythoncom as _pc
+    VT_I4, VT_VOID, VT_BOOL = 3, 24, 11
+    VT_SAFEARRAY_BSTR_BYREF = 0x4000 | 0x2000 | 8
+    ob = vault.CreateUtility(8)   # EdmUtil_AddCustomRefs
+    ob = ob._oleobj_ if hasattr(ob, '_oleobj_') else ob
+    ob.InvokeTypes(2, 0, _pc.DISPATCH_METHOD, (VT_VOID, 0),
+                   ((VT_I4, 1), (VT_SAFEARRAY_BSTR_BYREF, 1)), root_file_id, list(ref_paths))
+    ob.InvokeTypes(4, 0, _pc.DISPATCH_METHOD, (VT_BOOL, 0), ((VT_I4, 1),), 0)   # CreateTree
+    ob.InvokeTypes(6, 0, _pc.DISPATCH_METHOD, (VT_BOOL, 0), ())                 # CreateReferences
+
+
 @app.route('/api/dcn/attachment/upload', methods=['POST'])
 def dcn_attachment_upload():
-    """上傳附件到指定的 DCN 資料夾（簡化版：只把檔案加進同一個資料夾，不建立 PDM「參考」關聯——
-    「貼上為參考」實測查不到可用的 COM 寫入 API，只找到唯讀的 GetReferenceTree，見 docs/dcn-index.md）"""
+    """上傳附件到指定的 DCN 資料夾，並把它掛成申請單 xlsm 的 PDM「參考」
+    （等同人工做的複製→在 Excel 上貼上參考，見 _dcn_paste_as_reference）"""
     folder_path = (request.form.get('folder') or '').strip()
     dcn_root = os.path.normpath(config.DCN_VAULT_PATH)
     norm = os.path.normpath(folder_path)
@@ -7873,6 +9660,7 @@ def dcn_attachment_upload():
         safe_name = os.path.basename(f.filename)
         tmp_path = os.path.join(tempfile.gettempdir(), f'dcn_upload_{int(time.time())}_{safe_name}')
         f.save(tmp_path)
+        warning = None
         try:
             file_id = f5folder.AddFile(0, tmp_path, safe_name)
             fobj = vault.GetObject(1, file_id)  # 1 = EdmObject_File
@@ -7886,7 +9674,23 @@ def dcn_attachment_upload():
                 os.remove(tmp_path)
             except Exception:
                 pass
-        return jsonify({'success': True, 'filename': safe_name})
+
+        # 掛成申請單 xlsm 的參考（失敗只警告，附件本身已經進 vault 了，不該讓整個上傳算失敗）
+        try:
+            xlsm = None
+            pos = f5folder.GetFirstFilePosition()
+            while not pos.IsNull:
+                ff = f5folder.GetNextFile(pos)
+                if ff.Name.lower().endswith('.xlsm') and '申請單' in ff.Name:
+                    xlsm = ff
+                    break
+            if xlsm is None:
+                warning = '附件已上傳，但這個資料夾找不到申請單 Excel，無法建立參考關聯'
+            else:
+                _dcn_paste_as_reference(vault, xlsm.ID, [os.path.join(norm, safe_name)])
+        except Exception as e:
+            warning = f'附件已上傳，但建立參考關聯失敗（可在 PDM 手動複製→貼上參考）：{e}'
+        return jsonify({'success': True, 'filename': safe_name, 'warning': warning})
     except Exception as e:
         return jsonify({'success': False, 'error': f'上傳失敗：{e}'}), 502
     finally:
@@ -8037,6 +9841,764 @@ def dcn_open_folder():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ══════════════════════════════════════════════════════════
+#  油品管理（油品主檔／MSDS／使用單位／更換記錄）  詳見 docs/oil-management.md
+# ══════════════════════════════════════════════════════════
+#  正本是網芳上的 oil.db（config.OIL_DB_PATH），MSDS/簡介的實體 PDF 留在網芳資料夾，
+#  這裡只存索引與對應關係。schema 定義在 build_oil_index.py，本檔不另外抄一份。
+
+_OIL_STATUSES = ('使用中', '停用')
+_OIL_ROOTS = {'msds': 'OIL_MSDS_ROOT', 'doc': 'OIL_DOC_ROOT'}
+# 附件允許的副檔名：MSDS 是 PDF，簡介/注意事項常是 Word，另外開放 Excel——
+# 使用者要求「平台可以放 EXCEL 資料存放」，油品的用量表/濃度記錄表就是丟這裡
+_OIL_UPLOAD_EXT = {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.xlsm', '.csv',
+                   '.ppt', '.pptx', '.txt', '.jpg', '.jpeg', '.png'}
+# 編輯時會寫進異動歷程的欄位（跟設備主檔一樣，備註/說明這種隨手改的刻意不追蹤）
+_OIL_TRACKED_FIELDS = {
+    'status':   '狀態變更',
+    'supplier': '資料修改',
+    'category': '資料修改',
+    'spec':     '資料修改',
+    'pack':     '資料修改',
+    'replaced_by': '資料修改',
+}
+_OIL_FIELD_LABEL = {'status': '狀態', 'supplier': '供應商', 'category': '分類',
+                    'spec': '規格', 'pack': '包裝', 'replaced_by': '替代油品'}
+
+
+# 清單排序用的分類順序：切削類 → 潤滑類 → 其他用途，跟新增表單的分類下拉選單同一個順序。
+# 不能直接 ORDER BY category——中文字是照 Unicode 碼位排（主軸油會排在切削油前面），
+# 對現場來說毫無意義，同類的油品也不會排在一起
+_OIL_CATEGORY_ORDER = ['水性切削液', '切削油', '切削油膏', '液壓油', '滑道油', '主軸油',
+                       '機油', '齒輪油', '潤滑脂', '防銹油', '清潔劑', '燃料', '其他']
+_OIL_CAT_SORT = {name: i for i, name in enumerate(_OIL_CATEGORY_ORDER)}
+
+
+def _oil_sort_key(r):
+    """分類優先 → 油品代號（分類沒在名單裡的排最後，代號大小寫不影響）
+
+    代號前面掛的中文說明（`「全合成切削液」CS-1010`）排序時先拿掉，照真正的代號排——
+    不然中文字的碼位比英數大，所有加了說明的油品都會被擠到該分類的最後面。"""
+    code = re.sub(r'^「[^」]*」\s*', '', (r.get('code') or '')).upper()
+    return (_OIL_CAT_SORT.get((r.get('category') or '').strip(), len(_OIL_CATEGORY_ORDER)), code)
+
+
+def _oil_root(root):
+    """'msds'/'doc' → 網芳實體資料夾路徑"""
+    key = _OIL_ROOTS.get(root)
+    return getattr(config, key, '') if key else ''
+
+
+def _oil_conn():
+    """開啟油品主檔資料庫（不存在時自動建立空的 schema，讓沒跑過匯入的電腦也能用）。
+
+    跟 equipment.db 同樣是網芳上的共用檔案：timeout=15 讓撞到別人寫入時等待重試，
+    刻意不開 WAL（Windows SMB 對 WAL 需要的 shared memory 支援不穩定）。"""
+    try:
+        from build_oil_index import SCHEMA as _OIL_SCHEMA
+    except Exception:
+        _OIL_SCHEMA = None
+    if not os.path.exists(OIL_DB_PATH):
+        if _OIL_SCHEMA is None:
+            return None
+        try:
+            os.makedirs(os.path.dirname(OIL_DB_PATH), exist_ok=True)
+        except OSError:
+            return None
+    conn = sqlite3.connect(OIL_DB_PATH, timeout=15)
+    conn.row_factory = sqlite3.Row
+    if _OIL_SCHEMA:
+        conn.executescript(_OIL_SCHEMA)     # 全部 IF NOT EXISTS，已有資料不受影響
+        conn.commit()
+    return conn
+
+
+def _oil_now():
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _oil_log(cur, code, action, detail, user='system'):
+    cur.execute('INSERT INTO oil_history (code, date, action, detail, user) VALUES (?,?,?,?,?)',
+                (code, datetime.now().strftime('%Y-%m-%d'), action, detail, user))
+
+
+def _oil_log_changes(cur, code, before, after):
+    """比對被追蹤欄位，有變動就一個欄位記一筆。原值必須在 UPDATE **之前**撈好。"""
+    for field, action in _OIL_TRACKED_FIELDS.items():
+        old = (before.get(field) or '').strip()
+        new = (after.get(field) or '').strip()
+        if old != new:
+            label = _OIL_FIELD_LABEL.get(field, field)
+            _oil_log(cur, code, action, f'{label}：{old or "（空白）"} → {new or "（空白）"}')
+
+
+@app.route('/oil')
+def oil_page():
+    """油品管理頁面（油品主檔／MSDS／使用單位／更換記錄）"""
+    return render_template('oil.html', app_version=APP_VERSION)
+
+
+@app.route('/api/oil/search')
+def oil_search():
+    """油品清單查詢（空格=AND、-前綴=NOT，比對代號/品名/品牌/供應商/分類/規格/說明/使用單位）"""
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟，請確認網芳路徑'}), 500
+    try:
+        rows = [dict(r) for r in conn.execute("""
+            SELECT o.*,
+                   (SELECT COUNT(*) FROM oil_file f
+                     WHERE f.code = o.code AND f.root='msds' AND f.obsolete=0) AS msds_count,
+                   (SELECT COUNT(*) FROM oil_file f
+                     WHERE f.code = o.code AND f.root='doc')  AS doc_count,
+                   (SELECT MAX(f.file_date) FROM oil_file f
+                     WHERE f.code = o.code AND f.root='msds' AND f.obsolete=0) AS msds_date,
+                   (SELECT COUNT(*) FROM oil_change c WHERE c.code = o.code) AS change_count,
+                   (SELECT MAX(c.date)  FROM oil_change c WHERE c.code = o.code) AS last_change
+              FROM oil o""").fetchall()]
+        units = {}
+        for r in conn.execute('SELECT code, unit, equip_code FROM oil_unit ORDER BY code, sort'):
+            units.setdefault(r['code'], []).append(
+                r['unit'] + (f"({r['equip_code']})" if r['equip_code'] else ''))
+    finally:
+        conn.close()
+    for r in rows:
+        r['units'] = units.get(r['code'], [])
+    rows.sort(key=_oil_sort_key)
+
+    q = request.args.get('q', '').strip()
+    if q:
+        must, must_not = [], []
+        for tok in q.split():
+            if tok.startswith('-') and len(tok) > 1:
+                must_not.append(tok[1:].lower())
+            else:
+                must.append(tok.lower())
+
+        def haystack(r):
+            return ' '.join([str(r.get(k) or '') for k in
+                             ('code', 'name', 'brand', 'supplier', 'category', 'spec',
+                              'pack', 'status', 'usage_note', 'remark', 'replaced_by')]
+                            + r['units']).lower()
+
+        rows = [r for r in rows if all(m in haystack(r) for m in must)
+                and not any(m in haystack(r) for m in must_not)]
+    return jsonify({'success': True, 'count': len(rows), 'data': rows})
+
+
+@app.route('/api/oil/stats')
+def oil_stats():
+    """分類／供應商／狀態的支數統計，供篩選列顯示數字（徽章篩選慣例）"""
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': True, 'categories': [], 'suppliers': [], 'statuses': []})
+    try:
+        # GROUP BY 一定要寫完整運算式，不能寫 `GROUP BY name`——oil 表本身就有一個
+        # name 欄位（品名），別名會被同名欄位蓋掉，變成每支油品各自一組（實測踩過）
+        cats = [dict(r) for r in conn.execute(
+            "SELECT IFNULL(NULLIF(category,''),'未分類') AS name, COUNT(*) AS cnt FROM oil "
+            "GROUP BY IFNULL(NULLIF(category,''),'未分類') ORDER BY cnt DESC")]
+        sups = [dict(r) for r in conn.execute(
+            "SELECT IFNULL(NULLIF(supplier,''),'未填') AS name, COUNT(*) AS cnt FROM oil "
+            "GROUP BY IFNULL(NULLIF(supplier,''),'未填') ORDER BY cnt DESC")]
+        sts = [dict(r) for r in conn.execute(
+            "SELECT IFNULL(NULLIF(status,''),'未填') AS name, COUNT(*) AS cnt FROM oil "
+            "GROUP BY IFNULL(NULLIF(status,''),'未填') ORDER BY cnt DESC")]
+        # 「使用中卻沒有現行 MSDS」是這個模組最該被看到的風險，放在工具列紅字提示
+        no_msds = conn.execute(
+            "SELECT COUNT(*) FROM oil o WHERE o.status='使用中' AND NOT EXISTS "
+            "(SELECT 1 FROM oil_file f WHERE f.code=o.code AND f.root='msds' AND f.obsolete=0)"
+        ).fetchone()[0]
+        orphan = conn.execute('SELECT COUNT(*) FROM oil_file WHERE code IS NULL').fetchone()[0]
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'categories': cats, 'suppliers': sups,
+                    'statuses': sts, 'no_msds': no_msds, 'orphan_files': orphan})
+
+
+@app.route('/api/oil/detail')
+def oil_detail():
+    """單一油品詳情：MSDS/文件清單、使用單位、更換記錄、異動歷程"""
+    code = request.args.get('code', '').strip()
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟'}), 500
+    try:
+        row = conn.execute('SELECT * FROM oil WHERE code=?', (code,)).fetchone()
+        if row is None:
+            return jsonify({'success': False, 'error': f'查無油品 {code}'}), 404
+        d = dict(row)
+        d['files'] = [dict(r) for r in conn.execute(
+            'SELECT rowid AS id, relpath, root, filename, ext, size, mtime, file_date, obsolete '
+            'FROM oil_file WHERE code=? ORDER BY obsolete, root, file_date DESC, filename', (code,))]
+        d['units'] = [dict(r) for r in conn.execute(
+            'SELECT rowid AS id, unit, equip_code, note FROM oil_unit WHERE code=? ORDER BY sort, rowid',
+            (code,))]
+        d['changes'] = [dict(r) for r in conn.execute(
+            'SELECT id, equip_code, equip_name, date, qty, operator, note, user '
+            'FROM oil_change WHERE code=? ORDER BY date DESC, id DESC', (code,))]
+        d['history'] = [dict(r) for r in conn.execute(
+            'SELECT rowid AS id, date, action, detail, user FROM oil_history WHERE code=? '
+            'ORDER BY date DESC, rowid DESC', (code,))]
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'data': d})
+
+
+@app.route('/api/oil/save', methods=['POST'])
+def oil_save():
+    """新增或編輯油品。改代號時所有子表（檔案/使用單位/更換記錄/歷程）一起搬過去。"""
+    d = request.get_json(silent=True) or {}
+    code = (d.get('code') or '').strip()
+    orig = (d.get('orig_code') or '').strip()
+    if not code:
+        return jsonify({'success': False, 'error': '油品代號必填'}), 400
+    if d.get('status') and d['status'] not in _OIL_STATUSES:
+        return jsonify({'success': False, 'error': '狀態只能是使用中或停用'}), 400
+
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟'}), 500
+    try:
+        cur = conn.cursor()
+        fields = ('name', 'brand', 'supplier', 'category', 'spec', 'pack',
+                  'status', 'replaced_by', 'usage_note', 'remark')
+        vals = {f: (d.get(f) or '').strip() for f in fields}
+        vals['status'] = vals['status'] or '使用中'
+
+        exists = cur.execute('SELECT * FROM oil WHERE code=?', (orig or code,)).fetchone()
+        if orig and orig != code:
+            if cur.execute('SELECT 1 FROM oil WHERE code=?', (code,)).fetchone():
+                return jsonify({'success': False, 'error': f'代號 {code} 已存在'}), 400
+
+        if exists is None:
+            if cur.execute('SELECT 1 FROM oil WHERE code=?', (code,)).fetchone():
+                return jsonify({'success': False, 'error': f'代號 {code} 已存在'}), 400
+            cur.execute("""INSERT INTO oil (code, name, brand, supplier, category, spec, pack,
+                                            status, replaced_by, usage_note, remark,
+                                            source, origin, created_at, updated_at)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,'manual','manual',?,?)""",
+                        (code, vals['name'], vals['brand'], vals['supplier'], vals['category'],
+                         vals['spec'], vals['pack'], vals['status'], vals['replaced_by'],
+                         vals['usage_note'], vals['remark'], _oil_now(), _oil_now()))
+            _oil_log(cur, code, '新增', f"在系統內新增油品：{vals['name'] or code}")
+        else:
+            before = dict(exists)
+            if orig and orig != code:
+                for tbl in ('oil_file', 'oil_unit', 'oil_change', 'oil_history'):
+                    cur.execute(f'UPDATE {tbl} SET code=? WHERE code=?', (code, orig))
+                cur.execute('UPDATE oil SET code=? WHERE code=?', (code, orig))
+                _oil_log(cur, code, '重新編碼', f'{orig} → {code}')
+            cur.execute("""UPDATE oil SET name=?, brand=?, supplier=?, category=?, spec=?,
+                                          pack=?, status=?, replaced_by=?, usage_note=?,
+                                          remark=?, source='manual', updated_at=?
+                            WHERE code=?""",
+                        (vals['name'], vals['brand'], vals['supplier'], vals['category'],
+                         vals['spec'], vals['pack'], vals['status'], vals['replaced_by'],
+                         vals['usage_note'], vals['remark'], _oil_now(), code))
+            _oil_log_changes(cur, code, before, vals)
+
+        # 使用單位整組覆寫（前端送完整清單，比逐筆增刪簡單也不會漏）
+        if isinstance(d.get('units'), list):
+            cur.execute('DELETE FROM oil_unit WHERE code=?', (code,))
+            for i, u in enumerate(d['units']):
+                unit = (u.get('unit') or '').strip()
+                eq = (u.get('equip_code') or '').strip().upper()
+                if not unit and not eq:
+                    continue
+                cur.execute('INSERT INTO oil_unit (code, unit, equip_code, note, sort) '
+                            'VALUES (?,?,?,?,?)', (code, unit, eq, (u.get('note') or '').strip(), i))
+        conn.commit()
+    finally:
+        conn.close()
+    # 改代號的話，設備保養基準書引用到的代號要一起改（見 _oil_sync_maint_code）
+    if orig and orig != code:
+        _oil_sync_maint_code(orig, code)
+    return jsonify({'success': True, 'code': code})
+
+
+# 可以在清單表格裡直接改的欄位（白名單，不接受任意欄位名）
+_OIL_INLINE_FIELDS = {'name': '品名'}   # 一般欄位（直接 UPDATE）；'code' 走下面的改代號分支
+
+
+def _oil_sync_maint_code(old, new):
+    """油品改代號時，把設備保養基準書引用到的代號一起改過去。
+
+    保養項目的 `mt_item.oil_code` 存的是代號字串，而 oil.db 與 equipment.db 是兩個
+    不同的資料庫檔案，沒有外鍵可以連動——不主動同步的話，改完代號基準書上就會顯示成
+    紅色「（主檔查無）」。清單頁的快速編輯讓改代號變得很容易按，這條同步就更不能省。
+    回傳更新筆數；設備資料庫還沒建立時回 0，不影響油品這邊的改名。"""
+    conn = _eq_conn()
+    if conn is None:
+        return 0
+    try:
+        cols = {r['name'] for r in conn.execute('PRAGMA table_info(mt_item)')}
+        if 'oil_code' not in cols:      # 還沒用過保養基準書的資料庫
+            return 0
+        n = conn.execute('UPDATE mt_item SET oil_code=? WHERE oil_code=?', (new, old)).rowcount
+        conn.commit()
+        return n
+    except sqlite3.Error:
+        return 0
+    finally:
+        conn.close()
+
+
+@app.route('/api/oil/inline_save', methods=['POST'])
+def oil_inline_save():
+    """清單表格內直接編輯單一欄位（品名、油品代號）。
+
+    一律把 source 標成 manual——這些欄位正是重新掃描時會從 MSDS 檔名覆蓋回去的，
+    使用者親手改過就不該再被檔名蓋掉。品名刻意不寫進異動歷程（跟 _OIL_TRACKED_FIELDS
+    的取捨一致：隨手修正的欄位記進去只會把歷程洗版），但**改代號會記**——那是會牽動
+    一整串子表的異動，事後一定會想知道什麼時候改的。"""
+    d = request.get_json(silent=True) or {}
+    code = (d.get('code') or '').strip()
+    field = (d.get('field') or '').strip()
+    value = (d.get('value') or '').strip()
+    if field != 'code' and field not in _OIL_INLINE_FIELDS:
+        return jsonify({'success': False, 'error': f'不支援編輯欄位 {field}'}), 400
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟'}), 500
+    try:
+        cur = conn.cursor()
+        if field == 'code':
+            if not value:
+                return jsonify({'success': False, 'error': '油品代號不可以空白'}), 400
+            if value == code:
+                return jsonify({'success': True, 'code': code, 'field': field, 'value': value})
+            if cur.execute('SELECT 1 FROM oil WHERE code=?', (value,)).fetchone():
+                return jsonify({'success': False, 'error': f'代號 {value} 已經有人用了'}), 400
+            if cur.execute('SELECT 1 FROM oil WHERE code=?', (code,)).fetchone() is None:
+                return jsonify({'success': False, 'error': f'查無油品 {code}'}), 404
+            # 子表一起搬（跟 /api/oil/save 改代號同一套做法）
+            for tbl in ('oil_file', 'oil_unit', 'oil_change', 'oil_history'):
+                cur.execute(f'UPDATE {tbl} SET code=? WHERE code=?', (value, code))
+            cur.execute("UPDATE oil SET code=?, source='manual', updated_at=? WHERE code=?",
+                        (value, _oil_now(), code))
+            _oil_log(cur, value, '重新編碼', f'{code} → {value}（清單快速編輯）')
+            conn.commit()
+            n = _oil_sync_maint_code(code, value)
+            msg = f'代號已改為 {value}'
+            if n:
+                msg += f'，並同步更新 {n} 筆保養基準書的引用'
+            return jsonify({'success': True, 'code': value, 'old_code': code,
+                            'field': field, 'value': value, 'message': msg})
+
+        cur.execute(f"UPDATE oil SET {field}=?, source='manual', updated_at=? WHERE code=?",
+                    (value, _oil_now(), code))
+        if cur.rowcount == 0:
+            return jsonify({'success': False, 'error': f'查無油品 {code}'}), 404
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'code': code, 'field': field, 'value': value})
+
+
+@app.route('/api/oil/delete', methods=['POST'])
+def oil_delete():
+    """預設軟刪除（狀態改停用）；hard=true 只允許刪系統內新增的（origin='manual'）。
+
+    判斷用 origin 不是 source——source 只要在系統內編輯過就會變 manual，
+    拿它當門檻會讓掃描來的油品也變成可硬刪（設備主檔踩過這個雷）。"""
+    d = request.get_json(silent=True) or {}
+    code = (d.get('code') or '').strip()
+    hard = bool(d.get('hard'))
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟'}), 500
+    try:
+        row = conn.execute('SELECT * FROM oil WHERE code=?', (code,)).fetchone()
+        if row is None:
+            return jsonify({'success': False, 'error': f'查無油品 {code}'}), 404
+        cur = conn.cursor()
+        if hard:
+            if (row['origin'] or 'msds') != 'manual':
+                return jsonify({'success': False,
+                                'error': '這支油品來自 MSDS 掃描，只能停用不能刪除'}), 400
+            for tbl in ('oil_unit', 'oil_change', 'oil_history'):
+                cur.execute(f'DELETE FROM {tbl} WHERE code=?', (code,))
+            cur.execute('UPDATE oil_file SET code=NULL WHERE code=?', (code,))
+            cur.execute('DELETE FROM oil WHERE code=?', (code,))
+            msg = f'已刪除 {code}'
+        else:
+            cur.execute("UPDATE oil SET status='停用', source='manual', updated_at=? WHERE code=?",
+                        (_oil_now(), code))
+            _oil_log(cur, code, '狀態變更', f"狀態：{row['status']} → 停用")
+            msg = f'{code} 已改為停用'
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'message': msg})
+
+
+@app.route('/api/oil/file')
+def oil_file():
+    """輸出 MSDS／文件（PDF 直接內嵌預覽，其餘下載）"""
+    from flask import send_file
+    root = request.args.get('root', 'msds')
+    base = _oil_root(root)
+    full = _eq_safe_path(base, request.args.get('relpath', '')) if base else None
+    if not full or not os.path.isfile(full):
+        return jsonify({'success': False, 'error': '檔案不存在'}), 404
+    dl = request.args.get('dl') == '1' or os.path.splitext(full)[1].lower() != '.pdf'
+    return send_file(full, as_attachment=dl, download_name=os.path.basename(full))
+
+
+@app.route('/api/oil/file/upload', methods=['POST'])
+def oil_file_upload():
+    """上傳 MSDS 或其他文件（含 Excel）到網芳，並立即補進索引。
+
+    MSDS 存進 OIL_MSDS_ROOT 根目錄（沿用既有的扁平結構，檔名照 [供應商][代號] 慣例
+    自動組出來，重新掃描時才認得出是哪支油品）；其他文件存進 OIL_DOC_ROOT\\<代號>\\。
+    兩者都標 claimed=1，重新掃描不會被搶走對應。"""
+    code = (request.form.get('code') or '').strip()
+    kind = (request.form.get('kind') or 'doc').strip()
+    files = request.files.getlist('files')
+    if not code:
+        return jsonify({'success': False, 'error': '缺少油品代號'}), 400
+    if kind not in _OIL_ROOTS:
+        return jsonify({'success': False, 'error': '檔案類型只能是 msds 或 doc'}), 400
+    if not files or not any(f and f.filename for f in files):
+        return jsonify({'success': False, 'error': '請選擇檔案'}), 400
+
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟'}), 500
+    try:
+        row = conn.execute('SELECT supplier FROM oil WHERE code=?', (code,)).fetchone()
+        if row is None:
+            return jsonify({'success': False, 'error': f'查無油品 {code}'}), 404
+        base = _oil_root(kind)
+        dest_dir = base if kind == 'msds' else os.path.join(base, code)
+        try:
+            os.makedirs(dest_dir, exist_ok=True)
+        except OSError as e:
+            return jsonify({'success': False, 'error': f'無法建立資料夾：{e}'}), 500
+
+        saved, rejected = [], []
+        for f in files:
+            if not f or not f.filename:
+                continue
+            ext = os.path.splitext(f.filename)[1].lower()
+            if ext not in _OIL_UPLOAD_EXT:
+                rejected.append(f.filename)
+                continue
+            filename = _cnc_safe_filename(f.filename)
+            if kind == 'msds' and not filename.startswith('['):
+                # 照既有慣例組檔名，下次重新掃描才對得回這支油品
+                sup = (row['supplier'] or '').strip()
+                prefix = (f'[{sup}]' if sup else '') + f'[{code}]'
+                filename = prefix + filename
+            dest = os.path.join(dest_dir, filename)
+            if os.path.exists(dest):
+                stem, ex = os.path.splitext(filename)
+                filename = f'{stem}_{int(time.time())}{ex}'
+                dest = os.path.join(dest_dir, filename)
+            try:
+                f.save(dest)
+            except OSError as e:
+                rejected.append(f'{f.filename}（存檔失敗：{e}）')
+                continue
+            # relpath 是 oil_file 的主鍵，一定要跟 build_oil_index.py 掃描時寫入的格式一致
+            # （os.path.relpath 的原生分隔符，Windows 上是反斜線）。這裡若改寫成正斜線，
+            # 下次重新掃描會把同一個檔案當成另一筆插進去，清單上就會出現兩份（實測踩過）
+            relpath = os.path.relpath(dest, base)
+            conn.execute("""INSERT OR REPLACE INTO oil_file
+                (relpath, root, code, folder, filename, ext, size, mtime, file_date, obsolete, claimed)
+                VALUES (?,?,?,?,?,?,?,datetime('now','localtime'),'',0,1)""",
+                (relpath, kind, code, '' if kind == 'msds' else code, filename, ext,
+                 os.path.getsize(dest)))
+            saved.append(filename)
+        conn.commit()
+    finally:
+        conn.close()
+
+    if not saved:
+        err = '沒有成功上傳的檔案'
+        if rejected:
+            err += '：' + '、'.join(rejected) + '（僅支援 ' + '/'.join(sorted(_OIL_UPLOAD_EXT)) + '）'
+        return jsonify({'success': False, 'error': err}), 400
+    msg = f'已上傳 {len(saved)} 個檔案'
+    if rejected:
+        msg += f'，{len(rejected)} 個格式不支援已略過'
+    return jsonify({'success': True, 'message': msg, 'saved': saved})
+
+
+@app.route('/api/oil/file/claim', methods=['POST'])
+def oil_file_claim():
+    """把掃描時歸不了位的檔案人工指定給某支油品（claimed=1，重新掃描保留）"""
+    d = request.get_json(silent=True) or {}
+    relpath = (d.get('relpath') or '').strip()
+    code = (d.get('code') or '').strip()
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟'}), 500
+    try:
+        if code and not conn.execute('SELECT 1 FROM oil WHERE code=?', (code,)).fetchone():
+            return jsonify({'success': False, 'error': f'查無油品 {code}'}), 404
+        cur = conn.execute('UPDATE oil_file SET code=?, claimed=? WHERE relpath=?',
+                           (code or None, 1 if code else 0, relpath))
+        if cur.rowcount == 0:
+            return jsonify({'success': False, 'error': '查無這個檔案'}), 404
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/oil/file/list')
+def oil_file_list():
+    """MSDS 子頁：跨油品列出所有檔案（含歸不了位的），支援同一套搜尋語法"""
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟'}), 500
+    try:
+        rows = [dict(r) for r in conn.execute("""
+            SELECT f.rowid AS id, f.relpath, f.root, f.code, f.folder, f.filename, f.ext,
+                   f.size, f.mtime, f.file_date, f.obsolete, f.claimed,
+                   IFNULL(o.name,'') AS oil_name, IFNULL(o.supplier,'') AS supplier,
+                   IFNULL(o.category,'') AS category, IFNULL(o.status,'') AS oil_status
+              FROM oil_file f LEFT JOIN oil o ON o.code = f.code
+             ORDER BY f.obsolete, f.root, IFNULL(f.code,'zzz'), f.filename""").fetchall()]
+    finally:
+        conn.close()
+
+    q = request.args.get('q', '').strip()
+    if q:
+        must, must_not = [], []
+        for tok in q.split():
+            if tok.startswith('-') and len(tok) > 1:
+                must_not.append(tok[1:].lower())
+            else:
+                must.append(tok.lower())
+
+        def hay(r):
+            return ' '.join(str(r.get(k) or '') for k in
+                            ('code', 'filename', 'oil_name', 'supplier', 'category', 'folder')).lower()
+        rows = [r for r in rows if all(m in hay(r) for m in must)
+                and not any(m in hay(r) for m in must_not)]
+    return jsonify({'success': True, 'count': len(rows), 'data': rows})
+
+
+@app.route('/api/oil/change/list')
+def oil_change_list():
+    """更換記錄清單（跨油品），搜尋語法同其他清單"""
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟'}), 500
+    try:
+        rows = [dict(r) for r in conn.execute("""
+            SELECT c.*, IFNULL(o.name,'') AS oil_name, IFNULL(o.category,'') AS category,
+                   IFNULL(o.supplier,'') AS supplier
+              FROM oil_change c LEFT JOIN oil o ON o.code = c.code
+             ORDER BY c.date DESC, c.id DESC""").fetchall()]
+    finally:
+        conn.close()
+    q = request.args.get('q', '').strip()
+    if q:
+        must, must_not = [], []
+        for tok in q.split():
+            if tok.startswith('-') and len(tok) > 1:
+                must_not.append(tok[1:].lower())
+            else:
+                must.append(tok.lower())
+
+        def hay(r):
+            return ' '.join(str(r.get(k) or '') for k in
+                            ('code', 'oil_name', 'equip_code', 'equip_name', 'date',
+                             'operator', 'note', 'category', 'supplier')).lower()
+        rows = [r for r in rows if all(m in hay(r) for m in must)
+                and not any(m in hay(r) for m in must_not)]
+    return jsonify({'success': True, 'count': len(rows), 'data': rows})
+
+
+@app.route('/api/oil/change/save', methods=['POST'])
+def oil_change_save():
+    """新增或編輯一筆更換記錄（帶 id = 編輯）"""
+    d = request.get_json(silent=True) or {}
+    code = (d.get('code') or '').strip()
+    date_s = (d.get('date') or '').strip()
+    if not code or not date_s:
+        return jsonify({'success': False, 'error': '油品與更換日期必填'}), 400
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟'}), 500
+    try:
+        if not conn.execute('SELECT 1 FROM oil WHERE code=?', (code,)).fetchone():
+            return jsonify({'success': False, 'error': f'查無油品 {code}'}), 404
+        vals = (code, (d.get('equip_code') or '').strip().upper(),
+                (d.get('equip_name') or '').strip(), date_s,
+                (d.get('qty') or '').strip(), (d.get('operator') or '').strip(),
+                (d.get('note') or '').strip())
+        cur = conn.cursor()
+        if d.get('id'):
+            cur.execute("""UPDATE oil_change SET code=?, equip_code=?, equip_name=?, date=?,
+                                                 qty=?, operator=?, note=? WHERE id=?""",
+                        vals + (int(d['id']),))
+        else:
+            cur.execute("""INSERT INTO oil_change
+                (code, equip_code, equip_name, date, qty, operator, note, user)
+                VALUES (?,?,?,?,?,?,?, 'user')""", vals)
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/oil/change/delete', methods=['POST'])
+def oil_change_delete():
+    """刪除更換記錄。只能刪系統內登錄的（user='user'）——Excel 匯入的是舊資料軌跡，
+    要清掉請重跑 build_oil_index.py（它會整批重建 user='excel' 的部分）。"""
+    d = request.get_json(silent=True) or {}
+    rid = d.get('id')
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟'}), 500
+    try:
+        row = conn.execute('SELECT user FROM oil_change WHERE id=?', (rid,)).fetchone()
+        if row is None:
+            return jsonify({'success': False, 'error': '查無這筆記錄'}), 404
+        if row['user'] != 'user':
+            return jsonify({'success': False, 'error': 'Excel 匯入的記錄不能刪除'}), 400
+        conn.execute('DELETE FROM oil_change WHERE id=?', (rid,))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/oil/equipment_options')
+def oil_equipment_options():
+    """使用單位／更換記錄選設備用的下拉選項（來自設備主檔，只列使用中與閒置的）"""
+    conn = _eq_conn()
+    if conn is None:
+        return jsonify({'success': True, 'data': []})
+    try:
+        rows = [dict(r) for r in conn.execute("""
+            SELECT e.code, IFNULL(e.old_code,'') AS old_code, IFNULL(e.location,'') AS location,
+                   CASE WHEN e.needs_fix = 1 AND IFNULL(e.type_name_raw,'') <> ''
+                        THEN e.type_name_raw ELSE IFNULL(t.name,'') END AS type_name
+              FROM equipment e
+              LEFT JOIN eq_type t ON t.group_code = e.group_code AND t.code = e.type_code
+             WHERE e.status IN ('使用中','閒置') ORDER BY e.code""")]
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'data': rows})
+
+
+@app.route('/api/oil/rebuild', methods=['POST'])
+def oil_rebuild():
+    """重新掃描 MSDS／簡介資料夾（直接呼叫 build_oil_index 的函式，不另外開 process）。
+
+    掃描是合併式的：只更新 source='msds' 的資料，系統內編輯過的（manual）不受影響。"""
+    try:
+        import build_oil_index as B
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'找不到 build_oil_index.py：{e}'}), 500
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟'}), 500
+    try:
+        new_oil, upd_oil = B.scan_msds(conn)
+        ndoc = B.scan_docs(conn)
+        msg = f'掃描完成：新增 {new_oil} 支油品、更新 {upd_oil} 支、文件索引 {ndoc} 個檔案'
+        if (request.get_json(silent=True) or {}).get('with_change'):
+            msg += f'；更換記錄匯入 {B.import_change_xlsx(conn)} 筆'
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'掃描失敗：{e}'}), 500
+    finally:
+        conn.close()
+    return jsonify({'success': True, 'message': msg})
+
+
+_OIL_EXPORT_HEADERS = ['油品代號', '品名', '品牌', '供應商', '分類', '規格', '包裝', '狀態',
+                       '替代油品', '使用單位', 'MSDS份數', 'MSDS日期', '使用說明', '備註',
+                       '資料來源', '最後更新']
+
+
+@app.route('/api/oil/export', methods=['POST'])
+def oil_export():
+    """把油品主檔／使用單位／更換記錄匯出成獨立的 Excel（config.OIL_EXPORT_XLSX）。
+
+    每次都用 openpyxl.Workbook() 開一本全新的活頁簿整份重建，**不會**去開既有的
+    「油品更換記錄表.xlsx」——用 openpyxl 開檔存檔會把公式的快取值洗掉
+    （設備主檔實測踩過，見 docs/equipment-master.md）。檔案被開啟中時退存到桌面。"""
+    if not _OPENPYXL_OK:
+        return jsonify({'success': False, 'error': '未安裝 openpyxl'}), 500
+    conn = _oil_conn()
+    if conn is None:
+        return jsonify({'success': False, 'error': '油品資料庫無法開啟'}), 500
+    try:
+        oils = [dict(r) for r in conn.execute("""
+            SELECT o.*,
+                   (SELECT COUNT(*) FROM oil_file f WHERE f.code=o.code AND f.root='msds' AND f.obsolete=0) AS msds_count,
+                   (SELECT MAX(f.file_date) FROM oil_file f WHERE f.code=o.code AND f.root='msds' AND f.obsolete=0) AS msds_date
+              FROM oil o""")]
+        oils.sort(key=_oil_sort_key)
+        units = {}
+        for r in conn.execute('SELECT code, unit, equip_code FROM oil_unit ORDER BY code, sort'):
+            units.setdefault(r['code'], []).append(
+                r['unit'] + (f"({r['equip_code']})" if r['equip_code'] else ''))
+        changes = [dict(r) for r in conn.execute("""
+            SELECT c.date, c.code, IFNULL(o.name,'') AS oil_name, c.equip_code, c.equip_name,
+                   c.qty, c.operator, c.note, c.user
+              FROM oil_change c LEFT JOIN oil o ON o.code=c.code
+             ORDER BY c.date DESC, c.id DESC""")]
+    finally:
+        conn.close()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = '油品主檔'
+    ws.append(_OIL_EXPORT_HEADERS)
+    for o in oils:
+        ws.append([o['code'], o['name'], o['brand'], o['supplier'], o['category'], o['spec'],
+                   o['pack'], o['status'], o['replaced_by'], '、'.join(units.get(o['code'], [])),
+                   o['msds_count'], o['msds_date'] or '', o['usage_note'], o['remark'],
+                   'MSDS掃描' if (o['origin'] or '') != 'manual' else '系統內新增', o['updated_at']])
+    ws2 = wb.create_sheet('更換記錄')
+    ws2.append(['更換日期', '油品代號', '品名', '設備編碼', '設備名稱', '數量', '登錄人', '備註', '來源'])
+    for c in changes:
+        ws2.append([c['date'], c['code'], c['oil_name'], c['equip_code'], c['equip_name'],
+                    c['qty'], c['operator'], c['note'],
+                    'Excel匯入' if c['user'] == 'excel' else '系統登錄'])
+    for sheet, cols, widths in (
+            (ws,  'ABCDEFGHIJKLMNOP', (12, 34, 12, 12, 14, 18, 14, 10, 12, 30, 10, 12, 40, 30, 12, 20)),
+            (ws2, 'ABCDEFGHI',        (12, 12, 30, 12, 14, 10, 12, 24, 12))):
+        for col, w in zip(cols, widths):
+            sheet.column_dimensions[col].width = w
+        sheet.freeze_panes = 'A2'
+
+    path = getattr(config, 'OIL_EXPORT_XLSX', '') or os.path.join(
+        os.path.expanduser('~'), 'Desktop', '油品主檔.xlsx')
+    try:
+        wb.save(path)
+    except Exception:
+        path = os.path.join(os.path.expanduser('~'), 'Desktop', '油品主檔.xlsx')
+        try:
+            wb.save(path)
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'存檔失敗：{e}'}), 500
+    return jsonify({'success': True, 'path': path,
+                    'message': f'已匯出 {len(oils)} 支油品、{len(changes)} 筆更換記錄'})
+
+
+@app.route('/api/oil/open_folder', methods=['POST'])
+def oil_open_folder():
+    """用檔案總管開啟油品資料夾（放 Excel／其他資料用）"""
+    root = (request.get_json(silent=True) or {}).get('root', '')
+    path = _oil_root(root) if root in _OIL_ROOTS else getattr(config, 'OIL_ROOT_PATH', '')
+    if not path or not os.path.isdir(path):
+        return jsonify({'success': False, 'error': '資料夾不存在'}), 404
+    try:
+        os.startfile(path)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    return jsonify({'success': True, 'path': path})
+
+
 def _preload_cache():
     """背景預載 SSRS 資料到快取（加速首次搜尋）"""
     try:
@@ -8047,7 +10609,19 @@ def _preload_cache():
         pass
 
 
+def _flask_host():
+    """要綁哪個網卡。
+
+    預設維持 config.FLASK_HOST（127.0.0.1，只有本機連得到，跟以前完全一樣）；
+    只有把 config.MOBILE_ACCESS 打開時才改綁 0.0.0.0，讓同一個內網的手機掃 QR 進來
+    回報保養（見 docs/equipment-maintenance.md P3）。這個開關預設關閉是刻意的——
+    系統沒有登入機制，開了就等於內網任何人都能用。"""
+    if getattr(config, 'MOBILE_ACCESS', False):
+        return '0.0.0.0'
+    return config.FLASK_HOST
+
+
 if __name__ == '__main__':
     # 獨立執行模式（除錯用）— GUI 版由 main.py 啟動
     threading.Thread(target=_preload_cache, daemon=True).start()
-    app.run(host=config.FLASK_HOST, port=config.FLASK_PORT, debug=config.FLASK_DEBUG)
+    app.run(host=_flask_host(), port=config.FLASK_PORT, debug=config.FLASK_DEBUG)

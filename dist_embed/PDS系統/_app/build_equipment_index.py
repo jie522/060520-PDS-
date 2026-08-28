@@ -33,7 +33,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(_APP_DIR, 'equipment.db')
+# 2026-08-07：equipment.db 改讀 config.EQUIPMENT_DB_PATH（網芳共用路徑），dev 版跟
+# dist_embed 桌面版現在讀寫同一份檔案，不再需要 --deploy 另外複製一份到 dist_embed。
+DB_PATH = getattr(config, 'EQUIPMENT_DB_PATH', None) or os.path.join(_APP_DIR, 'equipment.db')
 
 # PDM 編碼格式：群組(1碼) + 機台類型(2碼) + '-' + 加工屬性(1碼) + 流水號(2碼)
 CODE_RE = re.compile(r'^([A-Z])(\d{2})-(\d)(\d{2})$')
@@ -72,7 +74,7 @@ CREATE TABLE IF NOT EXISTS equipment (
     -- （它的類型/屬性碼是硬湊的，查字典會查到別台設備的名稱），要顯示這裡的原文。
     type_name_raw TEXT, attr_name_raw TEXT,
     location    TEXT,
-    status      TEXT DEFAULT '在用',
+    status      TEXT DEFAULT '使用中',
     -- source 與 origin 是兩件事，不可合併：
     --   source = 目前這筆能不能被 Excel 覆蓋（在系統內改過就變 manual）
     --   origin = 這筆資料當初打哪來的，寫入後永不變更，用來擋「Excel 來源的設備被硬刪」
@@ -164,7 +166,7 @@ def parse_specs(remark):
 
 
 def guess_status(note, remark):
-    """從「說明」欄推斷設備狀態（賣掉/報廢/閒置），判斷不出來就當在用"""
+    """從「說明」欄推斷設備狀態（賣掉/報廢/閒置），判斷不出來就當使用中"""
     text = f'{note} {remark}'
     if '報廢' in text:
         return '報廢'
@@ -172,7 +174,7 @@ def guess_status(note, remark):
         return '已售出'
     if '閒置' in text:
         return '閒置'
-    return '在用'
+    return '使用中'
 
 
 def parse_move_history(move_text):
@@ -442,15 +444,6 @@ def scan_tech_files(conn):
     return matched, len(files) - matched
 
 
-def _deploy(src):
-    dist_app = os.path.join(_APP_DIR, 'dist_embed', 'PDS系統', '_app')
-    if not os.path.isdir(dist_app):
-        print(f'  [WARN] dist_embed 目錄不存在，略過部署：{dist_app}')
-        return
-    shutil.copy2(src, os.path.join(dist_app, os.path.basename(src)))
-    print(f'  部署 {os.path.basename(src)} -> {dist_app}')
-
-
 def _migrate(conn):
     """相容遷移：舊版 equipment.db 缺新欄位時補上"""
     existing = {r[1] for r in conn.execute('PRAGMA table_info(equipment)')}
@@ -495,7 +488,7 @@ def rebuild(deploy=False, scan=True):
     print(f'\n完成！設備 {total} 台、群組 {groups} 個、機台類型 {types} 種')
     print(f'DB -> {DB_PATH}')
     if deploy:
-        _deploy(DB_PATH)
+        print('  equipment.db 現在是網芳共用路徑，dev 版跟桌面版共用同一份，不用再另外部署')
     return total
 
 

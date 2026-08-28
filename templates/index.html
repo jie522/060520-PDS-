@@ -52,7 +52,7 @@
         .header-logo{margin-left:auto;align-self:center;font-size:1.15rem;font-weight:800;font-style:italic;letter-spacing:.03em;color:#F5A623}
         .header-title{font-size:1.1rem;font-weight:700;padding-bottom:.45rem;white-space:nowrap;margin-right:.5rem}
         .header-tabs{display:flex;align-items:flex-end;gap:2px}
-        .header-tab{display:inline-block;padding:.3rem 1rem;font-size:1rem;font-weight:600;
+        .header-tab{display:inline-block;padding:.3rem .75rem;font-size:1rem;font-weight:600;white-space:nowrap;
           color:rgba(255,255,255,.85);text-decoration:none;border-radius:0;
           background:rgba(255,255,255,.15);cursor:pointer;transition:background .15s}
         .header-tab.active,.header-tab:hover{background:#fff;color:#1565C0}
@@ -209,6 +209,8 @@
         /* ── Clickable ── */
         .clickable { color: var(--erp-blue); cursor: pointer; text-decoration: underline; font-weight: 600; }
         .clickable:hover { color: var(--erp-blue-dark); }
+        .zume-link { cursor: pointer; font-size: 1rem; opacity: .75; }
+        .zume-link:hover { opacity: 1; }
 
         /* ── Toolbar row inside results ── */
         .toolbar-label { font-weight: 700; color: var(--erp-text); font-size: 0.83rem; }
@@ -267,6 +269,21 @@
         .detail-section-transfer .table td { border-color: #E4DFEF; }
         .detail-section-transfer .table tbody tr:nth-child(even) td { background: #F7F5FB; }
         .detail-section-transfer .table tbody tr:hover td { background: #E2DBED !important; }
+
+        /* ── 詳細資訊最上方的成品資訊列（品號/品名/單位/庫存數）──
+           樣式比照產品途程明細那頁的 .detail-info-bar，兩邊看到的是同一個「庫存數」 */
+        .detail-info-bar {
+            display: flex; align-items: center; gap: 1.4rem; flex-wrap: wrap;
+            padding: .5rem .85rem; margin-bottom: .8rem;
+            background: #F7F6F1; border: 1px solid #E5E4DF; border-radius: 4px;
+        }
+        .detail-info-bar .info-chip { display: flex; align-items: center; gap: .3rem; font-size: .8rem; }
+        .detail-info-bar .info-chip .lbl { color: #8A8778; font-weight: 500; }
+        .detail-info-bar .info-chip .val { color: #3D3D3A; font-weight: 700; }
+        .detail-info-bar .info-chip .val.code { font-family: Consolas, monospace; font-size: .82rem; color: #1565C0; }
+        /* 庫存數用跟途程頁一樣的磚紅色，是這一列真正要被看到的數字 */
+        .detail-info-bar .info-chip .val.stock { color: #C5613F; font-size: .95rem; }
+        .detail-info-bar .info-chip .val.stock.zero { color: #DC2626; }
 
         /* ── Stock warning ── */
         td.td-warn { color: #DC2626 !important; font-weight: 700; }
@@ -391,11 +408,12 @@
                 <span class="header-tab active">製令查詢</span>
                 <a href="/production" class="header-tab">生產中製令</a>
                 <a href="/equipment" class="header-tab">設備稼動</a>
-                <a href="/equipment_master" class="header-tab">設備管理</a>
                 <a href="/drawing" class="header-tab">PDM圖面查詢</a>
                 <a href="/routing"      class="header-tab">產品途程查詢</a>
                 <a href="/batch_cost" class="header-tab">批成本</a>
                 <a href="/cnc_program" class="header-tab">程式管理</a>
+                <a href="/oil"        class="header-tab">油品管理</a>
+                <a href="/equipment_master" class="header-tab">設備管理</a>
                 <a href="/zumen" class="header-tab header-tab-zumen">ZUMEN</a>
                 <a href="/management" class="header-tab header-tab-mgmt">管理</a>
             </div>
@@ -426,6 +444,7 @@
                 </div>
                 <input type="hidden" id="releaseSelect" value="已發放">
                 <button id="searchBtn" class="btn-erp btn-erp-primary">🔍 查詢</button>
+                <button class="btn-erp" onclick="clearSearch()" title="清空搜尋條件與結果（快捷鍵 Esc）">✕ 清除</button>
                 <button class="btn-erp" onclick="refreshCache()" title="清除快取，重新抓取最新資料">↻ 重新整理</button>
             </div>
 
@@ -469,6 +488,7 @@
                                 <th>預計完工日</th>
                                 <th>即時生產量</th>
                                 <th>機台</th>
+                                <th style="width:44px;">技術資料</th>
                             </tr>
                         </thead>
                         <tbody id="resultBody"></tbody>
@@ -625,6 +645,25 @@
         </div>
     </div>
 
+    <!-- ══════════ 展開訂單 Modal ══════════ -->
+    <div class="modal-overlay" id="ix-order-modal" onclick="if(event.target===this)ixCloseOrderModal()">
+        <div class="modal-box" style="max-width:min(96vw, 1100px)">
+            <div class="modal-header">
+                <span style="display:flex;align-items:center;gap:.5rem">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>
+                    客戶訂單資訊
+                </span>
+                <button class="modal-close" onclick="ixCloseOrderModal()">✕</button>
+            </div>
+            <div class="modal-info" id="ix-om-info"></div>
+            <div class="modal-body">
+                <div id="ix-om-content" style="max-height:65vh;overflow:auto">
+                    <div class="msg-empty"><span class="spinner"></span><span>載入中…</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ══════════ 歷史異動 Modal ══════════ -->
     <div class="modal-overlay" id="ix-history-modal" onclick="if(event.target===this)ixCloseHistoryModal()">
         <div class="modal-box">
@@ -760,7 +799,8 @@
                             '<td class="date-val">' + esc(row['預計開工日']) + '</td>' +
                             '<td>' + finishCell + '</td>' +
                             '<td class="text-end' + rtCls + '">' + esc(rt) + '</td>' +
-                            '<td class="text-center machine-cell">' + esc(machine) + '</td>';
+                            '<td class="text-center machine-cell">' + esc(machine) + '</td>' +
+                            '<td class="text-center"><span class="zume-link" title="開啟 ZUMEN 圖面" onclick="openZumeForItem(\'' + escAttr(row['品號']) + '\', event)">📂</span></td>';
                         resultBody.appendChild(tr);
                     });
                     resultArea.style.display = 'block';
@@ -776,6 +816,34 @@
                 searchBtn.disabled = false;
             }
         }
+
+        // ========== 清除搜尋條件 ==========
+        // 條件重設回預設值（000-1 加工課／已發放），順便清掉查詢結果跟 sessionStorage 存檔，
+        // 不然清空畫面後一重新整理/切分頁又被 _restoreIndexState() 撈回來
+        function clearSearch() {
+            orderInput.value = '';
+            nameInput.value = '';
+            unitSelect.value = '000-1';
+            const defaultTog = document.querySelector('.release-tog[data-val="已發放"]');
+            if (defaultTog) setReleaseTog(defaultTog);
+            window._searchResults = [];
+            resultBody.innerHTML = '';
+            resultCount.textContent = '';
+            hideAll();
+            try { sessionStorage.removeItem(_IDX_KEY); } catch(e) {}
+            orderInput.focus();
+        }
+
+        // Esc 清除搜尋——但若有彈窗開著，先讓 Esc 關彈窗就好（Bootstrap modal 內建 Esc 關閉；
+        // 自訂 .modal-overlay 系列沒有內建 Esc，這裡順便補上），避免一鍵誤清掉整頁搜尋結果
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Escape') return;
+            const openOverlay = [...document.querySelectorAll('.modal-overlay')]
+                .find(m => getComputedStyle(m).display !== 'none');
+            if (openOverlay) { openOverlay.style.display = 'none'; return; }
+            if (document.querySelector('.modal.show')) return;   // 交給 Bootstrap 自己關
+            clearSearch();
+        });
 
         // ========== 勾選功能 ==========
         function selectAll() { document.querySelectorAll('.row-check').forEach(cb => cb.checked = true); document.getElementById('checkAll').checked = true; }
@@ -802,6 +870,29 @@
                 const j = await res.json();
                 if (!j.success) alert('開啟失敗：' + (j.error || '未知錯誤'));
             } catch(e) { alert('連線錯誤：' + e.message); }
+        }
+
+        // ========== 單列直接開啟 ZUMEN（不用勾選，且不跳出外部瀏覽器——
+        //             導到 PDS 內嵌的 ZUMEN 分頁，帶 id/品號讓它直接開啟該圖面）==========
+        async function openZumeForItem(itemNo, e) {
+            if (e) e.stopPropagation();
+            if (!itemNo) return;
+            try {
+                const res = await fetch('/api/zume/lookup', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({item_nos: [itemNo]})
+                });
+                const j = await res.json();
+                const item = j.items && j.items[0];
+                const m = item && item.found && item.url && item.url.match(/\/drawings\/(\d+)/);
+                const qs = m
+                    ? ('id=' + encodeURIComponent(m[1]) + '&q=' + encodeURIComponent(itemNo))
+                    : ('q=' + encodeURIComponent(itemNo));
+                location.href = '/zumen?' + qs;
+            } catch(err) {
+                location.href = '/zumen?q=' + encodeURIComponent(itemNo);
+            }
         }
 
         // ========== 列印日報表 ==========
@@ -1173,6 +1264,8 @@
         });
 
         // ========== 詳細資訊 ==========
+        // 廠內單位徽章對照（樣式定義在 static/pds-ibm.css，產品途程查詢用同一套）
+        const DEPT_TAG_CLS = { '加工課': 'dept-jiagong', '成品部': 'dept-chengpin', '製三課': 'dept-zhisan' };
         let ixCurrentItem = null;
         async function showDetail(orderId, itemNo, itemName) {
             const modal = new bootstrap.Modal(document.getElementById('detailModal'));
@@ -1181,6 +1274,7 @@
             const detailContent = document.getElementById('detail-content');
 
             ixCurrentItem = { item_no: (itemNo || '').trim(), item_name: itemName || '' };
+            window._ixCurrentOrder = null;   // 換一張製令，先清掉上一張的訂單資訊
 
             detailTitle.textContent = '📋 製令詳細資訊 — ' + orderId;
             detailContent.innerHTML = '';
@@ -1199,6 +1293,38 @@
 
                 const d = json.data;
                 let html = '';
+
+                // 成品資訊列：這張製令做的品號現在倉庫裡還有多少
+                // （庫存數＝INVMC 現有量加總，跟產品途程明細那頁看到的是同一個數字）
+                const prod = d.product || (ixCurrentItem.item_no ? {item_no: ixCurrentItem.item_no,
+                                            item_name: ixCurrentItem.item_name} : null);
+                if (prod) {
+                    const stock = (prod.stock_qty ?? '').toString();
+                    const isZero = parseFloat(stock.replace(/,/g, '')) === 0;
+                    html += '<div class="detail-info-bar">' +
+                        '<div class="info-chip"><span class="lbl">品號</span>' +
+                        '<span class="val code">' + esc(prod.item_no) + '</span></div>' +
+                        '<div class="info-chip"><span class="lbl">品名</span>' +
+                        '<span class="val">' + esc(prod.item_name) + '</span></div>' +
+                        (prod.unit ? '<div class="info-chip"><span class="lbl">單位</span>' +
+                            '<span class="val">' + esc(prod.unit) + '</span></div>' : '') +
+                        (stock !== '' ? '<div class="info-chip"><span class="lbl">庫存數</span>' +
+                            '<span class="val stock' + (isZero ? ' zero' : '') + '">' + esc(stock) + '</span></div>' : '') +
+                        '</div>';
+                }
+
+                // 訂單編號：從製令主檔的來源訂單反查（不是每張製令都有，例如庫存單）。
+                // 存到 window 給 ixShowOrder() 用，按「展開」才即時查 COPTC/COPTD（見 /api/order）。
+                window._ixCurrentOrder = d.order || null;
+                if (d.order) {
+                    html += '<div class="detail-info-bar" style="margin-top:-.4rem">' +
+                        '<div class="info-chip"><span class="lbl">訂單編號</span>' +
+                        '<span class="val code">' + esc(d.order.type) + '-' + esc(d.order.no) + '</span></div>' +
+                        '<button class="btn btn-sm" onclick="ixShowOrder()" style="background:#6A1B9A;color:#fff;border:none;padding:.15rem .6rem;border-radius:4px;cursor:pointer;font-size:0.76rem;display:inline-flex;align-items:center;gap:.25rem">' +
+                        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>' +
+                        '展開訂單</button>' +
+                        '</div>';
+                }
 
                 if (d.materials && d.materials.length > 0) {
                     html += '<div class="detail-section detail-section-material"><h6>🟢 用料資訊</h6>';
@@ -1227,17 +1353,22 @@
                     html += '<th>加工順序</th><th>製程代號</th><th>製程名稱</th><th>製程敘述</th><th>加工廠商</th><th class="text-end">投入數量</th><th class="text-end">完成數量</th><th>預計開工日</th><th>預計完工日</th><th>實際開工日</th><th>實際完工日</th>';
                     html += '</tr></thead><tbody>';
                     d.processes.forEach(p => {
-                        // 加工廠商是「加工課」自己代表整個廠內製程，highlight 出來方便一眼看出
-                        // 哪幾道是自己課要做的，不用逐行讀廠商欄（同一套配色見 .proc-code）
-                        const isInHouse = (p['加工廠商'] || '').trim() === '加工課';
-                        const rowStyle = isInHouse ? ' style="background:#E3F2FD;"' : '';
-                        const vendorStyle = isInHouse ? ' style="color:var(--erp-blue-dark);font-weight:700;"' : '';
+                        // 加工廠商欄：自家三個單位（加工課／成品部／製三課）各給一個顏色徽章，
+                        // 跟產品途程查詢用同一套 .dept-tag（定義在 static/pds-ibm.css）。
+                        // 另外整列淡底色只留給「加工課」——那是自己課要做的製程，一眼看出有幾道。
+                        const vendorName = (p['加工廠商'] || '').trim();
+                        const isInHouse = vendorName === '加工課';
+                        const rowStyle = isInHouse ? ' style="background:#F0FDF4;"' : '';
+                        const deptCls = DEPT_TAG_CLS[vendorName] || '';
+                        const vendorCell = deptCls
+                            ? '<span class="dept-tag ' + deptCls + '">' + esc(vendorName) + '</span>'
+                            : esc(p['加工廠商']);
                         html += '<tr' + rowStyle + '>' +
                             '<td class="text-center">' + esc(p['加工順序']) + '</td>' +
                             '<td class="text-center"><span class="proc-code">' + esc(p['製程代號']) + '</span></td>' +
                             '<td>' + esc(p['製程名稱']) + '</td>' +
                             '<td class="wrap-cell" style="max-width:320px;">' + esc(p['製程敘述']) + '</td>' +
-                            '<td' + vendorStyle + '>' + esc(p['加工廠商']) + '</td>' +
+                            '<td>' + vendorCell + '</td>' +
                             '<td class="text-end">' + esc(p['投入數量']) + '</td>' +
                             '<td class="text-end">' + esc(p['完成數量']) + '</td>' +
                             '<td style="font-family:Consolas,monospace;font-size:0.76rem;">' + esc(p['預計開工日']) + '</td>' +
@@ -1420,6 +1551,79 @@
             document.getElementById('ix-future-modal').style.display = 'none';
         }
 
+        // ========== 展開訂單（客戶訂單建立作業 COPI06 對應資料）==========
+        async function ixShowOrder() {
+            const order = window._ixCurrentOrder;
+            if (!order) { alert('這張製令沒有對應的客戶訂單'); return; }
+            const modal = document.getElementById('ix-order-modal');
+            modal.style.display = 'flex';
+            document.getElementById('ix-om-info').innerHTML =
+                '<div class="info-chip"><span class="lbl">訂單編號</span><strong style="font-family:Consolas">' +
+                esc(order.type) + '-' + esc(order.no) + '</strong></div>';
+            document.getElementById('ix-om-content').innerHTML =
+                '<div class="msg-empty"><span class="spinner"></span><span>查詢中…</span></div>';
+
+            try {
+                const res = await fetch('/api/order?type=' + encodeURIComponent(order.type) +
+                                         '&no=' + encodeURIComponent(order.no));
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error);
+
+                const h = data.header;
+                document.getElementById('ix-om-info').innerHTML =
+                    '<div class="info-chip"><span class="lbl">訂單編號</span><strong style="font-family:Consolas">' +
+                    esc(h.type) + '-' + esc(h.no) + '</strong></div>' +
+                    '<div class="info-chip"><span class="lbl">客戶</span>' + esc(h.customer_no) +
+                    (h.customer_name ? '　' + esc(h.customer_name) : '') + '</div>' +
+                    '<div class="info-chip"><span class="lbl">訂單日期</span>' + esc(h.order_date) + '</div>' +
+                    (h.confirmer ? '<div class="info-chip"><span class="lbl">確認者</span>' + esc(h.confirmer) + '</div>' : '');
+
+                if (!data.lines.length) {
+                    document.getElementById('ix-om-content').innerHTML =
+                        '<div class="msg-empty"><span>此訂單無品項明細</span></div>';
+                    return;
+                }
+
+                const rows = data.lines.map(l => {
+                    const delivered = parseFloat((l.delivered_qty || '0').replace(/,/g, '')) || 0;
+                    const ordered = parseFloat((l.order_qty || '0').replace(/,/g, '')) || 0;
+                    const doneCls = delivered > 0 && delivered >= ordered ? 'color:#2E7D32;font-weight:700' : '';
+                    return '<tr>' +
+                        '<td class="td-center">' + esc(l.seq) + '</td>' +
+                        '<td style="font-family:Consolas;font-size:0.8rem">' + esc(l.item_no) + '</td>' +
+                        '<td>' + esc(l.item_name) + '</td>' +
+                        '<td class="wrap-cell" style="max-width:280px;font-size:0.8rem;color:#555">' + esc(l.spec) + '</td>' +
+                        '<td class="td-num" style="' + doneCls + '">' + esc(l.delivered_qty) + '</td>' +
+                        '<td class="td-num">' + esc(l.order_qty) + '</td>' +
+                        '<td class="td-center">' + esc(l.due_date) + '</td>' +
+                        '<td class="td-center">' + esc(l.warehouse) + '</td>' +
+                        '<td>' + esc(l.wh_name) + '</td>' +
+                        '</tr>';
+                }).join('');
+
+                document.getElementById('ix-om-content').innerHTML =
+                    '<table class="pro-table" style="width:100%">' +
+                    '<thead><tr>' +
+                    '<th style="width:52px" class="center">序號</th>' +
+                    '<th style="width:150px">品號</th>' +
+                    '<th style="width:180px">品名</th>' +
+                    '<th>規格</th>' +
+                    '<th style="width:80px;text-align:right">已交數量</th>' +
+                    '<th style="width:80px;text-align:right">訂單數量</th>' +
+                    '<th style="width:90px" class="center">預交日</th>' +
+                    '<th style="width:70px" class="center">庫別</th>' +
+                    '<th style="width:80px">庫別名稱</th>' +
+                    '</tr></thead>' +
+                    '<tbody>' + rows + '</tbody></table>';
+            } catch(e) {
+                document.getElementById('ix-om-content').innerHTML =
+                    '<div class="msg-error">載入失敗：' + esc(e.message) + '</div>';
+            }
+        }
+        function ixCloseOrderModal() {
+            document.getElementById('ix-order-modal').style.display = 'none';
+        }
+
         // ========== 讀取圖面 ==========
         // 儲存圖面檔案列表（避免 inline onclick 的中文路徑跳脫問題）
         window._drawingFiles = [];
@@ -1583,7 +1787,8 @@
                   '<td class="date-val">' + esc(row['預計開工日']) + '</td>' +
                   '<td>' + finishCell + '</td>' +
                   '<td class="text-end' + rtCls + '">' + esc(rt) + '</td>' +
-                  '<td class="text-center machine-cell">' + esc(machine) + '</td>';
+                  '<td class="text-center machine-cell">' + esc(machine) + '</td>' +
+                  '<td class="text-center"><span class="zume-link" title="開啟 ZUMEN 圖面" onclick="openZumeForItem(\'' + escAttr(row['品號']) + '\', event)">📂</span></td>';
                 resultBody.appendChild(tr);
               });
               resultArea.style.display = 'block';

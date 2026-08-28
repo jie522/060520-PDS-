@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>設備 QR 標籤列印</title>
+    <link rel="icon" type="image/png" href="/static/app-icon.png">
+    <!-- QR 產生器：MIT，已下載到本地（禁止 CDN，見 CLAUDE.md 硬規則）-->
+    <script src="/static/vendor/qrcode.js"></script>
+    <style>
+        :root {
+            --blue:#1565C0; --blue-dark:#0D47A1; --bg:#F5F4ED; --surface:#fff;
+            --border:#E5E4DF; --border-dark:#D8D5CC; --text:#3D3D3A; --muted:#8A8778;
+            --warn:#E65100; --warn-bg:#FFF3E0;
+        }
+        * { box-sizing:border-box; }
+        body { margin:0; background:var(--bg); color:var(--text);
+            font-family:'Noto Sans TC','Source Han Sans TC',sans-serif; font-size:.9rem; }
+        .bar { background:var(--blue); color:#fff; padding:.6rem 1rem; display:flex;
+            align-items:center; gap:.6rem; flex-wrap:wrap; }
+        .bar .t { font-size:1.05rem; font-weight:800; margin-right:.5rem; }
+        .bar select, .bar input { font-size:.88rem; padding:.35rem .5rem; border-radius:5px;
+            border:1px solid rgba(255,255,255,.4); background:#fff; color:var(--text); }
+        .bar button { font-size:.88rem; font-weight:700; padding:.4rem .9rem; border-radius:6px;
+            border:none; cursor:pointer; background:#fff; color:var(--blue-dark); }
+        .bar button.primary { background:#F5A623; color:#fff; }
+        .bar .sp { flex:1; }
+        .hint { padding:.6rem 1rem; background:var(--warn-bg); color:var(--warn);
+            font-size:.84rem; line-height:1.6; }
+        .sheet { padding:1rem; }
+        .grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px;
+            max-width:210mm; margin:0 auto; background:var(--surface); padding:6mm; }
+        /* 一張標籤：左邊 QR、右邊編碼與機型。實際貼在機台上多半是 60×40mm 的標籤紙 */
+        .lb { display:flex; align-items:center; gap:6px; border:1px dashed var(--border-dark);
+            border-radius:4px; padding:5px 6px; height:24mm; overflow:hidden; page-break-inside:avoid; }
+        .lb .qr { width:20mm; height:20mm; flex-shrink:0; }
+        .lb .qr svg { width:100%; height:100%; display:block; }
+        .lb .info { min-width:0; }
+        .lb .code { font-family:'Consolas','Courier New',monospace; font-size:1.25rem;
+            font-weight:800; color:#000; line-height:1.1; }
+        .lb .nm { font-size:.62rem; color:#333; margin-top:2px; line-height:1.3;
+            display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        .lb .tip { font-size:.55rem; color:#666; margin-top:2px; }
+        .cnt { padding:.4rem 1rem; font-size:.85rem; color:var(--muted); }
+        .pick { padding:.5rem 1rem; display:flex; gap:.4rem; flex-wrap:wrap; align-items:center; }
+        .pick label { font-size:.85rem; }
+
+        @media print {
+            /* 列印時只留標籤本身：工具列、提示、虛線框都不要出現在紙上 */
+            .bar, .hint, .cnt, .pick { display:none !important; }
+            body { background:#fff; }
+            .sheet { padding:0; }
+            .grid { padding:0; gap:0; max-width:none; }
+            .lb { border:1px dashed #ccc; border-radius:0; }
+            @page { size:A4 portrait; margin:8mm; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="bar">
+    <span class="t">🏷️ 設備 QR 標籤</span>
+    <select id="fGroup" onchange="render()"></select>
+    <select id="fLoc" onchange="render()"></select>
+    <select id="fStatus" onchange="render()"></select>
+    <input id="fQ" placeholder="編碼／舊編號關鍵字" oninput="render()">
+    <span class="sp"></span>
+    <select id="fCols" onchange="render()">
+        <option value="3">每列 3 張</option>
+        <option value="2">每列 2 張（大）</option>
+        <option value="4">每列 4 張（小）</option>
+    </select>
+    <button class="primary" onclick="window.print()">🖨️ 列印</button>
+</div>
+
+<div class="hint" id="hint"></div>
+<div class="pick">
+    <label>QR 網址開頭：</label>
+    <input id="base" style="min-width:280px" oninput="render()">
+    <span style="color:var(--muted)">← 手機要用這個位址連進來，填服務端那台電腦的內網 IP</span>
+</div>
+<div class="cnt" id="cnt"></div>
+
+<div class="sheet"><div class="grid" id="grid"></div></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => (s ?? '').toString()
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+let ALL = [];
+
+// config.MOBILE_BASE_URL 有設就用它，沒設就用開這頁的網址
+// （在服務端那台電腦上列印時最準——那台的 origin 就是手機要連的位址）
+$('base').value = {{ base_url|tojson }} || location.origin;
+
+function fillSel(id, label, values, counts) {
+    const total = ALL.length;
+    $(id).innerHTML = `<option value="">${label}（${total}）</option>` +
+        values.map(v => `<option value="${esc(v)}">${esc(v)}（${counts[v]}）</option>`).join('');
+}
+
+async function load() {
+    const j = await (await fetch('/api/equipment_master/search?q=')).json();
+    if (!j.success) { $('grid').innerHTML = '載入失敗：' + esc(j.error); return; }
+    ALL = j.data;
+    const by = key => {
+        const c = {};
+        ALL.forEach(r => { const v = r[key] || ''; if (v) c[v] = (c[v] || 0) + 1; });
+        return c;
+    };
+    const g = by('group_code'), l = by('location'), s = by('status');
+    fillSel('fGroup', '全部群組', Object.keys(g).sort(), g);
+    fillSel('fLoc', '全部位置', Object.keys(l).sort(), l);
+    fillSel('fStatus', '全部狀態', Object.keys(s).sort(), s);
+    $('fStatus').value = '使用中';       // 報廢/售出的機器不用貼標籤
+    render();
+}
+
+function render() {
+    const q = ($('fQ').value || '').trim().toUpperCase();
+    const rows = ALL.filter(r =>
+        (!$('fGroup').value || r.group_code === $('fGroup').value) &&
+        (!$('fLoc').value || r.location === $('fLoc').value) &&
+        (!$('fStatus').value || r.status === $('fStatus').value) &&
+        (!q || `${r.code} ${r.old_code || ''} ${r.type_name || ''}`.toUpperCase().includes(q)));
+    const base = ($('base').value || location.origin).replace(/\/+$/, '');
+    $('grid').style.gridTemplateColumns = `repeat(${$('fCols').value}, 1fr)`;
+    $('cnt').textContent = `要列印 ${rows.length} 張標籤（A4 直式，每頁約 ${$('fCols').value * 11} 張）`;
+    $('hint').innerHTML = base.includes('127.0.0.1') || base.includes('localhost')
+        ? '⚠ 目前網址開頭是 localhost，<b>手機掃了會連不到</b>。請填服務端電腦的內網 IP（例如 http://192.168.1.50:5088），'
+          + '並確認 config.py 的 <b>MOBILE_ACCESS 已改成 True</b>、防火牆放行 5088 埠。'
+        : `掃描後會開啟 <b>${esc(base)}/m/eq/&lt;設備編碼&gt;</b>，直接進入該台的保養回報頁。`;
+
+    $('grid').innerHTML = rows.map(r => `
+      <div class="lb">
+        <div class="qr" data-url="${esc(base)}/m/eq/${encodeURIComponent(r.code)}"></div>
+        <div class="info">
+          <div class="code">${esc(r.code)}</div>
+          <div class="nm">${esc(r.type_name || '')}${r.old_code ? '／' + esc(r.old_code) : ''}</div>
+          <div class="tip">掃描回報保養</div>
+        </div>
+      </div>`).join('');
+
+    // 糾錯等級 M：標籤貼在機台上會沾油、被刮，容錯高一點比較掃得動
+    document.querySelectorAll('.qr').forEach(el => {
+        const qr = qrcode(0, 'M');
+        qr.addData(el.dataset.url);
+        qr.make();
+        el.innerHTML = qr.createSvgTag({cellSize: 2, margin: 0, scalable: true});
+    });
+}
+
+load();
+</script>
+</body>
+</html>

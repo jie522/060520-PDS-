@@ -287,8 +287,10 @@ def _run_flask():
     import logging
     logging.getLogger('werkzeug').setLevel(logging.ERROR)
     try:
+        # 綁哪個網卡由 app._flask_host() 決定：預設 127.0.0.1（跟以前一樣只有本機連得到），
+        # config.MOBILE_ACCESS 打開時才綁 0.0.0.0 讓手機掃 QR 進來（見 docs/equipment-maintenance.md）
         flask_app.app.run(
-            host='127.0.0.1', port=PORT,
+            host=flask_app._flask_host(), port=PORT,
             debug=False, use_reloader=False, threaded=True,
         )
     except Exception as e:

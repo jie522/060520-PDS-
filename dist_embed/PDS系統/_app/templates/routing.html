@@ -65,7 +65,7 @@
     .header-title { font-size:1.1rem; font-weight:700; padding-bottom:.45rem; white-space:nowrap; margin-right:.5rem; }
     .header-tabs { display:flex; align-items:flex-end; gap:2px; }
     .header-tab {
-      display: inline-block; padding:.3rem 1rem; font-size:1rem; font-weight:600;
+      display: inline-block; padding:.3rem .75rem; font-size:1rem; font-weight:600; white-space:nowrap;
       color:rgba(255,255,255,.85); text-decoration:none; border-radius:0;
       background:rgba(255,255,255,.15); cursor:pointer; transition:background .15s;
     }
@@ -420,6 +420,9 @@
     .nature-outer { background: #FFF3E0; color: #E65100; }
     .nature-sub   { background: #F3E5F5; color: #6A1B9A; }
 
+    /* 廠內單位徽章 .dept-tag / .dept-jiagong 等已移到 static/pds-ibm.css 共用
+       （製令詳細資訊彈窗也要用同一套，見該檔「廠內單位徽章」段） */
+
     /* ══ Empty / Error / Loading States ══ */
     .msg-empty {
       display: flex;
@@ -508,6 +511,38 @@
       flex-shrink: 0;
     }
     .modal-body { overflow: auto; flex: 1; }
+
+    /* ══ BOM 比較 Modal ══ */
+    .bc-col { flex: 1; min-width: 0; }
+    .bc-col-label { font-weight: 700; font-size: 0.82rem; margin-bottom: .35rem; }
+    .bc-col-label.a { color: var(--blue-d); }
+    .bc-col-label.b { color: #6A1B9A; }
+    .bc-result-list {
+      margin-top: .4rem; max-height: 200px; overflow-y: auto;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+    }
+    .bc-result-list:empty { display: none; }
+    .bc-picked {
+      margin-top: .4rem; padding: .5rem .7rem;
+      background: var(--blue-xpale); border: 1px solid var(--blue-pale); border-radius: var(--radius-sm);
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .bc-picked .item-no { font-weight: 700; color: var(--blue-d); font-family: Consolas, monospace; font-size: 0.82rem; }
+    .bc-picked .item-name { color: var(--text-2); font-size: 0.79rem; flex: 1; }
+    .bc-picked button {
+      background: none; border: 1px solid var(--border-d); border-radius: 4px;
+      color: var(--muted); font-size: 0.72rem; cursor: pointer; padding: .1rem .4rem;
+    }
+    .bc-picked button:hover { color: var(--text); border-color: var(--muted); }
+    /* 共用子件：兩個機型都用到，最重要的比較結果，用金色高亮跟其他既有配色（藍=選取、綠=已勾選）區隔 */
+    table.pro-table tbody tr.bc-both td { background: #FFE082 !important; }
+    table.pro-table tbody tr.bc-both:hover td { background: #FFD54F !important; }
+    table.pro-table tbody tr.bc-both td:first-child { border-left: 5px solid #F57F17; font-weight: 700; }
+    table.pro-table tbody tr.bc-both td.td-code { color: #8D5A00; }
+    .bc-tag { display: inline-block; padding: .05rem .45rem; border-radius: 10px; font-size: 0.71rem; font-weight: 700; white-space: nowrap; }
+    .bc-tag.both { background: #F57F17; color: #fff; }
+    .bc-tag.a-only { background: var(--blue-pale); color: var(--blue-d); }
+    .bc-tag.b-only { background: #F3E5F5; color: #6A1B9A; }
   </style>
   <link rel="stylesheet" href="/static/pds-ibm.css">
 </head>
@@ -521,11 +556,12 @@
       <a href="/"           class="header-tab">製令查詢</a>
       <a href="/production" class="header-tab">生產中製令</a>
       <a href="/equipment"  class="header-tab">設備稼動</a>
-      <a href="/equipment_master" class="header-tab">設備管理</a>
       <a href="/drawing"    class="header-tab">PDM圖面查詢</a>
       <span                 class="header-tab active">產品途程查詢</span>
       <a href="/batch_cost" class="header-tab">批成本</a>
       <a href="/cnc_program" class="header-tab">程式管理</a>
+      <a href="/oil"        class="header-tab">油品管理</a>
+      <a href="/equipment_master" class="header-tab">設備管理</a>
       <a href="/zumen" class="header-tab header-tab-zumen">ZUMEN</a>
       <a href="/management" class="header-tab header-tab-mgmt">管理</a>
     </div>
@@ -665,6 +701,10 @@
         <div class="card-header">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           搜尋條件
+          <button class="btn btn-primary" style="margin-left:auto;padding:.25rem .6rem;font-size:0.76rem" onclick="openCompareModal()">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-right:.15rem"><path d="M8 3L4 7l4 4"/><path d="M4 7h16"/><path d="M16 21l4-4-4-4"/><path d="M20 17H4"/></svg>
+            BOM 比較
+          </button>
         </div>
         <div class="card-body">
           <div class="search-row">
@@ -751,6 +791,83 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- ══════════ BOM 比較 Modal ══════════ -->
+<div class="modal-overlay" id="bom-compare-modal" onclick="if(event.target===this)closeCompareModal()">
+  <div class="modal-box" style="width:min(1600px, 96vw);max-width:none;max-height:94vh">
+    <div class="modal-header">
+      <span style="display:flex;align-items:center;gap:.5rem">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 3L4 7l4 4"/><path d="M4 7h16"/><path d="M16 21l4-4-4-4"/><path d="M20 17H4"/></svg>
+        BOM 展開比較（兩個機型）
+      </span>
+      <button class="modal-close" onclick="closeCompareModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:1rem 1.1rem;display:flex;flex-direction:column;gap:.9rem">
+      <div style="display:flex;gap:1.2rem">
+        <div class="bc-col">
+          <div class="bc-col-label a">機型 A</div>
+          <div class="search-row">
+            <input type="text" id="bc-input-a" class="search-input" placeholder="輸入品號或品名…" autocomplete="off"
+                   onkeydown="if(event.key==='Enter') bcSearch('a')">
+            <button class="btn btn-primary" onclick="bcSearch('a')">搜尋</button>
+          </div>
+          <div class="prefix-filter">
+            <label class="prefix-btn"><input type="radio" name="bcprefix-a" value="" checked onchange="bcSearch('a')"><span>全部</span></label>
+            <label class="prefix-btn"><input type="radio" name="bcprefix-a" value="5" onchange="bcSearch('a')"><span>5開頭</span></label>
+            <label class="prefix-btn"><input type="radio" name="bcprefix-a" value="6" onchange="bcSearch('a')"><span>6開頭</span></label>
+            <label class="prefix-btn"><input type="radio" name="bcprefix-a" value="56" onchange="bcSearch('a')"><span>5+6</span></label>
+          </div>
+          <div id="bc-picked-a" class="bc-picked" style="display:none"></div>
+          <div id="bc-list-a" class="bc-result-list"></div>
+        </div>
+        <div class="bc-col">
+          <div class="bc-col-label b">機型 B</div>
+          <div class="search-row">
+            <input type="text" id="bc-input-b" class="search-input" placeholder="輸入品號或品名…" autocomplete="off"
+                   onkeydown="if(event.key==='Enter') bcSearch('b')">
+            <button class="btn btn-primary" onclick="bcSearch('b')">搜尋</button>
+          </div>
+          <div class="prefix-filter">
+            <label class="prefix-btn"><input type="radio" name="bcprefix-b" value="" checked onchange="bcSearch('b')"><span>全部</span></label>
+            <label class="prefix-btn"><input type="radio" name="bcprefix-b" value="5" onchange="bcSearch('b')"><span>5開頭</span></label>
+            <label class="prefix-btn"><input type="radio" name="bcprefix-b" value="6" onchange="bcSearch('b')"><span>6開頭</span></label>
+            <label class="prefix-btn"><input type="radio" name="bcprefix-b" value="56" onchange="bcSearch('b')"><span>5+6</span></label>
+          </div>
+          <div id="bc-picked-b" class="bc-picked" style="display:none"></div>
+          <div id="bc-list-b" class="bc-result-list"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:center;align-items:center;gap:.6rem">
+        <button class="btn btn-success" id="bc-run-btn" onclick="bcRunCompare()" disabled>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-right:.2rem"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          開始比較
+        </button>
+        <span id="bc-run-hint" class="msg-info" style="min-height:auto"></span>
+      </div>
+
+      <div id="bc-result-wrap" style="display:none">
+        <div class="modal-info" id="bc-result-info" style="border-radius:var(--radius-sm);border:1px solid var(--border);border-bottom:none"></div>
+        <div class="table-wrap" style="max-height:58vh;border:1px solid var(--border);border-radius:0 0 var(--radius-sm) var(--radius-sm)">
+          <table class="pro-table" id="bc-result-table">
+            <thead>
+              <tr>
+                <th style="width:150px">子件品號</th>
+                <th>品名</th>
+                <th>規格</th>
+                <th style="width:48px" class="center">單位</th>
+                <th style="width:80px;text-align:right">用量A</th>
+                <th style="width:80px;text-align:right">用量B</th>
+                <th style="width:70px" class="center">歸屬</th>
+              </tr>
+            </thead>
+            <tbody id="bc-result-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -857,6 +974,15 @@ function rApplyLineFilter() {
   if (q) rSearch();
 }
 
+// 廠商名稱欄：自家三個單位各給一個顏色徽章，外包廠商維持純文字
+// （樣式定義在 static/pds-ibm.css，製令詳細資訊彈窗用同一套 DEPT_TAG_CLS）
+const DEPT_TAG_CLS = { '加工課': 'dept-jiagong', '成品部': 'dept-chengpin', '製三課': 'dept-zhisan' };
+function rVendorCell(name) {
+  const v = (name ?? '').trim();
+  const cls = DEPT_TAG_CLS[v];
+  return cls ? `<span class="dept-tag ${cls}">${esc(v)}</span>` : esc(name ?? '');
+}
+
 function rRenderRouting(rows) {
   if (!rows.length) {
     document.getElementById('r-empty-msg').innerHTML = '<span>此品號尚無途程資料</span>';
@@ -876,7 +1002,7 @@ function rRenderRouting(rows) {
       <td>${esc(r.proc_name)}</td>
       <td><span class="nature-tag ${natCls}">${esc(r.nature)}</span></td>
       <td>${esc(r.vendor_no)}</td>
-      <td>${esc(r.vendor_name)}</td>
+      <td>${rVendorCell(r.vendor_name)}</td>
       <td class="td-num">${esc(r.var_man_hrs ?? '')}</td>
       <td class="td-desc">${esc(r.description)}</td>
     </tr>`;
@@ -1141,6 +1267,130 @@ function updateBCheckCount() {
 }
 
 // ═══════════════════════════════════════════════════
+// BOM 展開比較（兩個機型）：各自搜尋→挑一個品號當代表→各自 /api/bom/detail 抓一層 BOM 明細
+// →依子件品號合併成一張表，兩邊都有的子件用金色整列高亮，方便一眼看出兩個機型共用哪些料件。
+// 全部沿用既有 /api/bom/search、/api/bom/detail，沒有新增後端 API。
+// ═══════════════════════════════════════════════════
+const bcState = {
+  a: { results: [], picked: null },
+  b: { results: [], picked: null },
+};
+
+function openCompareModal() {
+  document.getElementById('bom-compare-modal').style.display = 'flex';
+}
+function closeCompareModal() {
+  document.getElementById('bom-compare-modal').style.display = 'none';
+}
+
+async function bcSearch(side) {
+  const q = document.getElementById(`bc-input-${side}`).value.trim();
+  const prefix = document.querySelector(`input[name=bcprefix-${side}]:checked`).value;
+  const listEl = document.getElementById(`bc-list-${side}`);
+  if (!q) { listEl.innerHTML = '<div class="msg-empty" style="padding:.6rem">請輸入品號或品名</div>'; return; }
+  listEl.innerHTML = '<div class="msg-empty" style="padding:.6rem"><span class="spinner"></span><span>搜尋中…</span></div>';
+  try {
+    const res = await fetch(`/api/bom/search?q=${encodeURIComponent(q)}&prefix=${encodeURIComponent(prefix)}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    bcState[side].results = data.data;
+    if (!data.data.length) {
+      listEl.innerHTML = '<div class="msg-empty" style="padding:.6rem">找不到 BOM 資料</div>';
+      return;
+    }
+    listEl.innerHTML = data.data.map((it, idx) => `
+      <div class="result-item" onclick="bcPick('${side}', ${idx})">
+        <div class="item-no">${esc(it.item_no)}</div>
+        <div class="item-name">${esc(it.item_name)}</div>
+      </div>`).join('');
+  } catch (e) {
+    listEl.innerHTML = `<div class="msg-error">搜尋失敗：${esc(e.message)}</div>`;
+  }
+}
+
+function bcPick(side, idx) {
+  const item = bcState[side].results[idx];
+  if (!item) return;
+  bcState[side].picked = item;
+  document.getElementById(`bc-list-${side}`).innerHTML = '';
+  const picked = document.getElementById(`bc-picked-${side}`);
+  picked.style.display = 'flex';
+  picked.innerHTML = `
+    <span class="item-no">${esc(item.item_no)}</span>
+    <span class="item-name">${esc(item.item_name)}</span>
+    <button onclick="bcClearPick('${side}')">✕ 重選</button>`;
+  updateBcRunBtn();
+}
+
+function bcClearPick(side) {
+  bcState[side].picked = null;
+  document.getElementById(`bc-picked-${side}`).style.display = 'none';
+  document.getElementById(`bc-picked-${side}`).innerHTML = '';
+  updateBcRunBtn();
+}
+
+function updateBcRunBtn() {
+  const ready = bcState.a.picked && bcState.b.picked;
+  document.getElementById('bc-run-btn').disabled = !ready;
+  document.getElementById('bc-run-hint').textContent = ready ? '' : '請先分別選定機型 A 與機型 B 的品號';
+}
+
+async function bcRunCompare() {
+  const itemA = bcState.a.picked, itemB = bcState.b.picked;
+  if (!itemA || !itemB) return;
+  const wrap = document.getElementById('bc-result-wrap');
+  const info = document.getElementById('bc-result-info');
+  const tbody = document.getElementById('bc-result-tbody');
+  wrap.style.display = '';
+  info.innerHTML = '';
+  tbody.innerHTML = '<tr><td colspan="7"><div class="msg-empty" style="padding:1rem"><span class="spinner"></span><span>比較中…</span></div></td></tr>';
+
+  try {
+    const [resA, resB] = await Promise.all([
+      fetch(`/api/bom/detail?item_no=${encodeURIComponent(itemA.item_no)}`).then(r => r.json()),
+      fetch(`/api/bom/detail?item_no=${encodeURIComponent(itemB.item_no)}`).then(r => r.json()),
+    ]);
+    if (!resA.success) throw new Error('機型A：' + resA.error);
+    if (!resB.success) throw new Error('機型B：' + resB.error);
+
+    // 依子件品號合併：同一個子件品號兩邊都有 → bc-both；只有一邊有 → a-only / b-only
+    const mapA = new Map(resA.detail.map(r => [r.child_no, r]));
+    const mapB = new Map(resB.detail.map(r => [r.child_no, r]));
+    const allNo = [...new Set([...mapA.keys(), ...mapB.keys()])].sort();
+
+    let bothCount = 0, aOnlyCount = 0, bOnlyCount = 0;
+    const rows = allNo.map(no => {
+      const ra = mapA.get(no), rb = mapB.get(no);
+      const both = !!(ra && rb);
+      if (both) bothCount++; else if (ra) aOnlyCount++; else bOnlyCount++;
+      const ref = ra || rb;   // 品名/規格/單位一般兩邊都一樣，取有的那份顯示
+      const tag = both ? '<span class="bc-tag both">共用</span>'
+                : ra   ? '<span class="bc-tag a-only">僅A</span>'
+                       : '<span class="bc-tag b-only">僅B</span>';
+      return `<tr class="${both ? 'bc-both' : ''}">
+        <td class="td-code">${esc(no)}</td>
+        <td>${esc(ref.child_name)}</td>
+        <td class="td-muted">${esc(ref.spec)}</td>
+        <td class="td-center">${esc(ref.unit)}</td>
+        <td class="td-num">${ra ? esc(ra.qty) : ''}</td>
+        <td class="td-num">${rb ? esc(rb.qty) : ''}</td>
+        <td class="td-center">${tag}</td>
+      </tr>`;
+    }).join('');
+
+    info.innerHTML = `
+      <div class="info-chip"><span class="lbl">機型A</span><span class="val td-code">${esc(itemA.item_no)}</span> ${esc(itemA.item_name)}</div>
+      <div class="info-chip"><span class="lbl">機型B</span><span class="val td-code">${esc(itemB.item_no)}</span> ${esc(itemB.item_name)}</div>
+      <div class="info-chip"><span class="lbl">共用</span><strong style="color:#A16207">${bothCount}</strong> 項</div>
+      <div class="info-chip"><span class="lbl">僅A</span><strong style="color:var(--blue-d)">${aOnlyCount}</strong> 項</div>
+      <div class="info-chip"><span class="lbl">僅B</span><strong style="color:#6A1B9A">${bOnlyCount}</strong> 項</div>`;
+    tbody.innerHTML = rows || '<tr><td colspan="7"><div class="msg-empty" style="padding:1rem">兩邊都沒有 BOM 明細</div></td></tr>';
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="msg-error">比較失敗：${esc(e.message)}</div></td></tr>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════
 // 從 BOM 查看途程 Modal
 // ═══════════════════════════════════════════════════
 async function bShowRouting() {
@@ -1196,7 +1446,7 @@ async function bShowRouting() {
             <td>${esc(r.proc_name)}</td>
             <td><span class="nature-tag ${natCls}">${esc(r.nature)}</span></td>
             <td>${esc(r.vendor_no)}</td>
-            <td>${esc(r.vendor_name)}</td>
+            <td>${rVendorCell(r.vendor_name)}</td>
             <td class="td-num">${esc(r.var_man_hrs ?? '')}</td>
             <td class="td-desc">${esc(r.description)}</td>
           </tr>`;
